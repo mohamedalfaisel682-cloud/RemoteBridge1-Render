@@ -4,9 +4,11 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"io"
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -51,6 +53,50 @@ var hub = Hub{
 	clients:       make(map[string]*Client),
 	clientTokens:  make(map[string]string),
 	pendingOffers: make(map[string]*OfferState),
+}
+
+// 🗄️ مخزن لقطات الحالة الصغيرة (في الذاكرة فقط): تبقى البيانات متاحة
+// للمتحكم (الموقع/التسميات/آخر ظهور/بطارية) حتى لو انقطع المضيف عن الاتصال.
+// Render الخدمة ذات ذاكرة مؤقتة — بعد إعادة النشر تبدأ من متجر فارغ وهذا مقبول.
+var (
+	stateMu   sync.RWMutex
+	stateData = make(map[string]*StateSnapshot)
+)
+
+type StateSnapshot struct {
+	DeviceID   string          `json:"deviceId"`
+	Role       string          `json:"role,omitempty"`
+	Name       string          `json:"name,omitempty"`
+	Ts         int64           `json:"ts"`
+	Online     bool            `json:"online"`
+	Battery    int             `json:"batteryLevel"`
+	Charging   bool            `json:"isCharging"`
+	ReceivedAt time.Time       `json:"-"`
+	Data       json.RawMessage `json:"data,omitempty"`
+}
+
+const maxStateSnapshots = 64
+
+func upsertStateSnapshot(s *StateSnapshot) {
+	stateMu.Lock()
+	stateData[s.DeviceID] = s
+	if len(stateData) > maxStateSnapshots {
+		// إزالة اللقطة الأقدم عند التحاكي السعة
+		var oldestKey string
+		var oldest time.Time
+		first := true
+		for k, v := range stateData {
+			if first || v.ReceivedAt.Before(oldest) {
+				oldest = v.ReceivedAt
+				oldestKey = k
+				first = false
+			}
+		}
+		if oldestKey != s.DeviceID && oldestKey != "" {
+			delete(stateData, oldestKey)
+		}
+	}
+	stateMu.Unlock()
 }
 
 // Prometheus metrics
@@ -123,6 +169,13 @@ func main() {
 	http.HandleFunc("/metrics", promhttp.Handler().ServeHTTP)
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		// استضافة لوحة التحكم الثابتة إن كان ملفها موجوداً بمظروف النشر
+		index := filepath.Join("web-dashboard", "index.html")
+		if _, err := os.Stat(index); err == nil {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			http.ServeFile(w, r, index)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -130,14 +183,16 @@ func main() {
 			"status":  "active",
 			"version": "2.0.0",
 			"endpoints": map[string]string{
-				"/health": "Health check",
-				"/metrics": "Prometheus metrics",
-				"/ws":     "WebSocket signaling",
+				"/health":    "Health check",
+				"/metrics":   "Prometheus metrics",
+				"/ws":        "WebSocket signaling",
+				"/api/state": "State snapshots (POST/GET)",
 			},
 		})
 	})
 
 	http.HandleFunc("/ws", handleWebSocket)
+	http.HandleFunc("/api/state", handleStateAPI)
 
 	addr := "0.0.0.0:" + port
 	log.Printf("RemoteBridge Signaling Server starting on %s", addr)
@@ -478,4 +533,89 @@ func cleanupPendingOffers() {
 
 func init() {
 	go cleanupPendingOffers()
+}
+
+// 🌐 POST/GET /api/state — خزّان لقطات الحالة الصغيرة للمضيف/المتحكم.
+func handleStateAPI(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	switch r.Method {
+	case http.MethodPost:
+		r.Body = http.MaxBytesReader(w, r.Body, int64(6)<<20)
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			writeStateJSONError(w, http.StatusBadRequest, "فشل قراءة الجسم")
+			return
+		}
+		var req struct {
+			DeviceID string          `json:"deviceId"`
+			Role     string          `json:"role"`
+			Name     string          `json:"name"`
+			Online   *bool           `json:"online"`
+			Battery  *int            `json:"batteryLevel"`
+			Charging *bool           `json:"isCharging"`
+			Data     json.RawMessage `json:"data"`
+		}
+		if err := json.Unmarshal(body, &req); err != nil || req.DeviceID == "" {
+			writeStateJSONError(w, http.StatusBadRequest, "بيانات غير صالحة أو deviceId مفقود")
+			return
+		}
+		s := &StateSnapshot{
+			DeviceID:   req.DeviceID,
+			Role:       req.Role,
+			Name:       req.Name,
+			Ts:         time.Now().UnixMilli(),
+			Online:     true,
+			Battery:    -1,
+			ReceivedAt: time.Now(),
+			Data:       req.Data,
+		}
+		if req.Online != nil {
+			s.Online = *req.Online
+		}
+		if req.Battery != nil {
+			s.Battery = *req.Battery
+		}
+		if req.Charging != nil {
+			s.Charging = *req.Charging
+		}
+		upsertStateSnapshot(s)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "ts": s.Ts})
+
+	case http.MethodGet:
+		deviceID := r.URL.Query().Get("deviceId")
+		if deviceID == "" {
+			writeStateJSONError(w, http.StatusBadRequest, "deviceId مطلوب")
+			return
+		}
+		stateMu.RLock()
+		s, ok := stateData[deviceID]
+		stateMu.RUnlock()
+		if !ok || s == nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"ok":    false,
+				"error": "لا توجد حالة محفوظة لهذا الجهاز",
+			})
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(s)
+
+	default:
+		writeStateJSONError(w, http.StatusMethodNotAllowed, "طريقة غير مدعومة")
+	}
+}
+
+func writeStateJSONError(w http.ResponseWriter, status int, message string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "error": message})
 }

@@ -226,6 +226,9 @@ class PeerConnectionManager(
             onFailure("فشل تهيئة الاتصال")
             return
         }
+        // 🔧 إعادة إرفاق مسارات البث الحية إن وجدت — من دونها تصل الإجابة بلا مسارات
+        // (تظهر نافذة البث سوداء/فارغة على المتحكم رغم أن التقاط الشاشة يعمل)
+        reattachExistingTracks(connection)
         val type = if (sdpType.equals("OFFER", ignoreCase = true))
             SessionDescription.Type.OFFER else SessionDescription.Type.OFFER
 
@@ -253,6 +256,37 @@ class PeerConnectionManager(
             },
             SessionDescription(type, sdp)
         )
+    }
+
+    /**
+     * 🔧 عند إعادة بناء PeerConnection أثناء تفاوض جديد (حالة الإشارات أو "التعارض الصاخب")
+     * تُفقد مسارات البث الحية؛ هذه الدالة تربطها ثانية بالإجابة الجديدة فتستمر الصورة.
+     */
+    private fun reattachExistingTracks(pc: PeerConnection) {
+        try {
+            var attached = 0
+            val vt = videoTrack
+            if (vt != null) {
+                val videoTr = pc.transceivers.firstOrNull {
+                    it.mediaType == MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO
+                }
+                if (videoTr != null) videoTr.sender.setTrack(vt, true)
+                else pc.addTrack(vt, listOf("screenStream"))
+                attached++
+            }
+            val at = audioTrack
+            if (at != null) {
+                val audioTr = pc.transceivers.firstOrNull {
+                    it.mediaType == MediaStreamTrack.MediaType.MEDIA_TYPE_AUDIO
+                }
+                if (audioTr != null) audioTr.sender.setTrack(at, true)
+                else pc.addTrack(at, listOf("screenStream"))
+                attached++
+            }
+            if (attached > 0) Log.d(TAG, "🔁 أُعيد إرفاق ${attached} مسار (بث) بعد إعادة بناء الاتصال")
+        } catch (t: Throwable) {
+            Log.w(TAG, "فشل إعادة إرفاق المسارات: ${t.message}")
+        }
     }
 
     fun setRemoteAnswer(sdp: String, sdpType: String) {

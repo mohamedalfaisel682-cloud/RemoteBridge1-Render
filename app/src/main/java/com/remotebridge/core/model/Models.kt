@@ -130,6 +130,12 @@ object Commands {
     const val TOGGLE_AUDIO = "toggle_audio"
     const val MEDIA_FOLDERS = "media_folders"
     const val MEDIA_ITEMS = "media_items"
+    const val SCREENSHOT = "screenshot"
+    const val REC_START = "rec_start"
+    const val REC_STOP = "rec_stop"
+    const val RECORDINGS_LIST = "recordings_list"
+    const val LOCATIONS_GET = "locations_get"
+    const val LOCATIONS_CLEAR = "locations_clear"
 }
 
 /**

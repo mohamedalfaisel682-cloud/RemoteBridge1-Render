@@ -36,6 +36,11 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
+    <!-- الموقع (تتبع سجل الفيولي للهاتف المضيف) -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
@@ -67,7 +72,7 @@
             android:name="com.remotebridge.host.service.HostForegroundService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="dataSync|camera|microphone|mediaProjection" />
+            android:foregroundServiceType="dataSync|camera|microphone|mediaProjection|location" />
 
         <service
             android:name="com.remotebridge.host.service.BridgeNotificationListenerService"
