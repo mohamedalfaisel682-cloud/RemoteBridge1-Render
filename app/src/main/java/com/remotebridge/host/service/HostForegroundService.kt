@@ -227,13 +227,15 @@ class HostForegroundService : LifecycleService() {
 
     /**
      * يبدأ الخدمة: إشعار أمامي + اتصال بخادم الإشارات.
+     *
+     * 🔧 إصلاح عدم استجابة زر بدء المضيف: لم نعد نوقف البدء عند نقص أذونات حرجة بشكل صامت،
+     * بل نكمل التشغيل دائماً؛ الميزات المرتبطة بأذونات ناقصة ترجع رسائل خطأ لطيفة
+     * عبر الأوامر بدل الانهيار، والنقص يُعرض في واجهة شاشة المضيف.
      */
     private fun startHost(serverUrl: String, deviceName: String) {
-        // التحقق من الأذونات الحرجة قبل البدء
+        // تسجيل الأذونات الحرجة للسجل فقط — المتابعة دائماً (بدون حاجز صامت)
         if (!checkCriticalPermissions()) {
-            Log.e(TAG, "لا يمكن بدء الخدمة: الأذونات الحرجة غير ممنوحة")
-            serviceState.value = serviceState.value.copy(running = false)
-            return
+            Log.w(TAG, "استكمال بدء المضيف رغم نقص بعض الأذونات الأساسية — الميزات الناقصة سترجع أخطاء لطيفة")
         }
 
         try {
@@ -241,13 +243,30 @@ class HostForegroundService : LifecycleService() {
             val notification = NotificationHelper.buildHostNotification(this)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 try {
-                    val serviceTypes = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                        android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC or
-                        android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA or
-                        android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or
-                        android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
-                    } else {
-                        android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                    // 🔧 أنواع الخدمة تُحسب ديناميكياً حسب الأذونات الممنوحة فعلياً حتى لا يرمي
+                    // startForeground استثناء صمت على أندرويد 14+. نوع mediaProjection لا يُطلب
+                    // عند الإقلاع (يستلزم موافقة مستخدم نشطة) بل يُرفَع لاحقاً لحظة الموافقة.
+                    var serviceTypes = android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        val hasCameraPrem =
+                            ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+                        val hasMicPrem =
+                            ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+                        if (hasCameraPrem) {
+                            serviceTypes = serviceTypes or
+                                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
+                        }
+                        if (hasMicPrem) {
+                            serviceTypes = serviceTypes or
+                                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+                        }
+                        val hasLocationPrem =
+                            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                            ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                        if (hasLocationPrem) {
+                            serviceTypes = serviceTypes or
+                                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+                        }
                     }
                     startForeground(
                         NotificationHelper.NOTIFICATION_ID,
@@ -688,45 +707,65 @@ class HostForegroundService : LifecycleService() {
             }
 
             Commands.START_CAMERA_STREAM -> {
-                val front = request.params?.get("front")?.jsonPrimitive?.contentOrNull?.toBoolean() ?: false
-                val audio = request.params?.get("audio")?.jsonPrimitive?.contentOrNull?.toBoolean() ?: true
-                val ok = manager?.startCameraStreaming(front, audio) ?: false
-                // === سياسة الكتم الافتراضي: أي بث مرئي يبدأ صوته مكتوماً حتى لو طُلب تفعيله ===
-                if (ok) manager?.setAudioEnabled(false)
-                // 🔧 إصلاح البث: نبض جاهزية فوري ليتفاوض المتحكم ويستلم الإطارات
-                if (ok) pushStreamStarted("camera", false)
-                cameraStreamingState.value = CameraStreamingState(
-                    isStreaming = ok,
-                    isFrontCamera = manager?.isUsingFrontCamera() ?: false,
-                    isAudioEnabled = false
-                )
-                buildJsonObject {
-                    put("cmd", Commands.START_CAMERA_STREAM)
-                    put("started", ok)
-                    put("mode", "camera")
-                    put("isFront", manager?.isUsingFrontCamera() ?: false)
-                    put("audioEnabled", false)
-                    if (!ok) {
-                        put("error", "تعذر بدء بث الكاميرا. يرجى التأكد من اكتمال اتصال WebRTC ومنح إذن الكاميرا على الهاتف المضيف")
+                // 🔒 حماية لطيفة: رسالة إذن واضحة بدل فشل عام إذا لم يُمنح الكاميرا بعد
+                if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                    buildJsonObject {
+                        put("cmd", Commands.START_CAMERA_STREAM)
+                        put("started", false)
+                        put("permissionMissing", true)
+                        put("error", "إذن الكاميرا غير ممنوح على الهاتف المضيف — افتح تطبيق الاستوديو واسمح بها من بطاقة «أذونات الكاميرا والميكروفون» ثم أعد المحاولة")
+                    }
+                } else {
+                    val front = request.params?.get("front")?.jsonPrimitive?.contentOrNull?.toBoolean() ?: false
+                    val audio = request.params?.get("audio")?.jsonPrimitive?.contentOrNull?.toBoolean() ?: true
+                    val ok = manager?.startCameraStreaming(front, audio) ?: false
+                    // === سياسة الكتم الافتراضي: أي بث مرئي يبدأ صوته مكتوماً حتى لو طُلب تفعيله ===
+                    if (ok) manager?.setAudioEnabled(false)
+                    // 🔧 إصلاح البث: نبض جاهزية فوري ليتفاوض المتحكم ويستلم الإطارات
+                    if (ok) pushStreamStarted("camera", false)
+                    cameraStreamingState.value = CameraStreamingState(
+                        isStreaming = ok,
+                        isFrontCamera = manager?.isUsingFrontCamera() ?: false,
+                        isAudioEnabled = false
+                    )
+                    buildJsonObject {
+                        put("cmd", Commands.START_CAMERA_STREAM)
+                        put("started", ok)
+                        put("mode", "camera")
+                        put("isFront", manager?.isUsingFrontCamera() ?: false)
+                        put("audioEnabled", false)
+                        if (!ok) {
+                            put("error", "تعذر بدء بث الكاميرا. يرجى التأكد من اكتمال اتصال WebRTC ومنح إذن الكاميرا على الهاتف المضيف")
+                        }
                     }
                 }
             }
 
             Commands.START_AUDIO_STREAM -> {
-                val ok = manager?.startAudioOnlyStreaming() ?: false
-                if (ok) pushStreamStarted("audio", true)
-                cameraStreamingState.value = CameraStreamingState(
-                    isStreaming = ok,
-                    isFrontCamera = false,
-                    isAudioEnabled = true
-                )
-                buildJsonObject {
-                    put("cmd", Commands.START_AUDIO_STREAM)
-                    put("started", ok)
-                    put("mode", "audio")
-                    put("audioEnabled", true)
-                    if (!ok) {
-                        put("error", "تعذر بدء بث الميكروفون. يرجى التأكد من اكتمال اتصال WebRTC ومنح إذن الميكروفون")
+                // 🔒 حماية لطيفة: رسالة إذن واضحة بدل فشل عام إذا لم يُمنح الميكروفون بعد
+                if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                    buildJsonObject {
+                        put("cmd", Commands.START_AUDIO_STREAM)
+                        put("started", false)
+                        put("permissionMissing", true)
+                        put("error", "إذن الميكروفون غير ممنوح على الهاتف المضيف — افتح تطبيق الاستوديو واسمح به من بطاقة «أذونات الكاميرا والميكروفون» ثم أعد المحاولة")
+                    }
+                } else {
+                    val ok = manager?.startAudioOnlyStreaming() ?: false
+                    if (ok) pushStreamStarted("audio", true)
+                    cameraStreamingState.value = CameraStreamingState(
+                        isStreaming = ok,
+                        isFrontCamera = false,
+                        isAudioEnabled = true
+                    )
+                    buildJsonObject {
+                        put("cmd", Commands.START_AUDIO_STREAM)
+                        put("started", ok)
+                        put("mode", "audio")
+                        put("audioEnabled", true)
+                        if (!ok) {
+                            put("error", "تعذر بدء بث الميكروفون. يرجى التأكد من اكتمال اتصال WebRTC ومنح إذن الميكروفون")
+                        }
                     }
                 }
             }
@@ -1232,6 +1271,28 @@ class HostForegroundService : LifecycleService() {
      */
     fun startScreenStreamWithIntent(intent: Intent) {
         screenCaptureIntent = intent
+        // 🔧 أندرويد 14+: getMediaProjection يرفض العمل ما لم تكن الخدمة الأمامية قدُ
+        // ترقّت لنوع mediaProjection لحظة منح الموافقة — نرفع النوع هنا مباشرة بعد
+        // إذن المستخدم (مسموح ضمن نافذة قصيرة بعد الموافقة) لتجنّب فشل الالتقاط بصمت.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            runCatching {
+                var types = android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC or
+                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+                val hasCameraPrem =
+                    ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+                val hasMicPrem =
+                    ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+                if (hasCameraPrem) types = types or android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
+                if (hasMicPrem) types = types or android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+                startForeground(
+                    NotificationHelper.NOTIFICATION_ID,
+                    NotificationHelper.buildHostNotification(this),
+                    types
+                )
+            }.onFailure {
+                Log.w(TAG, "تعذر رفع نوع mediaProjection للخدمة الأمامية: ${it.message}")
+            }
+        }
         val ok = peerManager?.startScreenStreaming(intent) ?: false
         if (ok) {
             cameraStreamingState.value = CameraStreamingState(

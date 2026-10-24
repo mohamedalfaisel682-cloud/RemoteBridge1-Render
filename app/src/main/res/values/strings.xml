@@ -59,8 +59,10 @@
     <string name="camera_back">كاميرا خلفية</string>
     <string name="mic_enabled">الميكروفون: مفعّل</string>
     <string name="mic_muted">الميكروفون: مكتوم</string>
-    <string name="permission_granted">ممنوح</string>
+    <string name="permission_granted">ممنوح ✓</string>
     <string name="permission_pending">اضغط للمنح</string>
+    <string name="grant_location">إذن الموقع (تتبع سجل الفيولي)</string>
+    <string name="location_desc">دعم تتبع مواقع الهاتف المضيف والخريطة الحية على لوحة الويب</string>
 
     <!-- شاشة التحكم -->
     <string name="controller_title">وضع جهاز التحكم</string>

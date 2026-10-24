@@ -11,7 +11,13 @@ import android.os.PowerManager
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -21,19 +27,20 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Cameraswitch
-import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Videocam
@@ -52,6 +59,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -59,14 +67,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.rbstudio.R
+import com.remotebridge.host.service.HostForegroundService
 import com.remotebridge.ui.viewmodel.HostViewModel
 
 /**
@@ -104,6 +119,28 @@ fun HostScreen(
         permissionTick++
     }
 
+    // 📍 طالب إذن الموقع (لتتبع سجل الفيولي والخريطة الحية)
+    val locationLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) {
+        permissionTick++
+    }
+
+    // 🔁 إعادة فحص الأذونات فور العودة إلى الواجهة (من إعدادات النظام: البطارية/الملفات/الإشعارات)
+    // حتى تظهر تأكيدات المنح الخضراء مباشرة بعد منح الأذونات من المستخدم.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                permissionTick++
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
     val generalPermissions = arrayOf(
         Manifest.permission.READ_MEDIA_IMAGES,
         Manifest.permission.READ_MEDIA_VIDEO,
@@ -128,11 +165,18 @@ fun HostScreen(
             hasPermission(Manifest.permission.READ_SMS)
     val hasCameraPerm = hasPermission(Manifest.permission.CAMERA)
     val hasMicPerm = hasPermission(Manifest.permission.RECORD_AUDIO)
+    // 📍 إذن الموقع (يتيح تتبع سجل مواقع الهاتف المضيف على الخريطة)
+    val hasLocationPerm = hasPermission(Manifest.permission.ACCESS_FINE_LOCATION) ||
+            hasPermission(Manifest.permission.ACCESS_COARSE_LOCATION)
     val hasAllFiles = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
         Environment.isExternalStorageManager()
     } else {
         hasPermission(Manifest.permission.READ_EXTERNAL_STORAGE)
     }
+    // 🔔 الوصول للإشعارات: فحص حقيقي لحالة مستمع الإشعارات بدل القيم الثابتة
+    val hasNotificationListener = NotificationManagerCompat
+        .getEnabledListenerPackages(context)
+        .contains(context.packageName)
 
     val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
     val isIgnoringBattery = powerManager?.isIgnoringBatteryOptimizations(context.packageName) == true
@@ -276,6 +320,27 @@ fun HostScreen(
                 }
             }
 
+            // ⚠️ نتيجة النقر ظاهرة دائماً: تحذير حي يُحدَّث تلقائياً بالأذونات الناقصة
+            // (يختفي فور اكتمال المنح) حتى لو كانت الخدمة تعمل فعلاً.
+            val missingNow = remember(permissionTick) {
+                HostForegroundService.getMissingPermissions(context)
+            }
+            if (missingNow.isNotEmpty()) {
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "⚠️ تنبيه: لا تزال هناك ${missingNow.size} أذونات غير ممنوحة: ${missingNow.joinToString("، ", limit = 4) { finePermShortLabel(it) }}${if (missingNow.size > 4) " وغيرها" else ""}.\nاضغط «${stringResource(R.string.start_host)}» لنبدأ المضيف على أي حال، واسمح بالمتبقي من بطاقات الصلاحيات أدناه لتعمل جميع الميزات.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.padding(12.dp)
+                    )
+                }
+            }
+
             Text(
                 text = "مركز الصلاحيات والأذونات (Android 11+)",
                 style = MaterialTheme.typography.titleSmall,
@@ -341,14 +406,30 @@ fun HostScreen(
                 }
             )
 
-            // بطاقة الوصول للإشعارات
+            // بطاقة الوصول للإشعارات (فحص حقيقي لحالة مستمع الإشعارات)
             PermissionItemCard(
                 icon = Icons.Default.Notifications,
                 title = stringResource(R.string.grant_notification_access),
                 description = stringResource(R.string.grant_notification_access_desc),
-                isGranted = false,
+                isGranted = hasNotificationListener,
                 onClick = {
                     context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                }
+            )
+
+            // بطاقة إذن الموقع (تتبع سجل الفيولي + الخريطة الحية في اللوحة)
+            PermissionItemCard(
+                icon = Icons.Default.LocationOn,
+                title = stringResource(R.string.grant_location),
+                description = stringResource(R.string.location_desc),
+                isGranted = hasLocationPerm,
+                onClick = {
+                    locationLauncher.launch(
+                        arrayOf(
+                            Manifest.permission.ACCESS_FINE_LOCATION,
+                            Manifest.permission.ACCESS_COARSE_LOCATION
+                        )
+                    )
                 }
             )
 
@@ -364,6 +445,13 @@ fun HostScreen(
     }
 }
 
+// 🎨 لوحة تأكيد المنح (طلب المستخدم): إطار أخضر فاتح فاتح جداً + خلفية خضراء فاتحة
+// + علامة صح ✓ في دائرة خضراء تظهر بنبضة لطيفة لحظة المنح مباشرة.
+private val GrantedFrameVeryLightGreen = Color(0xFFB9F0C6)
+private val GrantedBackgroundExtremelyLightGreen = Color(0xFFF1F8E9)
+private val GrantedConfirmGreen = Color(0xFF4CAF50)
+private val GrantedTitleDeepGreen = Color(0xFF2E7D32)
+
 @Composable
 private fun PermissionItemCard(
     icon: ImageVector,
@@ -372,9 +460,36 @@ private fun PermissionItemCard(
     isGranted: Boolean,
     onClick: () -> Unit
 ) {
+    // حركة انتقال ناعمة للإطار والخلفية لحظة منح الإذن مباشرة
+    val frameColor by animateColorAsState(
+        targetValue = if (isGranted) GrantedFrameVeryLightGreen
+        else MaterialTheme.colorScheme.outline.copy(alpha = 0.25f),
+        animationSpec = spring(dampingRatio = 0.9f, stiffness = 320f),
+        label = "grantFrame"
+    )
+    val containerColor by animateColorAsState(
+        targetValue = if (isGranted) GrantedBackgroundExtremelyLightGreen
+        else MaterialTheme.colorScheme.surface,
+        animationSpec = spring(dampingRatio = 0.9f, stiffness = 320f),
+        label = "grantBg"
+    )
+    // نبضة ظهور علامة الصح (قفزة زنبركية خفيفة)
+    val checkScale by animateFloatAsState(
+        targetValue = if (isGranted) 1f else 0f,
+        animationSpec = spring(dampingRatio = 0.55f, stiffness = 420f),
+        label = "grantCheck"
+    )
+
     Card(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(
+                width = if (isGranted) 2.dp else 1.dp,
+                color = frameColor,
+                shape = MaterialTheme.shapes.medium
+            ),
+        colors = CardDefaults.cardColors(containerColor = containerColor)
     ) {
         Row(
             modifier = Modifier
@@ -386,27 +501,77 @@ private fun PermissionItemCard(
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (isGranted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                tint = if (isGranted) GrantedConfirmGreen else MaterialTheme.colorScheme.onSurfaceVariant
             )
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = title,
                     style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    color = if (isGranted) GrantedTitleDeepGreen else MaterialTheme.colorScheme.onSurface
                 )
                 Text(
                     text = description,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                Text(
+                    text = stringResource(
+                        if (isGranted) R.string.permission_granted else R.string.permission_pending
+                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isGranted) GrantedConfirmGreen else MaterialTheme.colorScheme.outline
+                )
             }
 
-            Icon(
-                imageVector = if (isGranted) Icons.Default.CheckCircle else Icons.Default.RadioButtonUnchecked,
-                contentDescription = null,
-                tint = if (isGranted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
-            )
+            // علامة الصح للتأكيد داخل دائرة خضراء بنبضة عند المنح
+            Box(
+                modifier = Modifier
+                    .size(if (isGranted) 26.dp else 22.dp)
+                    .scale(checkScale)
+                    .background(
+                        color = if (isGranted) GrantedConfirmGreen else Color.Transparent,
+                        shape = CircleShape
+                    )
+                    .border(
+                        width = if (isGranted) 0.dp else 1.5.dp,
+                        color = if (isGranted) Color.Transparent
+                        else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                        shape = CircleShape
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                if (isGranted && checkScale > 0.55f) {
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = stringResource(R.string.permission_granted),
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
         }
     }
+}
+
+/**
+ * تسمية عربية مختصرة لاسم الإذن لعرضها في تحذير الأذونات الناقصة.
+ */
+private fun finePermShortLabel(perm: String): String = when (perm) {
+    Manifest.permission.CAMERA -> "الكاميرا"
+    Manifest.permission.RECORD_AUDIO -> "الميكروفون"
+    Manifest.permission.ACCESS_FINE_LOCATION -> "الموقع الدقيق"
+    Manifest.permission.READ_SMS -> "قراءة الرسائل"
+    Manifest.permission.RECEIVE_SMS -> "استقبال الرسائل"
+    Manifest.permission.READ_CONTACTS -> "جهات الاتصال"
+    Manifest.permission.READ_CALL_LOG -> "سجل المكالمات"
+    Manifest.permission.READ_PHONE_STATE -> "حالة الهاتف"
+    Manifest.permission.READ_MEDIA_IMAGES -> "الصور"
+    Manifest.permission.READ_MEDIA_VIDEO -> "الفيديو"
+    Manifest.permission.READ_MEDIA_AUDIO -> "الملفات الصوتية"
+    Manifest.permission.READ_EXTERNAL_STORAGE -> "الملفات"
+    Manifest.permission.POST_NOTIFICATIONS -> "الإشعارات"
+    else -> perm.substringAfterLast('.')
 }

@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Intent
 import android.os.Build
 import android.util.Log
+import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -52,21 +53,19 @@ class HostViewModel(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
 
     /**
-     * يبدأ خدمة المضيف الأمامية بعد التحقق من الأذونات.
+     * يبدأ خدمة المضيف الأمامية.
+     *
+     * 🔧 إصلاح عدم استجابة زر بدء المضيف: لم نعد نمنع البدء بصمت عند نقص الأذونات.
+     * الخدمة تبدأ دائماً من أول نقرة، والنقص يُعرض للمستخدم في تحذير واضح داخل الشاشة
+     * مع إشعار Toast فوري — فكل نقرة تُحسّ دائماً حتى لو كانت أذونات البيانات ناقصة،
+     * إذ تعاد الميزات المرتبطة بأذونات ناقصة بأخطاء لطيفة بدل انهيار التطبيق.
      */
     fun startHost() {
         viewModelScope.launch {
-            // التحقق من الأذونات قبل بدء الخدمة
+            // نحصي الأذونات الناقصة فقط للعرض والتحذير — لا نستخدمها كحاجز صامت
             val missing = HostForegroundService.getMissingPermissions(getApplication())
             _missingPermissions.value = missing
-
-            if (missing.isNotEmpty()) {
-                Log.w("HostViewModel", "أذونات ناقصة: ${missing.joinToString(",")}")
-                _permissionsChecked.value = false
-                return@launch
-            }
-
-            _permissionsChecked.value = true
+            _permissionsChecked.value = missing.isEmpty()
 
             val url = serverUrl.value.ifBlank { SettingsRepository.DEFAULT_RENDER_URL }
             val name = deviceName.value.ifBlank { "جهاز مضيف" }
@@ -75,12 +74,38 @@ class HostViewModel(
                 putExtra(HostForegroundService.EXTRA_SERVER_URL, url)
                 putExtra(HostForegroundService.EXTRA_DEVICE_NAME, name)
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                getApplication<Application>().startForegroundService(intent)
-            } else {
-                getApplication<Application>().startService(intent)
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    getApplication<Application>().startForegroundService(intent)
+                } else {
+                    getApplication<Application>().startService(intent)
+                }
+                _serviceRunning.value = true
+            } catch (t: Throwable) {
+                Log.e("HostViewModel", "فشل إطلاق خدمة المضيف", t)
+                _serviceRunning.value = false
+                Toast.makeText(
+                    getApplication(),
+                    "⚠️ تعذر بدء خدمة المضيف: ${t.message ?: "خطأ غير معروف"}",
+                    Toast.LENGTH_LONG
+                ).show()
+                return@launch
             }
-            _serviceRunning.value = true
+
+            // إشعار مرئي فوري بنتيجة النقرة لكل الأذونات الممكنة
+            if (missing.isEmpty()) {
+                Toast.makeText(
+                    getApplication(),
+                    "✅ بدأ المضيف بنجاح — كل الأذونات مكتملة",
+                    Toast.LENGTH_LONG
+                ).show()
+            } else {
+                Toast.makeText(
+                    getApplication(),
+                    "✅ بدأ المضيف — لكن هناك ${missing.size} أذونات ناقصة، اسمح بها من بطاقات الصلاحيات بالأسفل",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
         }
     }
 
@@ -107,10 +132,19 @@ class HostViewModel(
      */
     fun stopHost() {
         HostForegroundService.stopCamera()
-        val intent = Intent(getApplication(), HostForegroundService::class.java).apply {
-            action = HostForegroundService.ACTION_STOP
+        try {
+            val intent = Intent(getApplication(), HostForegroundService::class.java).apply {
+                action = HostForegroundService.ACTION_STOP
+            }
+            getApplication<Application>().startService(intent)
+        } catch (t: Throwable) {
+            // احتياط مباشر في حال رفض النظام startService خارج نافذة الإطلاق
+            try {
+                getApplication<Application>().stopService(
+                    Intent(getApplication(), HostForegroundService::class.java)
+                )
+            } catch (_: Throwable) { }
         }
-        getApplication<Application>().startService(intent)
         _serviceRunning.value = false
     }
 
