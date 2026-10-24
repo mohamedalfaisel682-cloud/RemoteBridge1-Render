@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.rbstudio.R
 import com.remotebridge.core.data.SettingsRepository
+import com.remotebridge.ui.theme.UiThemePrefs
 import com.remotebridge.ui.viewmodel.SettingsViewModel
 
 /**
@@ -410,6 +411,79 @@ fun SettingsScreen(
             }
 
             Spacer(modifier = Modifier.height(8.dp))
+
+            // 🎨 B4 — قسم العرض والواجهة: نمط العرض داكن/فاتح/النظام
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "🎨 العرض والواجهة",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = "اختر نمط العرض المفضل للتطبيق (داكن - فاتح - حسب النظام)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    val themeMode by UiThemePrefs.mode.collectAsState()
+                    val modes = listOf(
+                        Triple(UiThemePrefs.MODE_SYSTEM, "🖥️ حسب النظام", themeMode == UiThemePrefs.MODE_SYSTEM),
+                        Triple(UiThemePrefs.MODE_DARK, "🌙 داكن", themeMode == UiThemePrefs.MODE_DARK),
+                        Triple(UiThemePrefs.MODE_LIGHT, "☀️ فاتح", themeMode == UiThemePrefs.MODE_LIGHT),
+                    )
+                    modes.forEach { (value, label, selected) ->
+                        Card(
+                            onClick = {
+                                UiThemePrefs.set(context, value)
+                                Toast.makeText(
+                                    context,
+                                    if (value == UiThemePrefs.MODE_LIGHT) "تم تفعيل النمط الفاتح ☀️"
+                                    else if (value == UiThemePrefs.MODE_DARK) "تم تفعيل النمط الداكن 🌙"
+                                    else "تم عودة الألوان حسب النظام 🖥️",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            },
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                                else MaterialTheme.colorScheme.surface
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = if (selected) "$label ✓" else label,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 🛡️ B4 — حالة أذونات الهاتف المضيف (منتقلة من شاشة المضيف إلى الإعدادات)
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    HostPermissionsSection()
+                }
+            }
 
             // زر الحفظ التأكيدي
             Button(

@@ -2,13 +2,18 @@ package main
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -193,6 +198,7 @@ func main() {
 
 	http.HandleFunc("/ws", handleWebSocket)
 	http.HandleFunc("/api/state", handleStateAPI)
+	http.HandleFunc("/api/blob", handleBlobAPI)
 
 	addr := "0.0.0.0:" + port
 	log.Printf("RemoteBridge Signaling Server starting on %s", addr)
@@ -536,8 +542,7 @@ func init() {
 }
 
 // 🌐 POST/GET /api/state — خزّان لقطات الحالة الصغيرة للمضيف/المتحكم.
-func handleStateAPI(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+func handleStateAPI(w http.ResponseWriter, r *http.Request) {	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 	if r.Method == http.MethodOptions {
@@ -618,4 +623,161 @@ func writeStateJSONError(w http.ResponseWriter, status int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "error": message})
+}
+
+// ==========================================================================
+//  B4 — مخزن الملفات المشفرة (Blob Store) لمزامنة بيانات المضيف إلى خادم Render
+//  المضيف يرفع: لقطات مشفرة (موقع/مكالمات/إشعارات/حالة الشبكة) + تسجيلات المكالمات والبث.
+//  التكرار ممنوع: يمنع التحقق sha256 رفع محتوى مطابق مفعلاً (dedup)، والحذف
+//  والجلب المُكرر مستبعدان لاحقاً بمقارنة sha256 في قائمة الملفات.
+//  ذاكرة in-process حتى 48MB لكل جهاز (قابلة للترقية لاحقاً إلى تخزين دائم).
+// ==========================================================================
+
+type BlobItem struct {
+	Name   string `json:"name"`
+	Kind   string `json:"kind"`
+	Sha256 string `json:"sha256"`
+	Size   int64  `json:"size"`
+	Ts     int64  `json:"ts"`
+	Data   []byte `json:"-"`
+}
+
+var (
+	blobMu    sync.RWMutex
+	blobData  = map[string]map[string]map[string]*BlobItem{} // device -> kind -> name -> item
+	blobBytes = map[string]int64{}                           // device -> total bytes
+)
+
+const blobMaxPerDevice = int64(48) << 20
+const blobMaxItem = int64(32) << 20
+
+func blobTrack(deviceID string, item *BlobItem, prev *BlobItem) {
+	delta := item.Size
+	if prev != nil {
+		delta -= prev.Size
+	}
+	blobBytes[deviceID] += delta
+	// طرد الأقدم لو تجاوزنا الحد
+	for blobBytes[deviceID] > blobMaxPerDevice {
+		var oldestKind, oldestName string
+		var oldestTs int64 = math.MaxInt64
+		for kind, items := range blobData[deviceID] {
+			for name, it := range items {
+				if it.Ts < oldestTs {
+					oldestTs, oldestKind, oldestName = it.Ts, kind, name
+				}
+			}
+		}
+		if oldestTs == math.MaxInt64 || (oldestKind == item.Kind && oldestName == item.Name) {
+			break // حماية من التخارج
+		}
+		evict := blobData[deviceID][oldestKind][oldestName]
+		blobBytes[deviceID] -= evict.Size
+		delete(blobData[deviceID][oldestKind], oldestName)
+		if len(blobData[deviceID][oldestKind]) == 0 {
+			delete(blobData[deviceID], oldestKind)
+		}
+	}
+}
+
+func handleBlobAPI(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Device-Id, X-Blob-Name, X-Blob-Sha")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	deviceID := r.URL.Query().Get("device")
+	kind := r.URL.Query().Get("kind")
+	name := r.URL.Query().Get("name")
+	deviceID = strings.TrimSpace(deviceID)
+	kind = strings.TrimSpace(kind)
+
+	switch r.Method {
+	case http.MethodPost:
+		if deviceID == "" || kind == "" || name == "" {
+			writeStateJSONError(w, http.StatusBadRequest, "device و kind و name مطلوبة في الرابط (query)")
+			return
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, blobMaxItem)
+		data, err := io.ReadAll(r.Body)
+		if err != nil {
+			writeStateJSONError(w, http.StatusBadRequest, "فشل قراءة بيانات الملف")
+			return
+		}
+		if len(data) == 0 {
+			writeStateJSONError(w, http.StatusBadRequest, "ملف فارغ")
+			return
+		}
+		sum := fmt.Sprintf("%x", sha256.Sum256(data))
+		clientSha := strings.TrimSpace(r.Header.Get("X-Blob-Sha"))
+		blobMu.Lock()
+		defer blobMu.Unlock()
+		prev, existed := blobData[deviceID][kind][name]
+		if existed && prev.Sha256 == sum && clientSha == sum {
+			// بلا تكرار: نفس المحتوى مرفوع مسبقاً — لا نزيده ولا نعيد تنزيل الرفع
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "dedup": true, "sha256": sum})
+			return
+		}
+		if blobData[deviceID] == nil {
+			blobData[deviceID] = map[string]map[string]*BlobItem{}
+		}
+		if blobData[deviceID][kind] == nil {
+			blobData[deviceID][kind] = map[string]*BlobItem{}
+		}
+		item := &BlobItem{Name: name, Kind: kind, Sha256: sum, Size: int64(len(data)), Ts: time.Now().UnixMilli(), Data: data}
+		if existed {
+			item.Ts = prev.Ts // أول رفع يبقى كمرجع (استبعاد التكرار عند الجلب)
+		}
+		blobData[deviceID][kind][name] = item
+		blobTrack(deviceID, item, prev)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "dedup": false, "sha256": sum, "size": item.Size})
+
+	case http.MethodGet:
+		if name == "" {
+			// قائمة الملفات (استبعاد التكرار يعتمد على sha256 في القائمة نفسها)
+			if deviceID == "" || kind == "" {
+				writeStateJSONError(w, http.StatusBadRequest, "device و kind مطلوبتان في الرابط")
+				return
+			}
+			blobMu.RLock()
+			kinds := blobData[deviceID]
+			var out []*BlobItem
+			items, ok := kinds[kind]
+			if ok {
+				for _, it := range items {
+					out = append(out, it)
+				}
+			}
+			blobMu.RUnlock()
+			sort.Slice(out, func(i, j int) bool { return out[i].Ts < out[j].Ts })
+			w.Header().Set("Content-Type", "application/json")
+			if out == nil {
+				out = []*BlobItem{}
+			}
+			json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "items": out})
+			return
+		}
+		if deviceID == "" || kind == "" {
+			writeStateJSONError(w, http.StatusBadRequest, "device و kind مطلوبتان")
+			return
+		}
+		blobMu.RLock()
+		it, ok := blobData[deviceID][kind][name]
+		blobMu.RUnlock()
+		if !ok || it == nil {
+			writeStateJSONError(w, http.StatusNotFound, "الملف غير موجود")
+			return
+		}
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", it.Name))
+		w.Write(it.Data)
+
+	default:
+		writeStateJSONError(w, http.StatusMethodNotAllowed, "طريقة غير مدعومة")
+	}
 }

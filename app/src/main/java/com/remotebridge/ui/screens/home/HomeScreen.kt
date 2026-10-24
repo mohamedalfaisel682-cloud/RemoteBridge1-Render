@@ -48,7 +48,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import com.rbstudio.R
+import com.remotebridge.core.data.AppModePrefs
+import androidx.compose.ui.platform.LocalContext
 
 /**
  * الشاشة الرئيسية لنظام "جسر عن بعد": واجهة أنيقة، عصرية ومصممة بدقة لشاشات الهواتف بلمسات زجاجية وألوان Material 3.
@@ -60,6 +72,9 @@ fun HomeScreen(
     onHostClick: () -> Unit,
     onControllerClick: () -> Unit
 ) {
+    // B4 — تتبع الوضع النشط (المفتوح) لتأثير التوهج على البطاقة النشطة
+    val context = LocalContext.current
+    val activeMode by AppModePrefs.mode.collectAsState()
     Scaffold(
         topBar = {
             TopAppBar(
@@ -194,7 +209,11 @@ fun HomeScreen(
                 description = stringResource(R.string.mode_host_desc),
                 accentColor = MaterialTheme.colorScheme.primary,
                 containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
-                onClick = onHostClick
+                isActive = activeMode == AppModePrefs.MODE_HOST,
+                onClick = {
+                    AppModePrefs.set(context, AppModePrefs.MODE_HOST)
+                    onHostClick()
+                }
             )
 
             // بطاقة جهاز التحكم الأصلي (Native Controller)
@@ -205,7 +224,11 @@ fun HomeScreen(
                 description = stringResource(R.string.mode_controller_desc),
                 accentColor = MaterialTheme.colorScheme.secondary,
                 containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.35f),
-                onClick = onControllerClick
+                isActive = activeMode == AppModePrefs.MODE_CONTROLLER,
+                onClick = {
+                    AppModePrefs.set(context, AppModePrefs.MODE_CONTROLLER)
+                    onControllerClick()
+                }
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -221,16 +244,31 @@ private fun ModernRoleCard(
     description: String,
     accentColor: Color,
     containerColor: Color,
+    isActive: Boolean,
     onClick: () -> Unit
 ) {
+    // B4 — تأثير مرئي للتبويب النشط: حافة توهج نابضة (ثابتة أثناء النقر أيضاً)
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val pulse = rememberInfiniteTransition(label = "activeGlow")
+    val glowAlpha by pulse.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 0.85f,
+        animationSpec = infiniteRepeatable(animation = tween(1300), repeatMode = RepeatMode.Reverse),
+        label = "glowAlpha"
+    )
+    val borderAlpha = if (pressed) 0.9f else (if (isActive) glowAlpha else 0.3f)
+    val borderW = if (pressed) 2.dp else (if (isActive) 2.dp else 1.dp)
+
     Card(
         onClick = onClick,
+        interactionSource = interaction,
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(22.dp))
-            .border(1.dp, accentColor.copy(alpha = 0.3f), RoundedCornerShape(22.dp)),
+            .border(borderW, accentColor.copy(alpha = borderAlpha), RoundedCornerShape(22.dp)),
         colors = CardDefaults.cardColors(containerColor = containerColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isActive) 4.dp else 2.dp)
     ) {
         Row(
             modifier = Modifier

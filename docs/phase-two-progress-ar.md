@@ -193,3 +193,78 @@
 - `host/service/HostForegroundService.kt` — بلا حاجز بداية صامت + أنواع خدمة ديناميكية + ترقية mediaProjection بعد الموافقة + حمايات إذن الكاميرا/الميكروفون في الأوامر.
 - `res/values/strings.xml` — إضافة `grant_location`/`location_desc` وتعديل نص الحالة إلى «ممنوح ✓».
 - APK: `app-debug.apk` = 66,636,607 B (Kotlin: BUILD SUCCESSFUL؛ APK السابق 66,026,134 B عند 331be0d).
+
+---
+
+## ✅ الدفعة B4 (2026-10-24) — الأوقات الإنجليزية، تجميع واتسابي، أقسام سريعة قابلة للتخصيص، تسجيل المكالمات مع الخزنة المشفرة ومزامنة بلا تكرار، وترحيل الأذونات إلى الإعدادات (RB-2026-10-24-B4)
+
+### 1) الوقت والتاريخ بالأرقام الإنجليزية وخط/لون أوضح (لوحة الويب + تطبيق المتحكم)
+- دوال مساعدة جديدة في اللوحة: `fmtEnTime` / `fmtEnDate` / `fmtEnDateLabel` / `fmtEnClock` — تفرض أرقاماً لاتينية (تريد `Latin digits`) بغض النظر عن لغة الجهاز، مع فئات CSS `.ts-en` (+ تنويعات `on-green`/`on-slate`/`on-panel`) لخط أحادي واضح وحجم/تباين محسّن.
+- تحويل كل 13 موقع تنسيق سابق بلغة `ar-SA`/`ar-EG` في اللوحة إلى الصيغة الإنجليزية، إضافة إلى 4 مواقع ترويسة تاريخ (`dateStr`/`timeTxt`/`formattedDate`) — الرسائل، المكالمات، المنشورات، التسجيلات، خريطة الموقع، خيوط الدردشة.
+- في تطبيق المتحكم (Compose): `formatBytes` في `DashboardScreen` و`FileListScreen` تستخدم `String.format(Locale.US, …)` حتى تظهر الأرقام الإنجليزية ثابتاً.
+
+### 2) تجميع واتسابي عالي الدقة للرسائل/المكالمات/الإشعارات
+- تجميع زمني يومي وتقسيم «اليوم/أمس/التاريخ» مع فاصل `.ts-date-sep` وسطر تاريخ إنجليزي.
+- الدردشة المتقدمة (نافذة SMS): فقاعات بحواف واتسابية، تسمية الاتجاه «📥 واردة / 📤 صادرة»، وطابع وقت إنجليزي بخط أوضح داخل كل فقاعة.
+- تجميع الإشعارات: بادجات السطر重金属 `ts-en` موحدة على كل الترويسات المجمّعة.
+
+### 3) تأثير مرئي للتبويب النشط
+- CSS: `.active-tab` بتوهج نبضي خطي (`activeTabPulse`) + خط سفلي — يوضع مؤقتاً عبر `switchTab` على `.tab-btn`/`.tab-btn-mobile` فقط.
+- Compose (القائمة الرئيسية): `ModernRoleCard` أصبحت بتأثير توهج نابض (`rememberInfiniteTransition` + `animateFloat`) على البطاقة النشطة، مع الاعتماد على `AppModePrefs` الجديد (`rb_ui_prefs`/`last_active_mode`) لتذكر آخر وضع مفتوح (host/controller) وتلوين حافته نابضة عند النقر أيضاً (حالة `pressed`).
+
+### 4) قسم «العرض والواجهة» في الإعدادات
+- إعدادات جديدة في اللوحة/Web + Compose عبر `UiThemePrefs` الجديد (`rb_ui_prefs`/`ui_theme_mode`: system/dark/light، StateFlow، استعادة عند الإقلاع).
+- Compose: ثلاث بطاقات وضع في `SettingsScreen` (حسب النظام / داكن / فاتح) مع Toast تأكيدي، وسقالة `BridgeTheme(darkTheme = when(mode))` في `MainActivity`.
+- Web: زرّان «مبدل نمط» بأزرار راديو + `body.ui-light` (خامة CSS filter-invert مع عكس معاكس للصور/الخرائط/العارض حتى لا تتشوه) وتخزين محلي `remotebridge_ui_theme_v1` واستعادة عند `DOMContentLoaded`.
+- قسم سريع: شبكة «الأقسام السريعة» القابلة للتخصيص (كتالوج 7 أقسام ومحرر تلقائي: `QUICK_SECTIONS_CATALOG` + `remotebridge_quick_sections_v1` + زر «✏️ تخصيص»).
+
+### 5) إعادة تسمية «جلب الحية» → «جلب البيانات»
+- استبدال 11 موضعاً في اللوحة بالكامل — لا نص متبقٍ.
+
+### 6) لوحة P2P المطوية بسطر واحد
+- الرأس: عنوان قابل للنقر + ملخص حالة مصغّر `#p2p-mini-summary` (DC-حالة أولوية بلون درجة) + زر «🔗 ربط WebRTC» + «🌐 STUN» + زر «🚨 تفاصيل» بنبضة `.blink-pill`.
+- زر «فحص الاتصال» داخل اللوحة استُبدل بوظيفة «ربط WebRTC» نفسها (نقل الإجراء من زر معرف الاستهداف) — يبقى زر الفحص في الترويسة العلوية كما هو.
+- زر تفاصيل `toggleP2PDetails()` يفتح نافذة التشخيص (الشبكة 4 حالة + مجموعات مرشحين + إعادة ربط P2P) وينطفئ النبضة عند فتحها، و`updateWebRTCDiagnosticUI` يحدّث الملخص المصغّر حتى مع إخفاء التفاصيل.
+
+### 7) ترحيل حالة أذونات الهاتف المضيف إلى الإعدادات
+- إزالة بطاقات الأذونات من شاشة المضيف، وبقيت ملخصاً مضغوطاً («X غير ممنوحة» أو «جميع الأذونات ممنوحة ✓») مع ذكر الناقص باللغة العربية، وفتح الإعدادات بضغطة.
+- قسم كامل في الإعدادات (كلاس `HostPermissionsSection.kt` الجديد): نفس البطاقات الست بصورها الخضراء من B3 + إعادة فحص `ON_RESUME` + ملخص «X من 6»، مع بقاء شريط التحذير داخل شاشة المضيف للسياق عند البدء.
+- اللوحة (Web): حشرات حالة حقيقية بديلاً عن شارات الإذن الوهمية السابقة — `hostPermHints` تُحدّث من ردود أوامر حقيقية (`notifications_list`/`calls_list`/`media_folders`/`recordings_list`/`rec_start`/`call_record_set`) عبر `markHostPerm`، ومساحة إعدادات `#host-perms-status` مع زر «🔄 تحقق» يعيد بروب الأوامر ويعاود الرسم بعد 7.5 ثانية.
+
+### 8) إزالة أيقونة «تنقيب تلقائي»
+- حذف زر `#auto-scan-alt` من اللوحة (والشبكة أصبحت عموداً واحداً)؛ منطق `toggleAutoScan` محفوظ بحارس `if` آمن، ويعمل المطوّر نفسه عبر البحث السحابي الجديد.
+
+### 9) تسجيل المكالمات على المضيف
+- `HostCallRecorder` (ضمن `HostVault.kt`) بمصادر صوت متضائلة: `VOICE_CALL → VOICE_COMMUNICATION → MIC` مع إعادة بناء `MediaRecorder` عند فشل الإعداد.
+- استماع هاتفي `PhoneStateListener` لكل الاشتراكات المسموحة: `OFFHOOK` يبدأ التسجيل، `IDLE` ينهيه ويحفظه في `RemoteBridgeMedia/callrec/call_*.m4a` ثم شفرة فورية.
+- أمر جديد `call_record_set` (تفعيل/إيقاف عبر زرّي الإعدادات في اللوحة) + إرفاق في `startHost` ونسيان التسجيل في `stopHost`، مع `pushLiveEvent("call_record_error")` عند الفشل إن حصل.
+- سلّم مشروعية الإذن (تحليل عميق — انظر §11).
+
+### 10) خزنة مشفرة مخفية + مزامنة بلا تكرار + مزامنة تسجيلات المكالمات
+- `HostVaultCrypto`: AES-256/GCM بمفتاح AndroidKeyStore (`rb_vault_key_v1`) وبديل مستقر من `ANDROID_ID`؛ الصيغة `[1B ver][12B IV][ct+tag]`.
+- `HostVaultManager`: مخزن مخفي `.rbvault` داخل `filesDir` (غير مرئي للمتصفحات العامة)، بيان وصفية داخل Prefs (`rb_upload_manifest_v1`)، مزامنة بلا تكرار على نطاق التخزين (المحلي `lasraw_<kind>`) وعلى الخادم (POST `/api/blob` مع `X-Blob-Sha` sha256 → استجابة `dedup:true` دون إعادة رفع)، وقفل `manifestLock` متزامن + لقطة مفاتيح قبل المرور لتفادي `ConcurrentModificationException`.
+- دفق بنقاط خدمة منتظم: `vaultTick()` كل 180 ثانية (أول نبضة بعد 15 ثانية) بعد لقطة الحالة، مع 5 أنواع لقطة (location/calls/sms/notifs/net) + تظليل كفاءة: الرفع فقط عند توفر الإنترنت (`isNetworkOnline()` عبر ConnectivityManager)، وحذف مدخل البيانات بعد رفع ناجح (ملف محفوظ محلياً كنسخة حتى يقرر المستخدم غير ذلك).
+- مرايا مجلدات الوسائط: screen/camera/audio/screenshot→screenshots/callrec تُشفَّر وتُرفع بنفس المسار (بلا تكرار).
+- خادم Go: نقطة `/api/blob` (GET قائمة/POST رفع/OPTIONS CORS؛ مخزن سحابي في الذاكرة `blobData[device][kind][name]` بسقف 48MB/جهاز (تطيير الأقدم أولاً مع حماية الطلب الحارج) وسقف 32MB/عنصر، والتحقق `sha256` يجنّب التكرار)، مع `go vet` و`go build` ناجحين.
+- شارات تشفير في شبكة التسجيلات: `loadRecordingsServerDedup(kind)` يجهّز خريطة أسماء الملفات المتزامنة مقابل الرفع المشفر بالخادم (إزالة `^kind__` و`.rbenc$` ثم مقارنة الاسم المحلي مضبوطاً بالوسوم «🔐 نسخة مشفرة متزامنة ✓» أو «⏳ بانتظار الرفع المشفر») — مع تبديل اسم `screenshot→screenshots` تلقائياً.
+- متصفح الخزنة في اللوحة: `openVaultBlobsPanel()` يجمع 11 نوعاً عبر `Promise.allSettled`، تمرير سجل «منزول» بالمحلي `remotebridge_seen_blobs_v1` (سقف 800) بطاقات «🆕 جديدة»/«✓ منزولة»، وعلامات 👁️ (مشاهدة) و⬇️ (تنزيل مشفر فعلياً) و«اجعل الكل منزولاً».
+
+### 11) تحليل عميق — مشروعة وحل ملائم لتسجيل المكالمات على أندرويد الحديث
+- بعد أندرويد 9/10 حول حفظ الصوت الدوري `MediaRecorder.AudioSource.VOICE_CALL` أُصبح يجيب بشبكة صامتة (أو رفضاً) إلا داخل تطبيقات مساعدة مسجلة رسمياً لدى OEM (RoleManager `ROLE_CALL_SCREENING`/`ROLE_DIALER` مع التزام بند مؤهل). تم الاعتماد على التراجع الحراري `VOICE_COMMUNICATION → MIC` — الثانيا̫ يسجل صوت المحيط الصادر من السماعة في الواقع العملي (أي لا صوت خفي متوقع من الشبكة على نموذج حديث) وقد ظل سهلاً على الأقدمي/المصنّعين البيئيين.
+- إذن `READ_CALL_LOG` على أندرويد 11+ محصور على إذن معتمد بتأكيد Play/OEM لتطبيقات الهاتف داخلية — بينما الموافقة اليدوية عبر الإعدادات تبقى ممكنة للمستخدم نفسه على الأغلبية (بديل: تصفية عبر `Telephony.CallLog` بعد المعالجة اللاحقة عند إتاحة الإذن).
+- HOST vault مستقل من مجلد عام؛ حفظ عرض ≤24MB لكل تلقاء مرآة الوسائط، مع خيار التسجيل الطويل ضمن أمان الذاكرة.
+
+### 12) منتقي مجلداتuspendLayout الاستيمو — بحث + اقتراحات + تحديد الكل
+- حقل بحث فوري `#studio-folder-search` مع شرح، وصندوق اقتراحات `#studio-folder-suggest` (أعلى 6 إسماً فريداً عند الكتابة، اختيار يقصّ علامة الإيموجي ثم تطبيق مباشر).
+- `filteredStudioFolders()` يحفظ الفهار الأصلية عند الالتصاق؛ «✅ تحديد الكل» يشمل النتائج المطابقة للبحث فقط (سلوك أذكى)؛ تصفير الاستعلام عند كل فتح.
+
+### 13) الملفات المعدّلة والتحقق
+- `main.go` – API blob كامل، `go vet` ناجح، `go build -o rb_server_test.exe` ناجح.
+- `core/model/Models.kt` – `CALL_RECORD_SET` + `VAULT_FLUSH`.
+- `host/service/HostVault.kt` – جديد كامل (crypto + manager + call recorder).
+- `host/service/HostForegroundService.kt` – شبكات الخزنة + الأوامر الجديدة + فصل المسجل عند الإيقاف.
+- `web-dashboard/index.html` – البنية المذكورة كاملة، تحقق `node --check` ناجح مرتين (سكربت الأساسي ≃289.6KB).
+- `MainActivity.kt` + `ui/theme/UiThemePrefs.kt` (جديد) + `core/data/AppModePrefs.kt` (جديد).
+- `ui/screens/settings/SettingsScreen.kt` + `ui/screens/settings/HostPermissionsSection.kt` (جديد) + `ui/screens/host/HostScreen.kt` + `ui/screens/home/HomeScreen.kt`.
+- `ui/screens/dashboard/DashboardScreen.kt` + `ui/screens/files/FileListScreen.kt` – Locale.US.
+- APK: `app-debug.apk` = 66,636,607 B (تجميعان ناجحان: الأول بعد طبقة الخزنة/الخدمة، والثاني بعد تغييرات Compose — تم التحقق أن APK الأخير حديث ويحوي كلاسات B4: UiThemePrefs/AppModePrefs/HostPermissionsSection/HostVault + أمر call_record_set داخل dex).

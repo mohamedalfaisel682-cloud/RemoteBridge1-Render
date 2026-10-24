@@ -223,16 +223,16 @@ private fun CategoryCard(
 }
 
 /**
- * يحوّل البايتات إلى نص مقروء.
+ * يحوّل البايتات إلى نص مقروء — B4: أرقام إنجليزية ثابتة بغض النظر عن لغة الجهاز.
  */
 private fun formatBytes(bytes: Long): String {
     val kb = bytes / 1024.0
     val mb = kb / 1024.0
     val gb = mb / 1024.0
     return when {
-        gb >= 1.0 -> String.format("%.1f غيغابايت", gb)
-        mb >= 1.0 -> String.format("%.1f ميغابايت", mb)
-        kb >= 1.0 -> String.format("%.0f كيلوبايت", kb)
+        gb >= 1.0 -> String.format(java.util.Locale.US, "%.1f غيغابايت", gb)
+        mb >= 1.0 -> String.format(java.util.Locale.US, "%.1f ميغابايت", mb)
+        kb >= 1.0 -> String.format(java.util.Locale.US, "%.0f كيلوبايت", kb)
         else -> "$bytes بايت"
     }
 }

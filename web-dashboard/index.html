@@ -142,6 +142,70 @@
         .bubble.out { background: rgba(16,185,129,0.22); border: 1px solid rgba(16,185,129,0.55); color: #d1fae5; border-start-end-radius: 4px; }
         .bubble-time { font-size: 9.5px; opacity: .75; margin-top: 4px; text-align: left; font-family: monospace; }
         .chat-input-row { display:flex; gap:8px; padding: 10px 12px; border-top: 1px solid rgba(51,65,85,0.8); background: rgba(15,23,42,0.9); }
+
+        /* ===== B4 — الوقت/التاريخ بالأرقام الإنجليزية وخط أوضح يتفق مع الخلفية ===== */
+        .ts-en {
+            font-family: "Consolas", "Menlo", ui-monospace, monospace;
+            font-weight: 700;
+            color: #fbbf24;               /* عشوائي واضح على الخلفيات الداكنة */
+            letter-spacing: .25px;
+            direction: ltr;
+            unicode-bidi: isolate;
+            text-shadow: 0 1px 2px rgba(0,0,0,.65);
+        }
+        .ts-en.on-green { color: #ecfdf5; text-shadow: 0 1px 2px rgba(2,44,34,.8); }   /* داخل فقاعة صادرة */
+        .ts-en.on-slate { color: #93c5fd; text-shadow: 0 1px 2px rgba(6,18,38,.8); }   /* داخل فقاعة واردة */
+        .ts-en.on-panel { color: #a7f3d0; }                                            /* على بطاقات شرم */
+        .ts-date-sep {
+            display: inline-flex; align-items: center; gap: 8px;
+            margin: 6px auto 2px; padding: 2.5px 10px;
+            border-radius: 999px;
+            background: rgba(56,189,248,0.12);
+            border: 1px solid rgba(56,189,248,0.35);
+            color: #7dd3fc; font-size: 10px; font-weight: 800;
+            font-family: "Consolas", ui-monospace, monospace;
+            direction: ltr; unicode-bidi: isolate;
+            box-shadow: 0 0 12px rgba(56,189,248,0.15);
+        }
+
+        /* ===== B4 — تأثير مرئي للتبويب/الأيقونة النشطة (توهج نابض + شريط سفلي) ===== */
+        .tab-btn, .tab-btn-mobile { position: relative; transition: box-shadow .25s, background .2s, color .2s; }
+        .active-tab {
+            background: rgba(16,185,129,0.22) !important;
+            color: #34d399 !important;
+            font-weight: 800;
+            box-shadow: 0 0 0 1px rgba(16,185,129,0.55), 0 0 14px 2px rgba(16,185,129,0.35);
+        }
+        .active-tab::after {
+            content: "";
+            position: absolute;
+            bottom: 3px; left: 18%; right: 18%;
+            height: 2.5px; border-radius: 3px;
+            background: linear-gradient(90deg, transparent, #34d399, transparent);
+            animation: activeTabPulse 1.6s ease-in-out infinite;
+        }
+        @keyframes activeTabPulse {
+            0%, 100% { opacity: .55; transform: scaleX(.85); }
+            50%      { opacity: 1;   transform: scaleX(1); }
+        }
+
+        /* ===== B4 — أيقونة نابضة تدل على وجود تفاصيل مخفية ===== */
+        @keyframes blinkPillDot {
+            0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(56,189,248,0.65), 0 0 10px 1px rgba(56,189,248,0.5); }
+            50%      { opacity: .45; box-shadow: 0 0 0 5px rgba(56,189,248,0.06), 0 0 4px 1px rgba(56,189,248,0.25); }
+        }
+        .blink-pill { animation: blinkPillDot 1.5s ease-in-out infinite; cursor: pointer; }
+        .p2p-panel-collapsed { overflow: hidden; }
+
+        /* ===== B4 — نمط العرض الفاتح (عكس منعكس مع إعادة عكس الوسائط) ===== */
+        body.ui-light {
+            filter: invert(0.92) hue-rotate(180deg) saturate(.92);
+            background: #e2e8f0;
+        }
+        body.ui-light img, body.ui-light video, body.ui-light canvas,
+        body.ui-light #rb-loc-map, body.ui-light .leaflet-tile-pane {
+            filter: invert(1) hue-rotate(180deg) saturate(1.08);
+        }
     </style>
     <style id="bridge-host-studio-css">
         /* ===== الإطار الوامض للجهاز المضيف المختار والمتصل (أخضر فاتح ↔ أبيض) ===== */
@@ -373,12 +437,9 @@
                         <input type="text" id="target-device-id" oninput="autoSaveInputs()" placeholder="host-xxxx..." class="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs font-mono text-slate-100 focus:outline-none focus:border-emerald-500">
                         <button onclick="saveCurrentTargetProfile()" title="حفظ بالمفضلة" class="bg-slate-800 text-amber-400 px-2 py-1 rounded-lg text-xs">⭐</button>
                     </div>
-                    <div class="grid grid-cols-2 gap-1.5 mt-2">
+                    <div class="grid grid-cols-1 gap-1.5 mt-2">
                         <button onclick="connectToSelectedHost()" class="bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 border border-emerald-500/30 py-1.5 rounded-lg text-xs font-bold transition">
                             🔗 ربط WebRTC
-                        </button>
-                        <button id="auto-scan-alt" onclick="toggleAutoScan()" class="auto-scan-on py-1.5 rounded-lg text-xs font-bold transition">
-                            🔍 تنقيب تلقائي — يعمل
                         </button>
                     </div>
                 </div>
@@ -529,6 +590,8 @@
 
         // Initialize App
         document.addEventListener("DOMContentLoaded", () => {
+            // B4 — استعادة نمط العرض المحفوظ (داكن/فاتح) قبل رسم أي شيء
+            applyUiTheme(getUiTheme());
             const targetEl = document.getElementById("target-device-id");
             if (targetEl && appConfig.targetDeviceId) targetEl.value = appConfig.targetDeviceId;
             switchTab('dashboard');
@@ -542,6 +605,41 @@
                 appConfig.targetDeviceId = targetEl.value.trim();
                 localStorage.setItem('remotebridge_config', JSON.stringify(appConfig));
             }
+        }
+
+        // ===== B4 — صيغة الوقت/التاريخ بالأرقام الإنجليزية (Latin digits) بخط أوضح =====
+        // تُستخدم في كل ترويسة الوقت داخل لوحة الويب: رسائل/مكالمات/إشعارات/تسجيلات/الخريطة
+        function fmtEnTime(ms) {
+            try {
+                const d = new Date(Number(ms) || Date.now());
+                return d.toLocaleString('en-GB', {
+                    year: 'numeric', month: '2-digit', day: '2-digit',
+                    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+                });
+            } catch (_) { return String(ms || ''); }
+        }
+        function fmtEnDate(ms) {
+            try {
+                const d = new Date(Number(ms) || Date.now());
+                return d.toLocaleDateString('en-GB', { year: 'numeric', month: '2-digit', day: '2-digit' });
+            } catch (_) { return String(ms || ''); }
+        }
+        function fmtEnDateLabel(ms) {
+            try {
+                const d = new Date(Number(ms));
+                const today = new Date();
+                const yest = new Date(); yest.setDate(today.getDate() - 1);
+                const sameDay = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+                if (sameDay(d, today)) return 'اليوم';
+                if (sameDay(d, yest)) return 'أمس';
+                return d.toLocaleDateString('en-GB', { year: 'numeric', month: 'short', day: 'numeric' });
+            } catch (_) { return ''; }
+        }
+        function fmtEnClock(ms) {
+            try {
+                const d = new Date(Number(ms) || Date.now());
+                return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+            } catch (_) { return ''; }
         }
 
         // Toast Notification System
@@ -1818,6 +1916,24 @@
             const data = resp.data || {};
             const cmd = data.cmd || resp.cmd;
 
+            // B4 — تتبع حالة أذونات الهاتف المضيف من ردود الأوامر الحقيقية (تُعرض في الإعدادات)
+            try {
+                if (cmd === 'notifications_list') {
+                    if (data.permissionWarning) markHostPerm('notifications', false);
+                    else if ((data.items || []).length > 0) markHostPerm('notifications', true);
+                } else if (cmd === 'calls_list') {
+                    markHostPerm('callLog', data.permissionWarning ? false : true);
+                } else if (cmd === 'media_folders') {
+                    markHostPerm('storage', true);
+                } else if (cmd === 'recordings_list') {
+                    markHostPerm('storage', true);
+                } else if (cmd === 'rec_start') {
+                    markHostPerm('cameraMic', !data.error && String(data.kind || '') === 'camera');
+                } else if (cmd === 'call_record_set') {
+                    markHostPerm('callRecord', data.ok !== false && !!data.enabled);
+                }
+            } catch (_) {}
+
             // 1) DEVICE_INFO Response
             if (cmd === 'device_info' || data.deviceName || data.batteryLevel !== undefined) {
                 updateDashboardCards(data);
@@ -1890,6 +2006,9 @@
                 // 📂 أرشيف التسجيلات + 📍 نقاط المواقع (قوائم جديدة)
                 if (cmd === 'recordings_list') {
                     recordingsCache = data.items || [];
+                    markHostPerm('storage', true);
+                    // B4 — جلب خريطة الملفات المتزامنة (المشفرة على الخادم) لاستبعاد التكرار والتأشير
+                    if (typeof loadRecordingsServerDedup === 'function') loadRecordingsServerDedup(recordingsFolderCurrent);
                     if (typeof renderRecordingsGrid === 'function') renderRecordingsGrid();
                     return;
                 }
@@ -2151,20 +2270,251 @@
             }
         }
 
+        // ============================================================
+        //  B4 — العرض والواجهة: نمط فاتح/داكن + الأقسام السريعة المخصصة
+        //        + حالة أذونات المضيف الحقيقية + لوحة P2P قابلة للطي
+        // ============================================================
+        const QUICK_SECTIONS_CATALOG = [
+            { id: 'files',         icon: '📁', label: 'مستكشف الملفات',  desc: 'تصفح الذاكرة' },
+            { id: 'camera',        icon: '📹', label: 'البث المباشر',    desc: 'كاميرا ومايك' },
+            { id: 'contacts',      icon: '📇', label: 'جهات الاتصال',    desc: 'الأرقام والمكالمات' },
+            { id: 'notifications', icon: '🔔', label: 'الإشعارات الحية', desc: 'إشعارات التطبيقات' },
+            { id: 'sms',           icon: '💬', label: 'الرسائل',         desc: 'دردشة SMS' },
+            { id: 'calls',         icon: '📞', label: 'سجل المكالمات',   desc: 'أنذر وواردة' },
+            { id: 'studio',        icon: '🎬', label: 'استوديو الوسائط', desc: 'تسجيل وتنزيل' },
+        ];
+        const QUICK_SECTIONS_KEY = 'remotebridge_quick_sections_v1';
+
+        function getQuickSections() {
+            try {
+                const saved = JSON.parse(localStorage.getItem(QUICK_SECTIONS_KEY) || 'null');
+                if (Array.isArray(saved) && saved.length > 0) {
+                    const valid = saved.filter(id => QUICK_SECTIONS_CATALOG.some(s => s.id === id));
+                    if (valid.length > 0) return valid;
+                }
+            } catch (_) {}
+            return ['files', 'camera', 'contacts', 'notifications'];
+        }
+
+        function saveQuickSections(list) {
+            try {
+                const uniq = Array.from(new Set(list.filter(id => QUICK_SECTIONS_CATALOG.some(s => s.id === id))));
+                localStorage.setItem(QUICK_SECTIONS_KEY, JSON.stringify(uniq.length ? uniq : ['files', 'camera', 'contacts', 'notifications']));
+            } catch (_) {}
+        }
+
+        function toggleQuickSection(id) {
+            const cur = getQuickSections();
+            const next = cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id];
+            saveQuickSections(next);
+            const grid = document.getElementById('quick-sections-grid');
+            if (grid) grid.innerHTML = renderQuickSectionsGrid();
+            renderQuickSectionEditor();
+            showToast('تم تحديث الأقسام السريعة ✓', 'success');
+        }
+
+        function renderQuickSectionsGrid() {
+            return getQuickSections().map(id => {
+                const s = QUICK_SECTIONS_CATALOG.find(x => x.id === id) || QUICK_SECTIONS_CATALOG[0];
+                return `
+                    <div onclick="switchTab('${s.id}')" class="p-3 bg-slate-900/60 hover:bg-slate-800/80 border border-slate-800 rounded-2xl cursor-pointer transition text-center group">
+                        <div class="text-2xl mb-1 group-hover:scale-110 transition transform">${s.icon}</div>
+                        <p class="text-xs font-bold text-slate-200">${s.label}</p>
+                        <p class="text-[10px] text-slate-400 mt-0.5">${s.desc}</p>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderQuickSectionEditor() {
+            const cur = getQuickSections();
+            return QUICK_SECTIONS_CATALOG.map(s => `
+                <label class="flex items-center gap-2 px-2.5 py-1.5 rounded-xl border ${cur.includes(s.id) ? 'border-emerald-500/50 bg-emerald-950/40' : 'border-slate-700 bg-slate-950/50'} cursor-pointer select-none">
+                    <input type="checkbox" ${cur.includes(s.id) ? 'checked' : ''} onchange="toggleQuickSection('${s.id}')" class="accent-emerald-500 w-3.5 h-3.5">
+                    <span class="text-sm">${s.icon}</span>
+                    <span class="text-[11px] font-bold ${cur.includes(s.id) ? 'text-emerald-300' : 'text-slate-300'}">${s.label}</span>
+                </label>
+            `).join('');
+        }
+
+        // — نمط العرض: بديل فاتح/داكن — محفوظ محلياً —
+        const UI_THEME_KEY = 'remotebridge_ui_theme_v1';
+        function applyUiTheme(mode) {
+            try { localStorage.setItem(UI_THEME_KEY, mode); } catch (_) {}
+            document.body.classList.toggle('ui-light', mode === 'light');
+        }
+        function getUiTheme() {
+            try { return localStorage.getItem(UI_THEME_KEY) || 'dark'; } catch (_) { return 'dark'; }
+        }
+        function setUiTheme(mode) {
+            applyUiTheme(mode);
+            const r1 = document.getElementById('ui-theme-dark'); if (r1) r1.checked = mode === 'dark';
+            const r2 = document.getElementById('ui-theme-light'); if (r2) r2.checked = mode === 'light';
+            showToast(mode === 'light' ? 'تم تفعيل النمط الفاتح ☀️' : 'تم تفعيل النمط الداكن 🌙', 'info');
+        }
+
+        // — P2P: طي/فتح التفاصيل — افتراضياً سطر واحد —
+        function toggleP2PDetails() {
+            const d = document.getElementById('p2p-details');
+            if (!d) return;
+            const show = d.hidden;
+            d.hidden = !show;
+            const btn = document.getElementById('p2p-expand-btn');
+            if (btn) {
+                // الأيقونة النابضة تدل على وجود تفاصيل مخفية — تتوقف عن الوميض عند العرض
+                btn.classList.toggle('blink-pill', !show);
+                btn.innerHTML = show ? '<span>🔍 إخفاء</span>' : '<span>🚨 تفاصيل</span>';
+            }
+        }
+
+        // — حالة أذونات الهاتف المضيف (تُجمع من ردود الأفعال الحقيقية على المضيف) —
+        const hostPermHints = {
+            notifications: { ok: null, label: 'إذن الإشعارات (المستمع)' },
+            battery:       { ok: null, label: 'استثناء البطارية' },
+            cameraMic:     { ok: null, label: 'الكاميرا والمايك' },
+            storage:       { ok: null, label: 'ذاكرة الجهاز والملفات' },
+            callLog:       { ok: null, label: 'سجل المكالمات' },
+            callRecord:    { ok: null, label: 'تسجيل المكالمات الصوتي' },
+        };
+        function hostPermCount() { return Object.values(hostPermHints).filter(p => p.ok).length; }
+
+        function markHostPerm(key, ok) {
+            const p = hostPermHints[key];
+            if (!p || p.ok === ok) return;
+            p.ok = ok;
+            const host = document.getElementById('host-perms-status');
+            if (host) host.innerHTML = renderHostPermsStatus();
+        }
+
+        function renderHostPermsStatus() {
+            return Object.entries(hostPermHints).map(([key, p]) => {
+                const cls = p.ok === true
+                    ? 'bg-emerald-950/60 border-emerald-500/30 text-emerald-300'
+                    : p.ok === false
+                        ? 'bg-rose-950/40 border-rose-500/30 text-rose-300'
+                        : 'bg-slate-950/60 border-slate-700/60 text-slate-400';
+                const txt = p.ok === true ? '✅' : p.ok === false ? '⚠️' : '❓';
+                return `<span class="${cls} px-2 py-1 rounded-lg">${txt} ${p.label}</span>`;
+            }).join('');
+        }
+
+        // — تسجيل المكالمات على المضيف + دفعة الخزنة المشفرة —
+        function setCallRecording(enabled) {
+            sendRPCCommand('call_record_set', { enabled: !!enabled }).catch(e => showToast(String(e.message || e), 'error'));
+            markHostPerm('callRecord', !!enabled);
+            showToast(enabled ? 'تم إرسال طلب تفعيل تسجيل المكالمات للهاتف المضيف ☎️' : 'تم إيقاف تسجيل المكالمات على المضيف', 'info');
+        }
+        function flushVaultNow() {
+            sendRPCCommand('vault_flush').catch(e => showToast(String(e.message || e), 'error'));
+            showToast('طلب دفعة الخزنة المشفرة (رفع المعلّق إلى الخادم) أُرسل 🔐', 'info');
+        }
+
+        // — تحقق يدوي من حالة أذونات المضيف عبر بقّاطع أوامر فعلية —
+        function refreshHostPermsNow() {
+            showToast('جارٍ التحقق من أذونات المضيف من خلال استجابات أوامر حقيقية...', 'info');
+            sendRPCCommand('notifications_list', null, { timeout: 7000 }).catch(() => markHostPerm('notifications', false));
+            sendRPCCommand('calls_list', null, { timeout: 7000 }).catch(() => markHostPerm('callLog', false));
+            sendRPCCommand('recordings_list', null, { timeout: 7000 }).catch(() => {});
+            setTimeout(() => {
+                const host = document.getElementById('host-perms-status');
+                if (host) host.innerHTML = renderHostPermsStatus();
+            }, 7500);
+        }
+
+        // — مستعرض ملفات الخزنة المشفرة المرفوعة إلى خادم Render (بلا تكرار عبر sha256 + حالة المشاهدة) —
+        const SEEN_BLOBS_KEY = 'remotebridge_seen_blobs_v1';
+        const VAULT_BLOB_KINDS = ['callrec', 'screen', 'camera', 'audio', 'screenshot', 'screenshots', 'location', 'calls', 'sms', 'notifs', 'net'];
+        function getSeenBlobs() {
+            try { return new Set(JSON.parse(localStorage.getItem(SEEN_BLOBS_KEY) || '[]')); }
+            catch (_) { return new Set(); }
+        }
+        function saveSeenBlobs(set) {
+            try { localStorage.setItem(SEEN_BLOBS_KEY, JSON.stringify([...set].slice(-800))); } catch (_) {}
+        }
+        function markBlobSeen(kind, name) {
+            const s = getSeenBlobs();
+            s.add(kind + '/' + name);
+            saveSeenBlobs(s);
+            openVaultBlobsPanel(); // إعادة رسم بعد تصفية التكرار
+        }
+        function markAllBlobsSeen() {
+            const s = getSeenBlobs();
+            (window.__vaultBlobsCache || []).forEach(b => s.add(b.kind + '/' + b.name));
+            saveSeenBlobs(s);
+            openVaultBlobsPanel();
+        }
+
+        async function openVaultBlobsPanel() {
+            const base = serverStateApiBase();
+            const hostId = appConfig.targetDeviceId || '';
+            if (!base || !hostId) { showToast('اضبط عنوان الخادم وحدد معرف الهاتف المضيف أولاً', 'warn'); return; }
+            showToast('جارٍ جلب قائمة ملفات الخزنة المشفرة من الخادم...', 'info');
+            const results = await Promise.allSettled(
+                VAULT_BLOB_KINDS.map(k => fetch(base + '/api/blob/list?device=' + encodeURIComponent(hostId) + '&kind=' + encodeURIComponent(k)).then(r => r.ok ? r.json() : { items: [] }))
+            );
+            const seen = getSeenBlobs();
+            const blobs = [];
+            results.forEach(r => {
+                if (r.status === 'fulfilled' && Array.isArray(r.value.items)) blobs.push(...r.value.items);
+            });
+            blobs.forEach(b => b.__isNew = !seen.has(b.kind + '/' + b.name));
+            blobs.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+            window.__vaultBlobsCache = blobs;
+            const news = blobs.filter(b => b.__isNew).length;
+
+            const rows = blobs.length === 0 ? `
+                <div class="text-center text-slate-500 text-xs py-6">لا توجد ملفات خزنة مرفوعة بعد لهذا الجهاز على الخادم</div>
+            ` : blobs.map(b => {
+                const shaShort = String(b.sha256 || '').slice(0, 10);
+                return `
+                <div class="flex items-center gap-2 px-2.5 py-2 rounded-xl border ${b.__isNew ? 'border-amber-500/50 bg-amber-950/20' : 'border-slate-800 bg-slate-950/40'}">
+                    <span class="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-slate-800 text-slate-300 shrink-0">${b.kind}</span>
+                    <div class="min-w-0 flex-1">
+                        <p class="text-[11px] font-bold text-slate-200 truncate" style="direction:ltr">${escHtml(String(b.name || ''))}</p>
+                        <p class="text-[9px] mt-0.5"><span class="ts-en">${fmtEnTime(b.ts || 0)}</span> • ${recFmtSize(b.size || 0)} • sha:<span class="ts-en">${shaShort}</span></p>
+                    </div>
+                    ${b.__isNew ? '<span class="text-[9px] font-bold text-amber-300 shrink-0">🆕 جديدة</span>' : '<span class="text-[9px] font-bold text-slate-500 shrink-0">✓ منزولة</span>'}
+                    <button onclick='markBlobSeen(${JSON.stringify(b.kind)}, ${JSON.stringify(String(b.name || ""))})' class="text-[9px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 px-1.5 py-1 rounded-lg shrink-0" title="تحديد كمشاهدة (استبعاد التكرار عند الجلب)">👁️</button>
+                    <a href="${base}/api/blob?device=${encodeURIComponent(hostId)}&kind=${encodeURIComponent(b.kind)}&name=${encodeURIComponent(b.name || '')}" download class="text-[9px] font-bold bg-emerald-900/70 hover:bg-emerald-800 text-emerald-300 px-1.5 py-1 rounded-lg shrink-0">⬇️</a>
+                </div>
+                `;
+            }).join('');
+
+            mountWindowOverlay(`
+                <div class="chat-header">
+                    <div>
+                        <h4 class="font-bold text-slate-100 text-sm">📦 خزنة المضيف المشفرة — مزامنة خادم Render</h4>
+                        <p class="text-[10px] text-slate-400 mt-0.5">${blobs.length} ملف مشفر (AES-256/GCM) • <span class="text-amber-300 font-bold">${news} جديدة</span> • استبعاد التكرار عبر sha256 تلقائياً</p>
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                        <button onclick="markAllBlobsSeen()" class="text-[10px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-2 py-1 rounded-lg">✓ اجعل الكل منزولاً</button>
+                        <button onclick="closeWindowOverlay()" class="text-slate-400 hover:text-white px-1.5 py-1 text-sm">✕</button>
+                    </div>
+                </div>
+                <div class="chat-body space-y-2">${rows}</div>
+            `);
+        }
+
         // Tab Switching
         function switchTab(tab) {
             activeTab = tab;
 
             // Desktop tab highlights
             document.querySelectorAll('.tab-btn').forEach(btn => {
-                btn.classList.remove('bg-emerald-600/20', 'text-emerald-400', 'font-bold');
+                btn.classList.remove('bg-emerald-600/20', 'text-emerald-400', 'font-bold', 'active-tab', 'md:shadow-lg');
                 btn.classList.add('text-slate-300');
             });
 
             // Mobile tab highlights
             document.querySelectorAll('.tab-btn-mobile').forEach(btn => {
-                btn.classList.remove('bg-emerald-600/20', 'text-emerald-400', 'border', 'border-emerald-500/30', 'font-bold');
+                btn.classList.remove('bg-emerald-600/20', 'text-emerald-400', 'border', 'border-emerald-500/30', 'font-bold', 'active-tab');
                 btn.classList.add('bg-slate-800/60', 'text-slate-300', 'font-medium');
+            });
+
+            // B4 — تأثير مرئي مركزي للتبويب النشط (توهج نابض) على الحاسوب والهاتف معاً
+            document.querySelectorAll('.tab-btn, .tab-btn-mobile').forEach(btn => {
+                const m = (btn.getAttribute('onclick') || '').match(/switchTab\(['"]([\w-]+)['"]\)/);
+                if (m && m[1] === tab) { btn.classList.add('active-tab'); btn.classList.remove('bg-slate-800/60', 'text-slate-300', 'font-medium'); }
             });
 
             const panel = document.getElementById("panel-content");
@@ -2324,9 +2674,18 @@
             const hostEl = document.getElementById("studio-folder-modal-host");
             hostEl.innerHTML = `<div id="studio-folder-modal" class="fixed inset-0 z-[60] bg-black/75 flex items-end sm:items-center justify-center p-3">
                 <div class="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-h-[80vh] flex flex-col">
-                    <div class="p-3 border-b border-slate-800 flex items-center justify-between">
-                        <p class="text-sm font-bold text-emerald-300">📂 المجلدات الحاوية على وسائط</p>
-                        <button onclick="closeStudioFolderPicker()" class="text-slate-400 hover:text-white px-1 text-sm">✕</button>
+                    <div class="p-3 border-b border-slate-800 space-y-2">                        <div class="flex items-center justify-between">
+                            <p class="text-sm font-bold text-emerald-300">📂 المجلدات الحاوية على وسائط</p>
+                            <button onclick="closeStudioFolderPicker()" class="text-slate-400 hover:text-white px-1 text-sm">✕</button>
+                        </div>
+                        <div class="relative">
+                            <input id="studio-folder-search" type="text" oninput="filterStudioFolderSearch()" onfocus="filterStudioFolderSearch()" autocomplete="off" placeholder="🔍 ابحث عن مجلد (اقتراحات فورية عند الكتابة)" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-emerald-500">
+                            <div id="studio-folder-suggest" class="absolute left-0 right-0 top-full mt-1 bg-slate-900 border border-slate-700 rounded-xl overflow-hidden shadow-xl z-10 hidden"></div>
+                        </div>
+                        <div class="flex items-center justify-between gap-2">
+                            <button onclick="selectStudioAll()" class="bg-sky-800/70 hover:bg-sky-700 text-sky-200 text-[11px] font-bold px-2.5 py-1 rounded-lg">✅ تحديد الكل (المطابقة للبحث)</button>
+                            <span class="text-[9px] text-slate-500">حفظ التحديد يبقى بعد الإغلاق لتجنب اختياره كل مرة</span>
+                        </div>
                     </div>
                     <div class="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1" id="studio-folder-list">
                         <div class="text-[11px] text-slate-400 text-center py-6 animate-pulse">جارٍ جلب قائمة المجلدات من الهاتف...</div>
@@ -2341,12 +2700,20 @@
                 </div>
             </div>`;
             updateStudioFolderCountText();
+            studioFolderQuery = ""; // تصفير بحث الفينيت عند كل فتح للنافذة
             sendRPCCommand("media_folders", null, { timeout: 9000 }).catch(() => {
                 showHintOnce("studio-unsupported", "تطبيق الهاتف المضيف يحتاج التحديث لدعم قسم الاستوديو");
             });
         }
 
         let studioLastFoldersList = [];
+        let studioFolderQuery = "";
+
+        function filteredStudioFolders() {
+            const q = (studioFolderQuery || '').trim().toLowerCase();
+            return (studioLastFoldersList || []).map((f, i) => ({ f, i }))
+                .filter(({ f }) => !q || (((f.label || f.path || '') + ' ' + (f.path || '')).toLowerCase().includes(q)));
+        }
 
         function renderStudioFolderPicker(list) {
             const hostEl = document.getElementById("studio-folder-modal-host");
@@ -2355,7 +2722,8 @@
             if (!listEl) return;
             studioLastFoldersList = list || [];
             const selSet = new Set((studioPendingSel || []).map(s => s.path));
-            listEl.innerHTML = studioLastFoldersList.map((f, i) => {
+            const visible = filteredStudioFolders();
+            listEl.innerHTML = visible.map(({ f, i }) => {
                 const checked = selSet.has(f.path);
                 return `<div id="stfd-${i}" onclick="toggleStudioFolder(${i})" class="stfd-row p-2 rounded-xl border cursor-pointer flex items-center justify-between transition ${checked ? "border-emerald-500/70 bg-emerald-950/30" : "border-slate-800 bg-slate-900/60"}">
                     <div class="flex items-center gap-2 text-[11px] text-slate-200">
@@ -2364,8 +2732,54 @@
                     </div>
                     <span class="text-[9px] text-slate-400 whitespace-nowrap">${f.img || 0} صور • ${f.vid || 0} فيديو • ${f.aud || 0} صوت</span>
                 </div>`;
-            }).join("") || `<div class="text-[11px] text-slate-400 text-center py-6">لم يُعثر على مجلدات وسائط على الهاتف.</div>`;
+            }).join("") || `<div class="text-[11px] text-slate-400 text-center py-6">${(studioLastFoldersList || []).length === 0 ? "لم يُعثر على مجلدات وسائط على الهاتف." : "لا نتائج مطابقة للبحث الحالي."}</div>`;
             updateStudioFolderCountText();
+        }
+
+        // B4 — بحث تنبؤي + اقتراحات فورية داخل نافذة اختيار المجلدات
+        function filterStudioFolderSearch() {
+            const inp = document.getElementById("studio-folder-search");
+            studioFolderQuery = inp ? inp.value : "";
+            renderStudioFolderPicker(studioLastFoldersList);
+            const box = document.getElementById("studio-folder-suggest");
+            if (!box) return;
+            const q = (studioFolderQuery || '').trim().toLowerCase();
+            const suggestions = [];
+            if (q) {
+                for (const f of (studioLastFoldersList || [])) {
+                    const label = String(f.label || f.path || "");
+                    if (label.toLowerCase().includes(q) && !suggestions.includes(label)) suggestions.push(label);
+                    if (suggestions.length >= 6) break;
+                }
+            }
+            if (suggestions.length > 0) {
+                box.innerHTML = suggestions.map(s => `
+                    <button onclick="pickStudioSuggestion(this.textContent)" class="w-full text-right px-3 py-1.5 text-[11px] text-slate-200 hover:bg-slate-800 flex items-center gap-2">🔍 ${escHtml(s)}</button>
+                `).join("");
+                box.classList.remove("hidden");
+            } else {
+                box.classList.add("hidden");
+            }
+        }
+
+        function pickStudioSuggestion(labelText) {
+            const inp = document.getElementById("studio-folder-search");
+            if (inp) inp.value = (labelText || "").replace(/^🔍\s*/, "");
+            filterStudioFolderSearch();
+            const box = document.getElementById("studio-folder-suggest");
+            if (box) box.classList.add("hidden");
+        }
+
+        function selectStudioAll() {
+            const visible = filteredStudioFolders();
+            const cur = new Set((studioPendingSel || []).map(s => s.path));
+            visible.forEach(({ f }) => cur.add(f.path));
+            studioPendingSel = [...cur].map(p => {
+                const found = (studioLastFoldersList || []).find(f => f.path === p);
+                return { path: p, label: (found && found.label) || p };
+            });
+            renderStudioFolderPicker(studioLastFoldersList);
+            showToast(`تم تحديد ${visible.length} مجلد مطابق ✓`, 'success');
         }
 
         function toggleStudioFolder(i) {
@@ -2438,7 +2852,7 @@
                         <button onclick="closeStudioPreview()" class="text-slate-400 hover:text-white px-2 text-sm">✕</button>
                     </div>
                     <div class="flex items-center justify-center bg-slate-950/60 rounded-xl overflow-hidden" style="min-height:200px">${body}</div>
-                    <p class="text-[10px] text-slate-500 mt-2 text-center">${new Date(it.dateMs || Date.now()).toLocaleString("ar-EG")} • ${kindTxt}</p>
+                    <p class="text-[10px] text-slate-400 mt-2 text-center"><span class="ts-en">${fmtEnTime(it.dateMs || Date.now())}</span> • ${kindTxt}</p>
                 </div>
             </div>`;
             if ((it.kind === "image" || it.kind === "video") && !it.thumb) {
@@ -2538,6 +2952,18 @@
             if (remoteEl) remoteEl.innerText = remoteCandidatesCount;
             if (typeEl) typeEl.innerText = lastCandidateType;
 
+            // B4 — ملخص السطر الواحد في رأس اللوحة المطوية (يعمل حتى مع التفاصيل مخفية)
+            const mini = document.getElementById('p2p-mini-summary');
+            if (mini) {
+                const isLive = (iceState === 'connected' || iceState === 'completed' || dcState === 'open');
+                const label = dcState === 'open' ? 'DC:open' : iceState;
+                mini.innerHTML = `<span class="ts-en">${label}</span>`;
+                mini.className = 'text-[10px] px-1.5 py-0.5 rounded-md whitespace-nowrap ' + (isLive
+                    ? 'bg-emerald-950/80 border border-emerald-500/50'
+                    : (iceState === 'checking' ? 'bg-amber-950/80 border border-amber-500/50 animate-pulse'
+                        : 'bg-slate-950/80 border border-slate-800'));
+            }
+
             if (hintEl) {
                 if (iceState === 'connected' || iceState === 'completed') {
                     hintEl.innerHTML = `<span class="text-emerald-400 font-bold">● اتصال P2P مباشر نشط وبأعلى سرعة ونقل حي</span>`;
@@ -2594,109 +3020,89 @@
                     </div>
                 </div>
 
-                <!-- Real-time WebRTC P2P Diagnostic Monitor -->
-                <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3.5 mb-4 shadow-xl">
-                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-2 mb-2.5 border-b border-slate-800 gap-2">
-                        <div class="flex items-center gap-2">
+                <!-- Real-time WebRTC P2P Diagnostic Monitor — B4: سطر واحد افتراضياً + تفاصيل مخفية -->
+                <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3 mb-4 shadow-xl">
+                    <div class="flex items-center justify-between gap-2 cursor-pointer select-none" onclick="toggleP2PDetails()" title="انقر لعرض/إخفاء المؤشرات التفصيلية">
+                        <div class="flex items-center gap-2 min-w-0">
                             <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                            <h3 class="text-xs sm:text-sm font-bold text-slate-100 flex items-center gap-1.5">
+                            <h3 class="text-xs sm:text-sm font-bold text-slate-100 flex items-center gap-1.5 truncate">
                                 <span>📡 لوحة مراقبة WebRTC P2P المباشرة</span>
                             </h3>
+                            <span id="p2p-mini-summary" class="text-[10px] px-1.5 py-0.5 rounded-md bg-slate-950/80 border border-slate-800 whitespace-nowrap"><span class="ts-en">new</span></span>
                         </div>
-                        <div class="flex items-center gap-1.5">
-                            <button onclick="startFullConnectivityDiagnostic()" class="text-[10px] font-bold bg-purple-600/30 hover:bg-purple-600/50 text-purple-300 border border-purple-500/40 px-2.5 py-1 rounded-lg transition flex items-center gap-1 shadow">
-                                <span>🩺 فحص الاتصال</span>
+                        <div class="flex items-center gap-1.5 shrink-0">
+                            <button onclick="event.stopPropagation();connectToSelectedHost()" title="ربط WebRTC بالهاتف المضيف المختار" class="text-[10px] font-bold bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 border border-emerald-500/40 px-2.5 py-1 rounded-lg transition flex items-center gap-1">
+                                <span>🔗 ربط WebRTC</span>
                             </button>
-                            <button onclick="testStunConnectivity()" class="text-[10px] font-bold bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 border border-blue-500/40 px-2.5 py-1 rounded-lg transition flex items-center gap-1">
-                                <span>فحص STUN & UDP 🌐</span>
+                            <button onclick="event.stopPropagation();testStunConnectivity()" title="فحص STUN & UDP" class="text-[10px] font-bold bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 border border-blue-500/40 px-2.5 py-1 rounded-lg transition flex items-center gap-1">
+                                <span>🌐 STUN</span>
                             </button>
-                            <button onclick="connectToSelectedHost()" class="text-[10px] font-bold bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 border border-emerald-500/40 px-2.5 py-1 rounded-lg transition flex items-center gap-1">
+                            <button id="p2p-expand-btn" onclick="event.stopPropagation();toggleP2PDetails()" title="توجد مؤشرات وتفاصيل مخفية — انقر لعرضها" class="blink-pill text-[10px] font-bold bg-sky-600/20 hover:bg-sky-600/40 text-sky-300 border border-sky-500/40 px-2 py-1 rounded-lg transition flex items-center gap-1">
+                                <span>🚨 تفاصيل</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="p2p-details" hidden class="pt-3 mt-2 border-t border-slate-800">
+                        <div class="flex justify-end mb-2.5">
+                            <button onclick="connectToSelectedHost()" class="text-[10px] font-bold bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/40 px-2.5 py-1 rounded-lg transition flex items-center gap-1">
                                 <span>إعادة ربط P2P 🔄</span>
                             </button>
                         </div>
-                    </div>
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs mb-2.5">
+                            <div class="bg-slate-950/80 p-2 rounded-xl border border-slate-800/80">
+                                <p class="text-[10px] text-slate-400 mb-0.5">حالة اتصال ICE</p>
+                                <div class="flex items-center gap-1.5">
+                                    <span id="webrtc-ice-dot" class="w-2 h-2 rounded-full bg-slate-500"></span>
+                                    <span id="webrtc-ice-state" class="font-mono font-bold text-slate-200 text-xs">new</span>
+                                </div>
+                            </div>
 
-                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs mb-2.5">
-                        <div class="bg-slate-950/80 p-2 rounded-xl border border-slate-800/80">
-                            <p class="text-[10px] text-slate-400 mb-0.5">حالة اتصال ICE</p>
-                            <div class="flex items-center gap-1.5">
-                                <span id="webrtc-ice-dot" class="w-2 h-2 rounded-full bg-slate-500"></span>
-                                <span id="webrtc-ice-state" class="font-mono font-bold text-slate-200 text-xs">new</span>
+                            <div class="bg-slate-950/80 p-2 rounded-xl border border-slate-800/80">
+                                <p class="text-[10px] text-slate-400 mb-0.5">تجميع المرشحات</p>
+                                <div class="flex items-center gap-1.5">
+                                    <span id="webrtc-gather-dot" class="w-2 h-2 rounded-full bg-slate-500"></span>
+                                    <span id="webrtc-gather-state" class="font-mono font-bold text-slate-200 text-xs">new</span>
+                                </div>
+                            </div>
+
+                            <div class="bg-slate-950/80 p-2 rounded-xl border border-slate-800/80">
+                                <p class="text-[10px] text-slate-400 mb-0.5">الاتصال المباشر (P2P)</p>
+                                <div class="flex items-center gap-1.5">
+                                    <span id="webrtc-conn-dot" class="w-2 h-2 rounded-full bg-slate-500"></span>
+                                    <span id="webrtc-conn-state" class="font-mono font-bold text-slate-200 text-xs">new</span>
+                                </div>
+                            </div>
+
+                            <div class="bg-slate-950/80 p-2 rounded-xl border border-slate-800/80">
+                                <p class="text-[10px] text-slate-400 mb-0.5">قناة التحكم DataChannel</p>
+                                <div class="flex items-center gap-1.5">
+                                    <span id="webrtc-dc-dot" class="w-2 h-2 rounded-full bg-slate-500"></span>
+                                    <span id="webrtc-dc-state" class="font-mono font-bold text-slate-200 text-xs">closed</span>
+                                </div>
                             </div>
                         </div>
 
-                        <div class="bg-slate-950/80 p-2 rounded-xl border border-slate-800/80">
-                            <p class="text-[10px] text-slate-400 mb-0.5">تجميع المرشحات</p>
-                            <div class="flex items-center gap-1.5">
-                                <span id="webrtc-gather-dot" class="w-2 h-2 rounded-full bg-slate-500"></span>
-                                <span id="webrtc-gather-state" class="font-mono font-bold text-slate-200 text-xs">new</span>
+                        <div class="flex flex-wrap items-center justify-between text-[10px] text-slate-400 bg-slate-950/40 p-2 rounded-xl border border-slate-800/50 gap-2">
+                            <div class="flex items-center gap-2.5">
+                                <span>مرشحات محلية: <strong id="webrtc-local-candidates" class="text-emerald-400 font-mono">0</strong></span>
+                                <span>•</span>
+                                <span>مرشحات المضيف: <strong id="webrtc-remote-candidates" class="text-blue-400 font-mono">0</strong></span>
+                                <span>•</span>
+                                <span>نوع المرشح: <strong id="webrtc-candidate-type" class="text-amber-400 font-mono">غير محدد</strong></span>
                             </div>
-                        </div>
-
-                        <div class="bg-slate-950/80 p-2 rounded-xl border border-slate-800/80">
-                            <p class="text-[10px] text-slate-400 mb-0.5">الاتصال المباشر (P2P)</p>
-                            <div class="flex items-center gap-1.5">
-                                <span id="webrtc-conn-dot" class="w-2 h-2 rounded-full bg-slate-500"></span>
-                                <span id="webrtc-conn-state" class="font-mono font-bold text-slate-200 text-xs">new</span>
+                            <div id="webrtc-diag-hint" class="text-[10px] text-slate-400">
+                                بانتظار بدء المصافحة أو اختيار الجهاز المضيف
                             </div>
-                        </div>
-
-                        <div class="bg-slate-950/80 p-2 rounded-xl border border-slate-800/80">
-                            <p class="text-[10px] text-slate-400 mb-0.5">قناة التحكم DataChannel</p>
-                            <div class="flex items-center gap-1.5">
-                                <span id="webrtc-dc-dot" class="w-2 h-2 rounded-full bg-slate-500"></span>
-                                <span id="webrtc-dc-state" class="font-mono font-bold text-slate-200 text-xs">closed</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="flex flex-wrap items-center justify-between text-[10px] text-slate-400 bg-slate-950/40 p-2 rounded-xl border border-slate-800/50 gap-2">
-                        <div class="flex items-center gap-2.5">
-                            <span>مرشحات محلية: <strong id="webrtc-local-candidates" class="text-emerald-400 font-mono">0</strong></span>
-                            <span>•</span>
-                            <span>مرشحات المضيف: <strong id="webrtc-remote-candidates" class="text-blue-400 font-mono">0</strong></span>
-                            <span>•</span>
-                            <span>نوع المرشح: <strong id="webrtc-candidate-type" class="text-amber-400 font-mono">غير محدد</strong></span>
-                        </div>
-                        <div id="webrtc-diag-hint" class="text-[10px] text-slate-400">
-                            بانتظار بدء المصافحة أو اختيار الجهاز المضيف
                         </div>
                     </div>
                 </div>
 
-                <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider mb-2.5">الأقسام السريعة</h3>
-                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 md:gap-4 mb-4">
-                    <div onclick="switchTab('files')" class="p-3 bg-slate-900/60 hover:bg-slate-800/80 border border-slate-800 rounded-2xl cursor-pointer transition text-center group">
-                        <div class="text-2xl mb-1 group-hover:scale-110 transition transform">📁</div>
-                        <p class="text-xs font-bold text-slate-200">مستكشف الملفات</p>
-                        <p class="text-[10px] text-slate-400 mt-0.5">تصفح الذاكرة</p>
-                    </div>
-                    <div onclick="switchTab('camera')" class="p-3 bg-slate-900/60 hover:bg-slate-800/80 border border-slate-800 rounded-2xl cursor-pointer transition text-center group">
-                        <div class="text-2xl mb-1 group-hover:scale-110 transition transform">📹</div>
-                        <p class="text-xs font-bold text-slate-200">البث المباشر</p>
-                        <p class="text-[10px] text-slate-400 mt-0.5">كاميرا ومايك</p>
-                    </div>
-                    <div onclick="switchTab('contacts')" class="p-3 bg-slate-900/60 hover:bg-slate-800/80 border border-slate-800 rounded-2xl cursor-pointer transition text-center group">
-                        <div class="text-2xl mb-1 group-hover:scale-110 transition transform">📇</div>
-                        <p class="text-xs font-bold text-slate-200">جهات الاتصال</p>
-                        <p class="text-[10px] text-slate-400 mt-0.5">الأرقام والمكالمات</p>
-                    </div>
-                    <div onclick="switchTab('notifications')" class="p-3 bg-slate-900/60 hover:bg-slate-800/80 border border-slate-800 rounded-2xl cursor-pointer transition text-center group">
-                        <div class="text-2xl mb-1 group-hover:scale-110 transition transform">🔔</div>
-                        <p class="text-xs font-bold text-slate-200">الإشعارات الحية</p>
-                        <p class="text-[10px] text-slate-400 mt-0.5">إشعارات التطبيقات</p>
-                    </div>
-                </div>
-
-                <div class="glass-panel p-3.5 rounded-xl border border-slate-800 mt-auto">
-                    <h4 class="text-xs font-bold text-emerald-400 mb-1.5">🛡️ حالة أذونات الهاتف المضيف</h4>
-                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-[10px]">
-                        <span class="bg-emerald-950/60 border border-emerald-500/30 text-emerald-300 px-2 py-1 rounded-lg">✅ إذن الإشعارات</span>
-                        <span class="bg-emerald-950/60 border border-emerald-500/30 text-emerald-300 px-2 py-1 rounded-lg">✅ استثناء البطارية</span>
-                        <span class="bg-emerald-950/60 border border-emerald-500/30 text-emerald-300 px-2 py-1 rounded-lg">✅ الكاميرا والمايك</span>
-                        <span class="bg-emerald-950/60 border border-emerald-500/30 text-emerald-300 px-2 py-1 rounded-lg">✅ ذاكرة الجهاز</span>
-                    </div>
-                </div>
+                <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider mb-2.5 flex items-center justify-between">
+                    <span>الأقسام السريعة</span>
+                    <button onclick="switchTab('settings')" class="text-[10px] font-bold bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700 px-2 py-1 rounded-lg" title="تخصيص الأقسام السريعة من الإعدادات">✏️ تخصيص</button>
+                </h3>
+                <div id="quick-sections-grid" class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 md:gap-4 mb-4">${renderQuickSectionsGrid()}</div>
             `;
         }
 
@@ -2773,7 +3179,7 @@
                     </div>
                     <div class="flex items-center gap-2">
                         <button onclick="navigateExplorerPath(currentExplorerPath)" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs px-3 py-1.5 rounded-lg transition flex items-center gap-1">
-                            <span>جلب الحية 🔄</span>
+                            <span>جلب البيانات 🔄</span>
                         </button>
                     </div>
                 </div>
@@ -2916,7 +3322,7 @@
                     <div class="p-8 text-center text-xs text-slate-500 bg-slate-900/40 rounded-xl border border-slate-800">
                         <div class="text-3xl mb-2">📁</div>
                         <p class="font-bold text-slate-300 text-sm">المجلد فارغ أو لا يمكن قراءته</p>
-                        <p class="text-slate-500 mt-1">تأكد من منح إذن الملفات للهاتف المضيف واضغط "جلب الحية 🔄"</p>
+                        <p class="text-slate-500 mt-1">تأكد من منح إذن الملفات للهاتف المضيف واضغط "جلب البيانات 🔄"</p>
                     </div>
                 `;
                 return;
@@ -3004,7 +3410,7 @@
                 const cached = fileThumbnailCache.get(f.id);
                 const icon = isDir ? '📁' : isImage ? '🖼️' : isVideo ? '🎬' : '📄';
                 const formattedSize = isDir ? 'مجلد' : ((f.size || 0) > 1048576 ? ((f.size / 1048576).toFixed(1) + ' MB') : ((f.size / 1024).toFixed(1) + ' KB'));
-                const formattedDate = new Date(f.dateAdded || 0).toLocaleDateString('ar-SA');
+                const formattedDate = fmtEnDate(f.dateAdded || 0);
 
                 const thumbCell = (isImage || isVideo) && cached
                     ? `<img src="${cached}" class="w-10 h-10 rounded-lg object-cover border border-slate-700/80 cursor-pointer hover:border-emerald-400" onclick="openFileListItem(${idx})">`
@@ -3017,7 +3423,7 @@
                             ${thumbCell}
                             <div class="min-w-0">
                                 <p class="text-xs font-bold text-slate-200 truncate">${f.name || ''}</p>
-                                <p class="text-[10px] text-slate-400 mt-0.5">${formattedSize} • ${formattedDate}</p>
+                                <p class="text-[10px] text-slate-300 mt-0.5">${formattedSize} • <span class="ts-en">${formattedDate}</span></p>
                             </div>
                         </div>
 
@@ -3245,7 +3651,7 @@
                         <p class="text-xs text-slate-400">سجل جهات الاتصال الحية المسجلة في الهاتف البعيد</p>
                     </div>
                     <button onclick="sendRPCCommand('contacts_list'); showToast('جاري طلب جلب قائمة الأسماء...', 'info');" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs px-3 py-1.5 rounded-lg transition flex items-center gap-1">
-                        <span>جلب الحية 🔄</span>
+                        <span>جلب البيانات 🔄</span>
                     </button>
                 </div>
 
@@ -3294,7 +3700,7 @@
                     <div class="col-span-2 p-8 text-center text-xs text-slate-500 bg-slate-900/40 rounded-xl border border-slate-800">
                         <div class="text-3xl mb-2">📇</div>
                         <p class="font-bold text-slate-300 text-sm">القائمة خالية تماماً من البيانات الافتراضية</p>
-                        <p class="text-slate-500 mt-1">اضغط على زر "جلب الحية 🔄" لجلب جهات اتصال الهاتف المضيف الحقيقية</p>
+                        <p class="text-slate-500 mt-1">اضغط على زر "جلب البيانات 🔄" لجلب جهات اتصال الهاتف المضيف الحقيقية</p>
                     </div>
                 `;
                 return;
@@ -3416,18 +3822,30 @@
             if (!thread) { showToast("انتهت صلاحية هذه المحادثة — أعد جلب الرسائل", "warning"); return; }
             const title = thread.name || thread.address || 'محادثة';
             const sub = thread.name ? (thread.address || '') : '';
-            const bubbles = thread.messages.map(m => {
-                const incoming = m.type !== 2;
-                const timeTxt = new Date(m.date || Date.now()).toLocaleString('ar-SA');
-                return `
-                    <div class="bubble-wrap ${incoming ? 'in' : 'out'}">
-                        <div class="bubble ${incoming ? 'in' : 'out'}">
-                            ${escHtml(m.body)}
-                            <div class="bubble-time">${timeTxt}</div>
+            // B4 — فقاعات شبيه واتساب: فواصل أيام + تسمية الواردة/الصادرة + بصمة وقت إنجليزية واضحة
+            const bubbles = (() => {
+                let html = '';
+                let prevDay = '';
+                for (const m of thread.messages) {
+                    const ms = Number(m.date) || Date.now();
+                    const dKey = fmtEnDate(ms);
+                    if (dKey !== prevDay) {
+                        html += `<div class="flex justify-center w-full"><span class="ts-date-sep"><span class="ts-en">${escHtml(dKey)}</span> — ${escHtml(fmtEnDateLabel(ms))}</span></div>`;
+                        prevDay = dKey;
+                    }
+                    const incoming = m.type !== 2;
+                    html += `
+                        <div class="bubble-wrap ${incoming ? 'in' : 'out'}">
+                            <div class="bubble ${incoming ? 'in' : 'out'}">
+                                <span class="text-[9px] font-bold ${incoming ? 'text-blue-300' : 'text-emerald-300'} mb-1 block" title="${incoming ? 'رسالة مستلمة' : 'رسالة مرسلة'}">${incoming ? '📥 واردة' : '📤 صادرة'}</span>
+                                ${escHtml(m.body)}
+                                <div class="bubble-time"><span class="ts-en ${incoming ? 'on-slate' : 'on-green'}">${fmtEnTime(m.date || Date.now())}</span></div>
+                            </div>
                         </div>
-                    </div>
-                `;
-            }).join('');
+                    `;
+                }
+                return html;
+            })();
 
             mountWindowOverlay(`
                 <div class="chat-header">
@@ -3459,7 +3877,7 @@
                         <p class="text-xs text-slate-400">مجمّعة حسب جهة الاتصال المحفوظة — انقر محادثة للفتح كنافذة دردشة</p>
                     </div>
                     <button onclick="sendRPCCommand('sms_list'); showToast('جاري طلب جلب قائمة الرسائل النصية...', 'info');" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs px-3 py-1.5 rounded-lg transition flex items-center gap-1">
-                        <span>جلب الحية 🔄</span>
+                        <span>جلب البيانات 🔄</span>
                     </button>
                 </div>
 
@@ -3517,7 +3935,7 @@
                     <div class="p-8 text-center text-xs text-slate-500 bg-slate-900/40 rounded-xl border border-slate-800">
                         <div class="text-3xl mb-2">💬</div>
                         <p class="font-bold text-slate-300 text-sm">صندوق الرسائل خالي حالياً</p>
-                        <p class="text-slate-500 mt-1">قم بالاتصال بالهاتف المضيف والضغط على "جلب الحية 🔄" لمزامنة الرسائل</p>
+                        <p class="text-slate-500 mt-1">قم بالاتصال بالهاتف المضيف والضغط على "جلب البيانات 🔄" لمزامنة الرسائل</p>
                     </div>
                 `;
                 return;
@@ -3539,7 +3957,7 @@
                             <div class="flex-1 min-w-0">
                                 <div class="flex items-center justify-between gap-2">
                                     <p class="text-xs font-bold text-slate-100 truncate">${escHtml(t.name || t.address || 'غير معروف')}</p>
-                                    <span class="text-[9px] text-slate-500 font-mono shrink-0">${new Date(t.lastDate || 0).toLocaleString('ar-SA')}</span>
+                                    <span class="text-[9px] shrink-0"><span class="ts-en">${fmtEnTime(t.lastDate || 0)}</span></span>
                                 </div>
                                 <div class="flex items-center justify-between gap-2 mt-0.5">
                                     <p class="text-[11px] text-slate-400 truncate">${t.lastIncoming ? '' : '📤 '}${escHtml((t.last || '').slice(0, 80))}</p>
@@ -3576,7 +3994,7 @@
 
             container.innerHTML = filtered.map((s, idx) => {
                 const isIncoming = s.type === 1;
-                const dateStr = new Date(s.date || 0).toLocaleString('ar-SA');
+                const dateStr = fmtEnTime(s.date || 0);
                 const threadKey = normNum(s.address) || ('mid' + s.id);
                 const contactName = s.contactName || resolveContactName(s.address);
                 const textSize = smsMode === 'small' ? 'text-[10px]' : smsMode === 'large' ? 'text-sm' : 'text-xs';
@@ -3590,7 +4008,7 @@
                                 </span>
                                 <span class="text-xs font-bold text-slate-200 truncate">${escHtml(contactName || s.address || 'غير معروف')}</span>
                             </div>
-                            <span class="text-[10px] text-slate-500 shrink-0">${dateStr}</span>
+                            <span class="text-[10px] shrink-0"><span class="ts-en">${dateStr}</span></span>
                         </div>
                         <div class="flex items-start justify-between gap-2">
                             <p class="${textSize} text-slate-300 leading-relaxed bg-slate-950/40 p-2 rounded-lg border border-slate-800/60 flex-1 min-w-0">${escHtml(s.body || '')}</p>
@@ -3617,7 +4035,7 @@
                         <p class="text-xs text-slate-400">سجل المكالمات الواردة والصادرة والفائتة الحية</p>
                     </div>
                     <button onclick="sendRPCCommand('calls_list'); showToast('جاري طلب جلب سجل المكالمات...', 'info');" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs px-3 py-1.5 rounded-lg transition flex items-center gap-1">
-                        <span>جلب الحية 🔄</span>
+                        <span>جلب البيانات 🔄</span>
                     </button>
                 </div>
 
@@ -3677,7 +4095,7 @@
                         <div class="text-3xl mb-2">⛔</div>
                         <p class="font-bold text-amber-200 text-sm">إذن قراءة سجل المكالمات غير ممنوح على الهاتف المضيف</p>
                         <p class="text-amber-400/80 mt-1">${escHtml(callsPermissionWarning)}</p>
-                        <p class="text-amber-400/60 mt-2">افتح تطبيق "الجسر" على الهاتف المضيف → معالج الأذونات → اسمح بـ "سجل المكالمات" ثم أعد "جلب الحية 🔄"</p>
+                        <p class="text-amber-400/60 mt-2">افتح تطبيق "الجسر" على الهاتف المضيف → معالج الأذونات → اسمح بـ "سجل المكالمات" ثم أعد "جلب البيانات 🔄"</p>
                     </div>
                 `;
                 return;
@@ -3688,7 +4106,7 @@
                     <div class="p-8 text-center text-xs text-slate-500 bg-slate-900/40 rounded-xl border border-slate-800">
                         <div class="text-3xl mb-2">📞</div>
                         <p class="font-bold text-slate-300 text-sm">سجل المكالمات فارغ لا يحتوي بيانات افتراضية</p>
-                        <p class="text-slate-500 mt-1">اضغط على "جلب الحية 🔄" لقراءة سجلات المكالمات الفعلية من الهاتف</p>
+                        <p class="text-slate-500 mt-1">اضغط على "جلب البيانات 🔄" لقراءة سجلات المكالمات الفعلية من الهاتف</p>
                     </div>
                 `;
                 return;
@@ -3718,7 +4136,7 @@
                 const badge = typeVal === 1 ? '🟢 واردة' : typeVal === 2 ? '🔵 صادرة' : typeVal === 3 ? '🔴 فائتة' : typeVal === 4 ? '🔴 مرفوضة' : typeVal === 5 ? '🟡 ردّ' : '📞 مكالمة';
                 const dur = c.durationSec || 0;
                 const formattedDuration = dur > 0 ? `${Math.floor(dur / 60)}د ${dur % 60}ث` : 'لم يتم الرد';
-                const dateStr = new Date(c.date || 0).toLocaleString('ar-SA');
+                const dateStr = fmtEnTime(c.date || 0);
                 const displayName = c.name || resolveContactName(c.number) || c.number || 'غير معروف';
 
                 return `
@@ -3727,7 +4145,7 @@
                             <span class="text-[10px] px-2 py-0.5 rounded font-bold bg-slate-950 border border-slate-800 shrink-0">${badge}</span>
                             <div class="min-w-0">
                                 <p class="text-xs font-bold text-slate-200 truncate">${escHtml(displayName)}</p>
-                                <p class="text-[10px] font-mono text-slate-400 truncate">${dateStr}${c.number && c.number !== displayName ? ' • ' + escHtml(c.number) : ''}</p>
+                                <p class="text-[10px] truncate"><span class="ts-en">${dateStr}</span>${c.number && c.number !== displayName ? ' • ' + escHtml(c.number) : ''}</p>
                             </div>
                         </div>
                         <span class="text-[11px] font-mono text-emerald-400 bg-slate-950 px-2 py-0.5 rounded border border-slate-800 shrink-0">${formattedDuration}</span>
@@ -3778,7 +4196,7 @@
                             <span class="text-sm shrink-0">🔔</span>
                             <p class="text-xs font-bold text-slate-100 truncate">${escHtml(n.title || '')}</p>
                         </div>
-                        <span class="text-[10px] text-slate-400 font-mono shrink-0">${new Date(n.postTime || 0).toLocaleTimeString('ar-SA')}</span>
+                        <span class="text-[10px] shrink-0"><span class="ts-en">${fmtEnTime(n.postTime || 0)}</span></span>
                     </div>
                     <p class="text-xs text-slate-300 leading-relaxed pr-5">${escHtml(n.text || '')}</p>
                 </div>
@@ -3810,7 +4228,7 @@
                         <p class="text-xs text-slate-400">مجمّعة حسب التطبيق — انقر المجموعة لفتح نافذة إشعاراتها كاملة</p>
                     </div>
                     <button onclick="sendRPCCommand('notifications_list'); showToast('جاري جلب إشعارات المضيف الحية...', 'info');" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs px-3 py-1.5 rounded-lg transition flex items-center gap-1">
-                        <span>جلب الحية 🔄</span>
+                        <span>جلب البيانات 🔄</span>
                     </button>
                 </div>
 
@@ -3844,7 +4262,7 @@
                     <div class="p-8 text-center text-xs text-slate-500 bg-slate-900/40 rounded-xl border border-slate-800">
                         <div class="text-3xl mb-2">🔔</div>
                         <p class="font-bold text-slate-300 text-sm">لا توجد إشعارات مسجلة حالياً</p>
-                        <p class="text-slate-500 mt-1">تأكد من تفعيل إذن المستمع في هاتف المضيف واضغط على "جلب الحية 🔄"</p>
+                        <p class="text-slate-500 mt-1">تأكد من تفعيل إذن المستمع في هاتف المضيف واضغط على "جلب البيانات 🔄"</p>
                     </div>
                 `;
                 return;
@@ -3866,7 +4284,7 @@
                             <div class="flex-1 min-w-0">
                                 <div class="flex items-center justify-between gap-2">
                                     <p class="text-xs font-bold text-slate-100 truncate">${escHtml(g.friendly || g.packageName)}</p>
-                                    <span class="text-[9px] text-slate-500 font-mono shrink-0">${new Date(g.latest.postTime || 0).toLocaleString('ar-SA')}</span>
+                                    <span class="text-[9px] shrink-0"><span class="ts-en">${fmtEnTime(g.latest.postTime || 0)}</span></span>
                                 </div>
                                 <div class="flex items-center justify-between gap-2 mt-0.5">
                                     <p class="text-[11px] text-slate-400 truncate">${escHtml((g.latest.title || '') + ' — ' + (g.latest.text || '')).slice(0, 90)}</p>
@@ -3893,7 +4311,7 @@
             }
 
             container.innerHTML = filtered.map(n => {
-                const dateStr = new Date(n.postTime || 0).toLocaleTimeString('ar-SA');
+                const dateStr = fmtEnTime(n.postTime || 0);
                 const tSize = notifMode === 'small' ? 'text-[10px]' : notifMode === 'large' ? 'text-sm' : 'text-xs';
                 const pad = notifMode === 'small' ? 'p-2' : notifMode === 'large' ? 'p-4' : 'p-3';
                 const friendly = packageNameFriendly[n.packageName] || n.packageName || 'unknown';
@@ -3905,7 +4323,7 @@
                                 <p class="${notifMode === 'large' ? 'text-sm' : 'text-xs'} font-bold text-slate-100 truncate">${escHtml(n.title || '')}</p>
                                 <span class="text-[9px] font-mono text-slate-500 bg-slate-950 px-1.5 py-0.5 rounded truncate shrink-0">${escHtml(friendly)}</span>
                             </div>
-                            <span class="text-[10px] text-slate-400 font-mono shrink-0">${dateStr}</span>
+                            <span class="text-[10px] shrink-0"><span class="ts-en">${dateStr}</span></span>
                         </div>
                         <p class="${tSize} text-slate-300 leading-relaxed pr-5">${escHtml(n.text || '')}</p>
                     </div>
@@ -3963,6 +4381,50 @@
                             </button>
                             <span class="text-[10px] text-slate-400 font-mono">أو عبر الكونسول: <code class="text-sky-300 bg-slate-950 px-1.5 py-0.5 rounded">testStunConnectivity()</code></span>
                         </div>
+                    </div>
+
+                    <!-- B4 — العرض والواجهة: نمط العرض + تخصيص الأقسام السريعة -->
+                    <div class="pt-3 border-t border-slate-800/80">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <label class="block text-xs font-bold text-emerald-300">🎨 العرض والواجهة</label>
+                            <span class="text-[10px] text-slate-500">نمط العرض + الأقسام السريعة</span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 mb-2">
+                            <label class="flex items-center gap-2 px-2.5 py-1.5 rounded-xl border ${getUiTheme() === 'dark' ? 'border-emerald-500/50 bg-emerald-950/40' : 'border-slate-700 bg-slate-950/50'} cursor-pointer select-none">
+                                <input type="radio" name="ui-theme" id="ui-theme-dark" ${getUiTheme() === 'dark' ? 'checked' : ''} onchange="setUiTheme('dark')" class="accent-emerald-500 w-3.5 h-3.5">
+                                <span class="text-[11px] font-bold text-slate-200">🌙 داكن</span>
+                            </label>
+                            <label class="flex items-center gap-2 px-2.5 py-1.5 rounded-xl border ${getUiTheme() === 'light' ? 'border-amber-500/50 bg-amber-950/30' : 'border-slate-700 bg-slate-950/50'} cursor-pointer select-none">
+                                <input type="radio" name="ui-theme" id="ui-theme-light" ${getUiTheme() === 'light' ? 'checked' : ''} onchange="setUiTheme('light')" class="accent-amber-500 w-3.5 h-3.5">
+                                <span class="text-[11px] font-bold text-slate-200">☀️ فاتح</span>
+                            </label>
+                        </div>
+                        <p class="text-[10px] text-slate-400 mb-1.5">اختر الأقسام الظاهرة في القائمة الرئيسية (الأقسام السريعة):</p>
+                        <div class="flex flex-wrap gap-1.5">${renderQuickSectionEditor()}</div>
+                    </div>
+
+                    <!-- B4 — حالة أذونات الهاتف المضيف (منتقلة من اللوحة الرئيسية — حالة حقيقية) -->
+                    <div class="pt-3 border-t border-slate-800/80">
+                        <div class="flex items-center justify-between mb-1.5">
+                            <label class="block text-xs font-bold text-emerald-300">🛡️ حالة أذونات الهاتف المضيف</label>
+                            <button onclick="refreshHostPermsNow()" class="text-[10px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-2 py-1 rounded-lg">🔄 تحقق</button>
+                        </div>
+                        <div id="host-perms-status" class="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[10px]">
+                            ${renderHostPermsStatus()}
+                        </div>
+                        <p class="text-[10px] text-slate-500 mt-1.5">تُحدَّث الحالة تلقائياً من ردود أوامر الهاتف المضيف الحقيقية (منح الإشعارات/المكالمات/الملفات/الكاميرا) — لإدارة الأذونات افتح معالج الأذونات في تطبيق المضيف</p>
+                    </div>
+
+                    <!-- B4 — تسجيل المكالمات + الخزنة المشفرة (بدون تكرار مع خادم Render) -->
+                    <div class="pt-3 border-t border-slate-800/80">
+                        <label class="block text-xs font-bold text-emerald-300 mb-1.5">☎️🔐 تسجيل المكالمات والخزنة المشفرة</label>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <button onclick="setCallRecording(true)" class="text-[11px] font-bold bg-emerald-950/80 hover:bg-emerald-900/90 text-emerald-300 border border-emerald-500/40 px-3 py-1.5 rounded-xl transition">▶️ تفعيل التسجيل على المضيف</button>
+                            <button onclick="setCallRecording(false)" class="text-[11px] font-bold bg-rose-950/70 hover:bg-rose-900/80 text-rose-300 border border-rose-500/40 px-3 py-1.5 rounded-xl transition">⏹️ إيقاف التسجيل</button>
+                            <button onclick="flushVaultNow()" class="text-[11px] font-bold bg-sky-950/80 hover:bg-sky-900/90 text-sky-300 border border-sky-500/40 px-3 py-1.5 rounded-xl transition">🔐 دفعة الخزنة الآن</button>
+                            <button onclick="openVaultBlobsPanel()" class="text-[11px] font-bold bg-purple-950/70 hover:bg-purple-900/80 text-purple-300 border border-purple-500/40 px-3 py-1.5 rounded-xl transition">📦 ملفات الخزنة على الخادم</button>
+                        </div>
+                        <p class="text-[10px] text-slate-500 mt-1.5">المكالمات والتسجيلات تُشفَّر (AES-256/GCM) وتُحفظ مخفية داخل ملفات المضيف (.rbvault) وترفع تلقائياً إلى خادم Render عند توفر الإنترنت، مع مزامنة بلا تكرار عبر sha256</p>
                     </div>
 
                     <button onclick="saveWebSettings(false)" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-5 py-2 rounded-xl text-xs transition shadow-md">
@@ -4685,7 +5147,7 @@
         }
 
         function recFmtDate(ms) {
-            try { return new Date(Number(ms) || Date.now()).toLocaleString('ar-EG', { hour12: false }); }
+            try { return fmtEnTime(ms); }
             catch (_) { return '' + ms; }
         }
 
@@ -4700,6 +5162,9 @@
             }
             grid.innerHTML = items.slice(0, 96).map((it, idx) => {
                 const icon = it.kind === 'audio' ? '🎙️' : (it.kind === 'image' ? '🖼️' : '🎬');
+                // B4 — تأشير الاستبعاد من التكرار: ملف متزامنه مشفراً على الخادم (sha مطابق) أو لم يرفع بعد
+                const syncedSet = ((window.__recordingsSyncMap || {})[kind]);
+                const isSynced = syncedSet instanceof Set && syncedSet.has(String(it.name));
                 return `
                     <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden mb-2">
                         <div class="h-28 bg-slate-950 flex items-center justify-center relative">
@@ -4707,7 +5172,10 @@
                         </div>
                         <div class="p-2">
                             <p class="text-[11px] font-bold text-slate-200 truncate" title="${it.name}">${it.name}</p>
-                            <p class="text-[10px] text-slate-500">${recFmtSize(it.size)} • ${recFmtDate(it.dateMs)}</p>
+                            <p class="text-[10px] text-slate-500">${recFmtSize(it.size)} • <span class="ts-en">${recFmtDate(it.dateMs)}</span></p>
+                            <p class="mt-0.5">${isSynced
+                                ? '<span class="text-[9px] font-bold text-emerald-400">🔐 نسخة مشفرة متزامنة على الخادم ✓</span>'
+                                : '<span class="text-[9px] text-slate-500">⏳ بانتظار الرفع المشفر</span>'}</p>
                         </div>
                     </div>`;
             }).join('');
@@ -4715,6 +5183,22 @@
         }
 
         const recThumbCache = {};
+        // B4 — خريطة الملفات المتزامنة بالفعل مع الخادم (بلا تكرار عبر sha256) — تستخدم للتأشير في الشبكة
+        async function loadRecordingsServerDedup(kind) {
+            const base = serverStateApiBase();
+            const hostId = appConfig.targetDeviceId || '';
+            if (!base || !hostId || !kind || kind === 'location') return;
+            const serverKind = kind === 'screenshot' ? 'screenshots' : kind;
+            try {
+                const res = await fetch(base + '/api/blob/list?device=' + encodeURIComponent(hostId) + '&kind=' + encodeURIComponent(serverKind));
+                if (!res.ok) return;
+                const js = await res.json();
+                const names = new Set((js.items || []).map(b => String(b.name || '').replace(new RegExp('^' + serverKind + '__'), '').replace(/\.rbenc$/, '')));
+                window.__recordingsSyncMap = window.__recordingsSyncMap || {};
+                window.__recordingsSyncMap[kind] = names;
+                if (document.getElementById('rb-rec-content')) renderRecordingsGrid();
+            } catch (_) {}
+        }
         function requestRecordingsThumbs(items) {
             items.slice(0, 48).forEach((it, idx) => {
                 const slot = document.getElementById('rb-thumb-' + idx);

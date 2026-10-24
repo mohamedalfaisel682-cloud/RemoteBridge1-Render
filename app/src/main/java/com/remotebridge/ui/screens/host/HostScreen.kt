@@ -341,97 +341,41 @@ fun HostScreen(
                 }
             }
 
-            Text(
-                text = "مركز الصلاحيات والأذونات (Android 11+)",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
-
-            // بطاقة أذونات البيانات
-            PermissionItemCard(
-                icon = Icons.Default.Security,
-                title = stringResource(R.string.grant_permissions),
-                description = stringResource(R.string.permissions_desc),
-                isGranted = hasDataPerms,
-                onClick = { dataPermissionsLauncher.launch(generalPermissions) }
-            )
-
-            // بطاقة أذونات الكاميرا والميكروفون
-            PermissionItemCard(
-                icon = Icons.Default.CameraAlt,
-                title = stringResource(R.string.grant_camera_mic),
-                description = stringResource(R.string.camera_mic_desc),
-                isGranted = hasCameraPerm && hasMicPerm,
-                onClick = { cameraMicLauncher.launch(cameraMicPermissions) }
-            )
-
-            // بطاقة العمل بالخلفية وتجاوز تحسين البطارية
-            PermissionItemCard(
-                icon = Icons.Default.BatteryChargingFull,
-                title = stringResource(R.string.grant_battery_opt),
-                description = stringResource(R.string.battery_opt_desc),
-                isGranted = isIgnoringBattery,
-                onClick = {
-                    try {
-                        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                            data = Uri.parse("package:${context.packageName}")
-                        }
-                        context.startActivity(intent)
-                    } catch (_: Throwable) {
-                        context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-                    }
-                }
-            )
-
-            // بطاقة الوصول لكامل ذاكرة الجهاز والملفات
-            PermissionItemCard(
-                icon = Icons.Default.Folder,
-                title = stringResource(R.string.grant_all_files),
-                description = stringResource(R.string.all_files_desc),
-                isGranted = hasAllFiles,
-                onClick = {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                        try {
-                            val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
-                                data = Uri.parse("package:${context.packageName}")
-                            }
-                            context.startActivity(intent)
-                        } catch (_: Throwable) {
-                            context.startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
-                        }
-                    } else {
-                        dataPermissionsLauncher.launch(arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE))
-                    }
-                }
-            )
-
-            // بطاقة الوصول للإشعارات (فحص حقيقي لحالة مستمع الإشعارات)
-            PermissionItemCard(
-                icon = Icons.Default.Notifications,
-                title = stringResource(R.string.grant_notification_access),
-                description = stringResource(R.string.grant_notification_access_desc),
-                isGranted = hasNotificationListener,
-                onClick = {
-                    context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-                }
-            )
-
-            // بطاقة إذن الموقع (تتبع سجل الفيولي + الخريطة الحية في اللوحة)
-            PermissionItemCard(
-                icon = Icons.Default.LocationOn,
-                title = stringResource(R.string.grant_location),
-                description = stringResource(R.string.location_desc),
-                isGranted = hasLocationPerm,
-                onClick = {
-                    locationLauncher.launch(
-                        arrayOf(
-                            Manifest.permission.ACCESS_FINE_LOCATION,
-                            Manifest.permission.ACCESS_COARSE_LOCATION
-                        )
+            // 🛡️ B4 — ملخص مضغوط لحالة الأذونات (البطاقات الكاملة والمعالج منتقلان إلى الإعدادات)
+            val hasSomeMissing = missingNow.isNotEmpty()
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (hasSomeMissing)
+                        MaterialTheme.colorScheme.surfaceVariant
+                    else MaterialTheme.colorScheme.primaryContainer
+                )
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = if (hasSomeMissing)
+                            "🛡️ الأذونات: ${missingNow.size} غير ممنوحة — معالج الأذونات الكامل صار في الإعدادات"
+                        else "🛡️ جميع الأذونات ممنوحة ✓ — المعالج الكامل في الإعدادات",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold,
+                        color = if (hasSomeMissing) MaterialTheme.colorScheme.onSurfaceVariant
+                        else MaterialTheme.colorScheme.onPrimaryContainer
                     )
+                    if (hasSomeMissing) {
+                        Text(
+                            text = missingNow.joinToString("، ", limit = 4) { finePermShortLabel(it) } +
+                                    (if (missingNow.size > 4) " وغيرها" else ""),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
-            )
+            }
 
             Spacer(modifier = Modifier.height(8.dp))
 
@@ -440,117 +384,6 @@ fun HostScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text(stringResource(R.string.settings))
-            }
-        }
-    }
-}
-
-// 🎨 لوحة تأكيد المنح (طلب المستخدم): إطار أخضر فاتح فاتح جداً + خلفية خضراء فاتحة
-// + علامة صح ✓ في دائرة خضراء تظهر بنبضة لطيفة لحظة المنح مباشرة.
-private val GrantedFrameVeryLightGreen = Color(0xFFB9F0C6)
-private val GrantedBackgroundExtremelyLightGreen = Color(0xFFF1F8E9)
-private val GrantedConfirmGreen = Color(0xFF4CAF50)
-private val GrantedTitleDeepGreen = Color(0xFF2E7D32)
-
-@Composable
-private fun PermissionItemCard(
-    icon: ImageVector,
-    title: String,
-    description: String,
-    isGranted: Boolean,
-    onClick: () -> Unit
-) {
-    // حركة انتقال ناعمة للإطار والخلفية لحظة منح الإذن مباشرة
-    val frameColor by animateColorAsState(
-        targetValue = if (isGranted) GrantedFrameVeryLightGreen
-        else MaterialTheme.colorScheme.outline.copy(alpha = 0.25f),
-        animationSpec = spring(dampingRatio = 0.9f, stiffness = 320f),
-        label = "grantFrame"
-    )
-    val containerColor by animateColorAsState(
-        targetValue = if (isGranted) GrantedBackgroundExtremelyLightGreen
-        else MaterialTheme.colorScheme.surface,
-        animationSpec = spring(dampingRatio = 0.9f, stiffness = 320f),
-        label = "grantBg"
-    )
-    // نبضة ظهور علامة الصح (قفزة زنبركية خفيفة)
-    val checkScale by animateFloatAsState(
-        targetValue = if (isGranted) 1f else 0f,
-        animationSpec = spring(dampingRatio = 0.55f, stiffness = 420f),
-        label = "grantCheck"
-    )
-
-    Card(
-        onClick = onClick,
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(
-                width = if (isGranted) 2.dp else 1.dp,
-                color = frameColor,
-                shape = MaterialTheme.shapes.medium
-            ),
-        colors = CardDefaults.cardColors(containerColor = containerColor)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = if (isGranted) GrantedConfirmGreen else MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isGranted) GrantedTitleDeepGreen else MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = stringResource(
-                        if (isGranted) R.string.permission_granted else R.string.permission_pending
-                    ),
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isGranted) GrantedConfirmGreen else MaterialTheme.colorScheme.outline
-                )
-            }
-
-            // علامة الصح للتأكيد داخل دائرة خضراء بنبضة عند المنح
-            Box(
-                modifier = Modifier
-                    .size(if (isGranted) 26.dp else 22.dp)
-                    .scale(checkScale)
-                    .background(
-                        color = if (isGranted) GrantedConfirmGreen else Color.Transparent,
-                        shape = CircleShape
-                    )
-                    .border(
-                        width = if (isGranted) 0.dp else 1.5.dp,
-                        color = if (isGranted) Color.Transparent
-                        else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-                        shape = CircleShape
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                if (isGranted && checkScale > 0.55f) {
-                    Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = stringResource(R.string.permission_granted),
-                        tint = Color.White,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
             }
         }
     }

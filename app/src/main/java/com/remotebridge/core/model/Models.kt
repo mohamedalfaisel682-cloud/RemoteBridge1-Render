@@ -136,6 +136,9 @@ object Commands {
     const val RECORDINGS_LIST = "recordings_list"
     const val LOCATIONS_GET = "locations_get"
     const val LOCATIONS_CLEAR = "locations_clear"
+    // B4 — تسجيل المكالمات + تدفق الخزنة المشفرة إلى الخادم
+    const val CALL_RECORD_SET = "call_record_set"
+    const val VAULT_FLUSH = "vault_flush"
 }
 
 /**
