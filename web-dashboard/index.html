@@ -143,6 +143,118 @@
         .bubble-time { font-size: 9.5px; opacity: .75; margin-top: 4px; text-align: left; font-family: monospace; }
         .chat-input-row { display:flex; gap:8px; padding: 10px 12px; border-top: 1px solid rgba(51,65,85,0.8); background: rgba(15,23,42,0.9); }
     </style>
+    <style id="bridge-host-studio-css">
+        /* ===== الإطار الوامض للجهاز المضيف المختار والمتصل (أخضر فاتح ↔ أبيض) ===== */
+        .host-flash {
+            animation: hostFlashAnim 1.5s ease-in-out infinite;
+        }
+        @keyframes hostFlashAnim {
+            0%, 100% {
+                border-color: rgba(134, 239, 172, .95);
+                box-shadow: 0 0 0 2px rgba(134, 239, 172, .70), 0 0 14px 4px rgba(134, 239, 172, .40);
+            }
+            50% {
+                border-color: rgba(255, 255, 255, .95);
+                box-shadow: 0 0 0 2px rgba(255, 255, 255, .70), 0 0 14px 4px rgba(255, 255, 255, .35);
+            }
+        }
+        .host-status-dot {
+            width: 9px; height: 9px; border-radius: 9999px; flex-shrink: 0;
+        }
+        .host-status-dot.on {
+            background: #22c55e;
+            box-shadow: 0 0 7px rgba(34, 197, 94, .95);
+            animation: hostDotPulse 1.6s ease-in-out infinite;
+        }
+        .host-status-dot.off {
+            background: #ef4444;
+            box-shadow: 0 0 5px rgba(239, 68, 68, .8);
+        }
+        @keyframes hostDotPulse {
+            0%, 100% { transform: scale(.9); opacity: .85; }
+            50% { transform: scale(1.25); opacity: 1; }
+        }
+        /* ===== زر الفحص التلقائي (أيقونة + نص + مؤشر نابض أخضر/أبيض) ===== */
+        .auto-scan-on {
+            background: rgba(34, 197, 94, .16);
+            border: 1px solid rgba(34, 197, 94, .45);
+            color: #6ee7b7;
+            animation: hostFlashAnim 1.5s ease-in-out infinite;
+        }
+        .auto-scan-off {
+            background: rgba(100, 116, 139, .14);
+            border: 1px solid rgba(100, 116, 139, .45);
+            color: #94a3b8;
+        }
+        .scan-pulse-dot {
+            width: 8px; height: 8px; border-radius: 9999px;
+            background: #22c55e;
+            box-shadow: 0 0 6px 1px rgba(34, 197, 94, .85);
+            animation: scanPulseDot 1.1s ease-in-out infinite;
+            flex-shrink: 0;
+        }
+        .scan-pulse-dot.off {
+            background: #64748b;
+            box-shadow: none;
+            animation: none;
+        }
+        @keyframes scanPulseDot {
+            0%, 100% { background: #22c55e; box-shadow: 0 0 6px 1px rgba(34, 197, 94, .85); }
+            50% { background: #ffffff; box-shadow: 0 0 10px 3px rgba(255, 255, 255, .9); }
+        }
+        /* ===== بطاقات الاستوديو ===== */
+        .studio-card {
+            position: relative;
+            border-radius: .75rem;
+            overflow: hidden;
+            background: #0f172a;
+            border: 1px solid #1e293b;
+            aspect-ratio: 1 / 1;
+            cursor: pointer;
+            transition: transform .15s ease, border-color .15s ease;
+        }
+        .studio-card:hover {
+            transform: scale(1.04);
+            border-color: rgba(52, 211, 153, .65);
+        }
+        .studio-thumb {
+            width: 100%; height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+        .studio-meta {
+            position: absolute;
+            inset-inline: 0; bottom: 0;
+            background: linear-gradient(transparent, rgba(2, 6, 23, .92));
+            padding: 10px 6px 5px;
+            font-size: 9px;
+            color: #e2e8f0;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+        .studio-type-badge {
+            position: absolute; top: 5px; left: 5px;
+            font-size: 9px;
+            padding: 2px 6px;
+            border-radius: 9999px;
+            background: rgba(15, 23, 42, .85);
+            border: 1px solid rgba(148, 163, 184, .35);
+            color: #a5f3fc;
+        }
+        .studio-chip {
+            font-size: 10px; font-weight: 700;
+            padding: 4px 10px; border-radius: 9999px;
+            background: #1e293b; color: #cbd5e1;
+            border: 1px solid #334155;
+            cursor: pointer; transition: all .15s;
+        }
+        .studio-chip.active {
+            background: rgba(16, 185, 129, .22);
+            color: #6ee7b7;
+            border-color: rgba(52, 211, 153, .55);
+        }
+    </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col custom-scrollbar selection:bg-emerald-500 selection:text-slate-950 overflow-x-hidden">
 
@@ -185,6 +297,7 @@
     <!-- Mobile Horizontal Tabs Navigation (Visually Optimized for Phones) -->
     <div class="md:hidden bg-slate-900/95 border-b border-slate-800 px-2 py-2 overflow-x-auto no-scrollbar flex items-center gap-1.5 sticky top-[53px] z-30 shadow-md">
         <button onclick="switchTab('dashboard')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap bg-emerald-600/20 text-emerald-400 border border-emerald-500/30">📊 الرئيسية</button>
+        <button onclick="switchTab('studio')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">🎬 الاستوديو <span id="badge-studio-m" class="tab-badge" hidden>0</span></button>
         <button onclick="switchTab('files')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">📁 الملفات والذاكرة <span id="badge-files-m" class="tab-badge" hidden>0</span></button>
         <button onclick="switchTab('camera')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">📹 البث الحي</button>
         <button onclick="switchTab('contacts')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">📇 الأسماء <span id="badge-contacts-m" class="tab-badge" hidden>0</span></button>
@@ -203,6 +316,10 @@
                 <div class="px-3 py-1 text-[11px] font-bold text-slate-400 uppercase tracking-wider">القوائم والأقسام</div>
                 <button onclick="switchTab('dashboard')" class="tab-btn w-full text-right px-3.5 py-2.5 rounded-xl bg-emerald-600/20 text-emerald-400 font-bold transition flex items-center justify-between group">
                     <span class="flex items-center gap-2.5 text-xs">📊 لوحة النظام الرئيسية</span>
+                </button>
+                <button onclick="switchTab('studio')" class="tab-btn w-full text-right px-3.5 py-2.5 rounded-xl hover:bg-slate-800/80 text-slate-300 font-medium transition flex items-center justify-between group">
+                    <span class="flex items-center gap-2.5 text-xs">🎬 الاستوديو — الوسائط المصغرة</span>
+                    <span id="badge-studio" class="tab-badge" hidden>0</span>
                 </button>
                 <button onclick="switchTab('files')" class="tab-btn w-full text-right px-3.5 py-2.5 rounded-xl hover:bg-slate-800/80 text-slate-300 font-medium transition flex items-center justify-between group">
                     <span class="flex items-center gap-2.5 text-xs">📁 مستكشف ملفات وذاكرة الهاتف</span>
@@ -236,7 +353,12 @@
             <div class="glass-panel rounded-2xl p-3.5 shadow-xl border border-slate-800">
                 <h3 class="text-xs font-bold text-slate-300 mb-2 flex items-center justify-between">
                     <span>📱 الأجهزة المتاحة (Hosts)</span>
-                    <button onclick="autoDiscoverAndConnectHosts()" class="text-[10px] text-emerald-400 hover:underline font-bold">🔍 فحص تلقائي</button>
+                    <button id="auto-scan-toggle" onclick="toggleAutoScan()" title="البحث التلقائي يعمل كل 3 ثوانٍ — انقر للإيقاف أو التفعيل" class="auto-scan-on flex items-center gap-1.5 text-[10px] font-bold px-2 py-1 rounded-lg transition">
+                        <span>📡</span>
+                        <span>فحص تلقائي</span>
+                        <span id="auto-scan-pulse" class="scan-pulse-dot"></span>
+                        <span class="text-[9px] opacity-70 font-normal">كل 3 ثوانٍ</span>
+                    </button>
                 </h3>
                 
                 <div class="space-y-1 mb-2.5 max-h-32 overflow-y-auto custom-scrollbar" id="hosts-list">
@@ -255,8 +377,8 @@
                         <button onclick="connectToSelectedHost()" class="bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 border border-emerald-500/30 py-1.5 rounded-lg text-xs font-bold transition">
                             🔗 ربط WebRTC
                         </button>
-                        <button onclick="autoDiscoverAndConnectHosts()" class="bg-purple-600/30 hover:bg-purple-600/50 text-purple-300 border border-purple-500/30 py-1.5 rounded-lg text-xs font-bold transition">
-                            🔍 تنقيب تلقائي
+                        <button id="auto-scan-alt" onclick="toggleAutoScan()" class="auto-scan-on py-1.5 rounded-lg text-xs font-bold transition">
+                            🔍 تنقيب تلقائي — يعمل
                         </button>
                     </div>
                 </div>
@@ -677,28 +799,173 @@
             const listEl = document.getElementById("hosts-list");
             if (!listEl) return;
 
-            if (!onlineHosts || onlineHosts.length === 0) {
+            // حفظ الهوستات التي تم الاتصال بها مسبقاً + دمجها مع الأجهزة الأونلاين حالياً
+            try {
+                for (const h of (onlineHosts || [])) {
+                    savedHosts.set(h.deviceId, {
+                        deviceId: h.deviceId,
+                        deviceName: h.deviceName || h.deviceId,
+                        lastSeenAt: Date.now(),
+                        online: true
+                    });
+                }
+                for (const [id, rec] of savedHosts) {
+                    if (rec.online && !(onlineHosts || []).some(x => x.deviceId === id)) {
+                        rec.online = false;
+                    }
+                }
+                localStorage.setItem("remotebridge_saved_hosts_v1", JSON.stringify([...savedHosts.values()]));
+            } catch (_) {}
+
+            const currentTarget = activeTargetDeviceId || appConfig.targetDeviceId;
+            if (!currentTarget && (onlineHosts || []).length > 0) {
+                selectHost(onlineHosts[0].deviceId);
+            }
+
+            // قائمة متحدة: الأجهزة الأونلاين أولاً ثم الهوستات المحفوظة (غير النشطة) بترتيب آخر ظهور
+            const offlineSaved = [...savedHosts.values()]
+                .filter(r => !r.online || !(onlineHosts || []).some(x => x.deviceId === r.deviceId))
+                .sort((a, b) => (b.lastSeenAt || 0) - (a.lastSeenAt || 0));
+            const offlineTotals = offlineSaved.filter(r => !(onlineHosts || []).some(x => x.deviceId === r.deviceId));
+
+            if ((onlineHosts || []).length === 0 && offlineTotals.length === 0) {
                 listEl.innerHTML = `<div class="text-[10px] text-slate-500 text-center py-2 bg-slate-900/40 rounded-xl border border-slate-800 animate-pulse">لا توجد أجهزة مضيفة أونلاين حالياً. جارٍ الفحص الدوري عبر السيرفر كل 3 ثوانٍ...</div>`;
                 return;
             }
 
-            const currentTarget = activeTargetDeviceId || appConfig.targetDeviceId;
-            if (!currentTarget && onlineHosts.length > 0) {
-                selectHost(onlineHosts[0].deviceId);
-            }
-
-            listEl.innerHTML = onlineHosts.map(h => `
-                <div onclick="selectHost('${h.deviceId}')" class="p-2 bg-slate-900/80 hover:bg-slate-800/90 border ${h.deviceId === currentTarget ? 'border-emerald-500/80 bg-emerald-950/20' : 'border-slate-700/60'} rounded-xl flex items-center justify-between cursor-pointer transition">
+            const p2pAlive = isP2pAlive();
+            const cardHtml = (deviceId, deviceName, isOnline) => {
+                const selected = deviceId === currentTarget;
+                const flash = selected && p2pAlive ? "host-flash" : "";
+                const dotCls = isOnline ? "host-status-dot on" : "host-status-dot off";
+                const border = selected ? "border-emerald-500/80 bg-emerald-950/25" : "border-slate-700/60 bg-slate-900/80";
+                const statusBadge = selected && p2pAlive
+                    ? `<span class="text-[9px] bg-emerald-950 border border-emerald-400/60 text-emerald-300 px-2 py-0.5 rounded-full">متصل ونشط</span>`
+                    : isOnline
+                        ? `<span class="text-[9px] bg-emerald-950 border border-emerald-500/30 text-emerald-300 px-2 py-0.5 rounded-full">نشط أونلاين</span>`
+                        : `<span class="text-[9px] bg-slate-800 border border-slate-600/40 text-slate-400 px-2 py-0.5 rounded-full">محفوظ — غير نشط</span>`;
+                const modelInfo = hostModelCache[deviceId] ? `<p class="text-[9px] text-slate-500 font-mono">${hostModelCache[deviceId]}</p>` : "";
+                return `
+                <div onclick="selectAndConnectHost('${deviceId}')" class="p-2 ${border} ${flash} rounded-xl flex items-center justify-between cursor-pointer transition hover:bg-slate-800/90">
                     <div class="flex items-center gap-2">
-                        <div class="w-2 h-2 rounded-full bg-emerald-400"></div>
+                        <div class="${dotCls}"></div>
                         <div>
-                            <p class="text-xs font-bold text-slate-200">${h.deviceName || h.deviceId}</p>
-                            <p class="text-[10px] font-mono text-slate-400">${h.deviceId}</p>
+                            <p class="text-xs font-bold text-slate-200">${deviceName}</p>
+                            <p class="text-[10px] font-mono text-slate-400">${deviceId}</p>
+                            ${modelInfo}
                         </div>
                     </div>
-                    <span class="text-[9px] bg-emerald-950 border border-emerald-500/30 text-emerald-300 px-2 py-0.5 rounded-full">نشط أونلاين</span>
-                </div>
-            `).join('');
+                    ${statusBadge}
+                </div>`;
+            };
+
+            listEl.innerHTML =
+                (onlineHosts || []).map(h => cardHtml(h.deviceId, h.deviceName || h.deviceId, true)).join("") +
+                offlineTotals.map(r => cardHtml(r.deviceId, r.deviceName, false)).join("");
+        }
+
+        // مزامنة حالة الأونلاين عند وصول قائمة/أحداث الهاستات
+        let autoFetchToastSuppressed = false;
+        let autoFetchInFlight = false;
+        const savedHosts = new Map(); // deviceId -> {deviceId, deviceName, lastSeenAt, online}
+        const hostModelCache = {};    // deviceId -> "الموديل • Android xx" (من device_info عند الاتصال)
+        try {
+            for (const rec of (JSON.parse(localStorage.getItem("remotebridge_saved_hosts_v1") || "[]"))) {
+                if (rec && rec.deviceId) savedHosts.set(rec.deviceId, { ...rec, online: false });
+            }
+        } catch (_) {}
+
+        function isP2pAlive() {
+            try {
+                const dcOpen = dataChannel && dataChannel.readyState === "open";
+                const connOk = pc && (pc.connectionState === "connected" || pc.iceConnectionState === "connected" || pc.iceConnectionState === "completed");
+                return !!(dcOpen && connOk);
+            } catch (_) { return false; }
+        }
+
+        // خطاف حالة جهاز info: احفظ موديل آخر host تم جلبه (بطاقة الهاست في القائمة)
+        const origUpdateDashboardCards = updateDashboardCards;
+        updateDashboardCards = function (data) {
+            try {
+                const hostId = activeTargetDeviceId || appConfig.targetDeviceId;
+                if (hostId && data && (data.model || data.manufacturer)) {
+                    hostModelCache[hostId] = `${data.model || ""}${data.manufacturer ? " • " + data.manufacturer : ""} • أندرويد ${data.androidVersion || ""}`.trim();
+                    renderHostList();
+                }
+            } catch (_) {}
+            return origUpdateDashboardCards(data);
+        };
+
+        function selectAndConnectHost(deviceId) {
+            if (!deviceId) return;
+            const wasSame = activeTargetDeviceId === deviceId;
+            const wasAlive = isP2pAlive();
+            selectHost(deviceId); // يشغّل عرض WebRTC التلقائي عند تغيير الجهاز أو انقطاع الاتصال
+            // الربط التلقائي: بعد النقر تُجلب كل القوائم تلقائياً دون نقر «جلب» في كل قائمة
+            if (!(wasSame && wasAlive)) {
+                showHintOnce("autolink::" + deviceId, "تم اختيار الجهاز — جارٍ الربط التلقائي بكل القنوات وجلب القوائم...");
+            }
+            autoFetchAllLists();
+            renderHostList();
+        }
+
+        function autoFetchAllLists() {
+            if (autoFetchInFlight || !activeTargetDeviceId) return;
+            autoFetchInFlight = true;
+            autoFetchToastSuppressed = true; // إسكات قيل «تم جلب القائمة» أثناء الجلب الشهودي التلقائي
+            const run = (cmd, params, timeout) => {
+                try {
+                    if (cmd === "storage_explore") {
+                        sendRPCCommand("storage_explore", params, { timeout: timeout }).catch(() => {});
+                    } else {
+                        sendRPCCommand(cmd, null, { timeout: timeout, retries: 1 }).catch(() => {});
+                    }
+                } catch (_) {}
+            };
+            // الأسماء أولاً (تعتمد عليها الرسائل والمكالمات) ثم بقية القوائم بتباعد بسيط
+            run("contacts_list", null, 9000);
+            setTimeout(() => run("sms_list", null, 9000), 900);
+            setTimeout(() => run("calls_list", null, 9000), 1800);
+            setTimeout(() => run("notifications_list", null, 9000), 2700);
+            setTimeout(() => run("storage_explore", { path: currentExplorerPath }, 12000), 3600);
+            setTimeout(() => {
+                autoFetchInFlight = false;
+                autoFetchToastSuppressed = false;
+            }, 6500);
+        }
+
+        let autoScanGloballyEnabled = true; // الفحص التلقائي مفعّل افتراضياً
+
+        function applyAutoScanVisual() {
+            const btn = document.getElementById("auto-scan-toggle");
+            const pulse = document.getElementById("auto-scan-pulse");
+            const altBtn = document.getElementById("auto-scan-alt");
+            if (btn) {
+                btn.classList.toggle("auto-scan-on", autoScanGloballyEnabled);
+                btn.classList.toggle("auto-scan-off", !autoScanGloballyEnabled);
+                btn.classList.toggle("host-flash", autoScanGloballyEnabled);
+            }
+            if (pulse) pulse.classList.toggle("off", !autoScanGloballyEnabled);
+            if (altBtn) {
+                altBtn.classList.toggle("auto-scan-on", autoScanGloballyEnabled);
+                altBtn.classList.toggle("auto-scan-off", !autoScanGloballyEnabled);
+                altBtn.innerHTML = autoScanGloballyEnabled ? "🔍 تنقيب تلقائي — يعمل" : "🔍 تنقيب تلقائي — متوقف";
+            }
+        }
+
+        function toggleAutoScan() {
+            autoScanGloballyEnabled = !autoScanGloballyEnabled;
+            applyAutoScanVisual();
+            if (autoScanGloballyEnabled) {
+                showHintOnce("auto-scan-on", "تم تفعيل الفحص التلقائي — يبحث عن الهواتف كل 3 ثوانٍ");
+                autoDiscoverAndConnectHosts();
+            } else {
+                if (autoDiscoveryIntervalId) {
+                    clearInterval(autoDiscoveryIntervalId);
+                    autoDiscoveryIntervalId = null;
+                }
+                showHintOnce("auto-scan-off", "تم إيقاف البحث التلقائي — استخدم زر الفحص يدوياً");
+            }
         }
 
         function selectHost(deviceId) {
@@ -714,7 +981,7 @@
             if (targetEl) targetEl.value = deviceId;
             autoSaveInputs();
 
-            // Prevent re-creating WebRTC offer if target hasn't changed and connection is alive!
+            // منع إعادة إنشاء عرض WebRTC إذا لم يتغير الهدف والاتصال قائم
             if (!isSameDevice || !isConnectionAlive) {
                 showToast(`تم اختيار الجهاز المضيف: ${deviceId}`, "info");
                 createWebRTCOfferWithRetry(deviceId);
@@ -1555,6 +1822,19 @@
 
             // 2) Items array responses (Contacts, SMS, Calls, Notifications, Files)
             if (data.items !== undefined && Array.isArray(data.items)) {
+                // الاستوديو: مجلدات الوسائط / عناصر الوسائط من الجهاز المضيف
+                if (cmd === 'media_folders') {
+                    if (activeTab === 'studio') renderStudioFolderPicker(data.items);
+                    return;
+                }
+                if (cmd === 'media_items') {
+                    studioItems = (data.items || []).filter(it => it && it.kind);
+                    studioItems.sort((a, b) => (b.dateMs || 0) - (a.dateMs || 0));
+                    studioLoading = false;
+                    setStudioBadge(studioItems.length);
+                    if (activeTab === 'studio') renderStudioGrid();
+                    return;
+                }
                 let targetType = activeTab;
 
                 if (cmd === 'contacts_list') {
@@ -1619,7 +1899,7 @@
                     else if (targetType === 'notifications') applyNotifFilters();
                 }
                 const countMsg = data.items.length > 0 ? ` (${data.items.length} عنصر)` : "";
-                if (countMsg) showToast("تم جلب وتحديث القائمة الحية بنجاح!" + countMsg, "success");
+                if (countMsg && !autoFetchToastSuppressed) showToast("تم جلب وتحديث القائمة الحية بنجاح!" + countMsg, "success");
                 return;
             }
 
@@ -1775,7 +2055,7 @@
 
             const panel = document.getElementById("panel-content");
             // أي دخول لتبويب قائمة = تسجيل المعاينة وإصفار شارته
-            if (['files', 'contacts', 'sms', 'calls', 'notifications'].includes(tab)) {
+            if (['files', 'contacts', 'sms', 'calls', 'notifications', 'studio'].includes(tab)) {
                 setTimeout(() => markTabSeen(tab), 0);
             }
             if (tab === 'dashboard') {
@@ -1801,10 +2081,277 @@
             } else if (tab === 'notifications') {
                 renderNotificationsListView();
                 sendRPCCommand('notifications_list');
+            } else if (tab === 'studio') {
+                renderStudioView();
             } else if (tab === 'settings') {
                 panel.innerHTML = renderSettingsView();
             }
         }
+
+        // ==========================================================
+        //   🎬 الاستوديو — الصور/الفيديو/الصوت مصغّرة، الأحدث أولاً، بنقرة جلب
+        //   المصدر: أوامر media_folders (قائمة المجلدات الحاوية وسائط)
+        //   و media_items (عناصر المجلدات المختارة مع مصغرات).
+        // ==========================================================
+        const STUDIO_FOLDER_KEY = "remotebridge_studio_folders_v1";
+        let studioItems = [];
+        let studioFilter = "all";
+        let studioLoading = false;
+        let studioFolders = [];
+        let studioPendingSel = null;
+        try {
+            studioFolders = (JSON.parse(localStorage.getItem(STUDIO_FOLDER_KEY) || "[]") || [])
+                .filter(f => f && (f.path || f.label));
+        } catch (_) { studioFolders = []; }
+
+        function saveStudioFolders() {
+            try { localStorage.setItem(STUDIO_FOLDER_KEY, JSON.stringify(studioFolders)); } catch (_) {}
+        }
+
+        function setStudioBadge(n) {
+            const dEl = document.getElementById("badge-studio");
+            const mEl = document.getElementById("badge-studio-m");
+            const show = activeTab !== "studio" && n > 0;
+            if (dEl) { dEl.hidden = !show; if (show) dEl.textContent = n; }
+            if (mEl) { mEl.hidden = !show; if (show) mEl.textContent = n; }
+        }
+
+        function renderStudioView() {
+            const panel = document.getElementById("panel-content");
+            panel.innerHTML = `
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-3 mb-3 border-b border-slate-800 gap-2">
+                    <div>
+                        <h2 class="text-lg md:text-xl font-bold text-emerald-300">🎬 الاستوديو — الوسائط الحديثة</h2>
+                        <p class="text-xs text-slate-400 mt-0.5">عرض مصغّر للصور والفيديو والصوت من المجلدات المختارة — الأحدث أولاً — لا يُجلب تلقائياً إلا بنقرة «جلب»</p>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span class="studio-chip ${studioFilter === 'all' ? 'active' : ''}" onclick="applyStudioFilter('all')">الكل</span>
+                        <span class="studio-chip ${studioFilter === 'image' ? 'active' : ''}" onclick="applyStudioFilter('image')">🖼 صور</span>
+                        <span class="studio-chip ${studioFilter === 'video' ? 'active' : ''}" onclick="applyStudioFilter('video')">🎞 فيديو</span>
+                        <span class="studio-chip ${studioFilter === 'audio' ? 'active' : ''}" onclick="applyStudioFilter('audio')">🎵 صوت</span>
+                        <button onclick="openStudioFolderPicker()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs px-3 py-1.5 rounded-xl font-bold border border-slate-700">📂 اختيار المجلدات</button>
+                        <button onclick="fetchStudioMedia()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-3 py-1.5 rounded-xl font-bold shadow-md">🔄 جلب الوسائط</button>
+                    </div>
+                </div>
+                <div id="studio-buckets-line" class="text-[10px] text-slate-500 mb-2"></div>
+                <div id="studio-grid" class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2"></div>
+                <div id="studio-folder-modal-host"></div>
+            `;
+            renderStudioGrid();
+        }
+
+        function updateStudioBucketsLine() {
+            const el = document.getElementById("studio-buckets-line");
+            if (!el) return;
+            el.textContent = studioFolders.length
+                ? "المجلدات المختارة: " + studioFolders.map(f => f.path || f.label).join(" ، ")
+                : "لم تُختر مجلدات بعد — انقر «اختيار المجلدات» لتحديد ما يُعرض في الاستوديو.";
+        }
+
+        function applyStudioFilter(kind) {
+            studioFilter = kind;
+            renderStudioView();
+        }
+
+        function renderStudioGrid() {
+            const grid = document.getElementById("studio-grid");
+            if (!grid) return;
+            updateStudioBucketsLine();
+            if (studioLoading) {
+                grid.innerHTML = Array.from({ length: 12 }).map(() =>
+                    `<div class="rounded-xl bg-slate-900/70 border border-slate-800 animate-pulse" style="aspect-ratio:1/1"></div>`
+                ).join("");
+                return;
+            }
+            const filtered = studioItems.filter(it => studioFilter === "all" || it.kind === studioFilter);
+            window.__stFiltered = filtered;
+            if (filtered.length === 0) {
+                grid.innerHTML = `<div class="col-span-full text-center py-10 text-slate-500 text-xs bg-slate-900/40 rounded-xl border border-slate-800">
+                    ${studioItems.length === 0
+                        ? "لا توجد وسائط محملة بعد — انقر «📂 اختيار المجلدات» ثم «🔄 جلب الوسائط»."
+                        : "لا وسائط من هذا النوع في المجلدات المختارة."}
+                </div>`;
+                return;
+            }
+            grid.innerHTML = filtered.map((it, fi) => {
+                const icon = it.kind === "audio" ? "🎵" : (it.kind === "video" ? "🎞" : "🖼");
+                const dur = it.durationMs ? Math.round(it.durationMs / 1000) + "ث" : "";
+                const sizeTxt = it.size ? (it.size >= 1048576 ? (it.size / 1048576).toFixed(1) + "MB" : (it.size / 1024).toFixed(0) + "KB") : "";
+                const thumb = it.thumb
+                    ? `<img class="studio-thumb" src="${it.thumb}" alt="">`
+                    : `<div class="w-full h-full flex items-center justify-center text-4xl opacity-60">${icon}</div>`;
+                return `<div class="studio-card" onclick="openStudioPreview(${fi})">${thumb}<span class="studio-type-badge">${icon}${dur ? " " + dur : ""}</span><div class="studio-meta">${escHtml(it.name || "")} • ${sizeTxt}</div></div>`;
+            }).join("");
+        }
+
+        function fetchStudioMedia() {
+            if (!studioFolders || studioFolders.length === 0) {
+                openStudioFolderPicker();
+                return;
+            }
+            studioLoading = true;
+            renderStudioGrid();
+            const paths = studioFolders.map(f => f.path || f.label);
+            sendRPCCommand("media_items", { folders: paths, limit: 300 }, { timeout: 18000 }).catch(() => {
+                studioLoading = false;
+                renderStudioGrid();
+                showHintOnce("studio-fetch-fail", "تعذر جلب الوسائط — تأكد من اتصال الجهاز المضيف وتحديث التطبيق");
+            });
+        }
+
+        function openStudioFolderPicker() {
+            studioPendingSel = studioFolders.map(f => ({ ...f }));
+            const modalHost = document.getElementById("studio-folder-modal-host");
+            if (!modalHost) {
+                const newHost = document.createElement("div");
+                newHost.id = "studio-folder-modal-host";
+                document.body.appendChild(newHost);
+            }
+            const hostEl = document.getElementById("studio-folder-modal-host");
+            hostEl.innerHTML = `<div id="studio-folder-modal" class="fixed inset-0 z-[60] bg-black/75 flex items-end sm:items-center justify-center p-3">
+                <div class="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl max-h-[80vh] flex flex-col">
+                    <div class="p-3 border-b border-slate-800 flex items-center justify-between">
+                        <p class="text-sm font-bold text-emerald-300">📂 المجلدات الحاوية على وسائط</p>
+                        <button onclick="closeStudioFolderPicker()" class="text-slate-400 hover:text-white px-1 text-sm">✕</button>
+                    </div>
+                    <div class="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1" id="studio-folder-list">
+                        <div class="text-[11px] text-slate-400 text-center py-6 animate-pulse">جارٍ جلب قائمة المجلدات من الهاتف...</div>
+                    </div>
+                    <div class="p-3 border-t border-slate-800 flex items-center justify-between gap-2">
+                        <span id="studio-folder-count" class="text-[10px] text-slate-400"></span>
+                        <div class="flex gap-1.5">
+                            <button onclick="clearStudioFolders()" class="bg-slate-800 text-slate-300 text-xs px-3 py-1.5 rounded-xl">تفريغ</button>
+                            <button onclick="saveAndCloseStudioFolders()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-3 py-1.5 rounded-xl font-bold">حفظ وعرض</button>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+            updateStudioFolderCountText();
+            sendRPCCommand("media_folders", null, { timeout: 9000 }).catch(() => {
+                showHintOnce("studio-unsupported", "تطبيق الهاتف المضيف يحتاج التحديث لدعم قسم الاستوديو");
+            });
+        }
+
+        let studioLastFoldersList = [];
+
+        function renderStudioFolderPicker(list) {
+            const hostEl = document.getElementById("studio-folder-modal-host");
+            if (!hostEl) return;
+            const listEl = document.getElementById("studio-folder-list");
+            if (!listEl) return;
+            studioLastFoldersList = list || [];
+            const selSet = new Set((studioPendingSel || []).map(s => s.path));
+            listEl.innerHTML = studioLastFoldersList.map((f, i) => {
+                const checked = selSet.has(f.path);
+                return `<div id="stfd-${i}" onclick="toggleStudioFolder(${i})" class="stfd-row p-2 rounded-xl border cursor-pointer flex items-center justify-between transition ${checked ? "border-emerald-500/70 bg-emerald-950/30" : "border-slate-800 bg-slate-900/60"}">
+                    <div class="flex items-center gap-2 text-[11px] text-slate-200">
+                        <span class="stfd-check w-4 h-4 rounded border border-emerald-500 flex items-center justify-center text-emerald-400 text-[10px] font-bold">${checked ? "✓" : ""}</span>
+                        <span>📁 ${escHtml(f.label || f.path)}</span>
+                    </div>
+                    <span class="text-[9px] text-slate-400 whitespace-nowrap">${f.img || 0} صور • ${f.vid || 0} فيديو • ${f.aud || 0} صوت</span>
+                </div>`;
+            }).join("") || `<div class="text-[11px] text-slate-400 text-center py-6">لم يُعثر على مجلدات وسائط على الهاتف.</div>`;
+            updateStudioFolderCountText();
+        }
+
+        function toggleStudioFolder(i) {
+            const f = studioLastFoldersList[i];
+            if (!f) return;
+            const cur = studioPendingSel || [];
+            const ix = cur.findIndex(s => s.path === f.path);
+            if (ix >= 0) cur.splice(ix, 1); else cur.push({ path: f.path, label: f.label || f.path });
+            studioPendingSel = cur;
+            const row = document.getElementById("stfd-" + i);
+            if (row) {
+                const checked = cur.some(s => s.path === f.path);
+                const chk = row.querySelector(".stfd-check");
+                if (chk) chk.textContent = checked ? "✓" : "";
+                row.classList.toggle("border-emerald-500/70", checked);
+                row.classList.toggle("bg-emerald-950/30", checked);
+                row.classList.toggle("border-slate-800", !checked);
+            }
+            updateStudioFolderCountText();
+        }
+
+        function clearStudioFolders() {
+            studioPendingSel = [];
+            document.querySelectorAll("#studio-folder-list .stfd-row").forEach(r => {
+                const chk = r.querySelector(".stfd-check");
+                if (chk) chk.textContent = "";
+                r.classList.remove("border-emerald-500/70", "bg-emerald-950/30");
+                r.classList.add("border-slate-800");
+            });
+            updateStudioFolderCountText();
+        }
+
+        function updateStudioFolderCountText() {
+            const c = document.getElementById("studio-folder-count");
+            if (c) c.textContent = ((studioPendingSel || []).length) + " مجلد مختار";
+        }
+
+        function saveAndCloseStudioFolders() {
+            studioFolders = (studioPendingSel || []).map(x => ({ ...x }));
+            saveStudioFolders();
+            closeStudioFolderPicker();
+            if (typeof studioItems !== "undefined" && studioItems.length === 0) fetchStudioMedia();
+            else renderStudioGrid();
+        }
+
+        function closeStudioFolderPicker() {
+            const m = document.getElementById("studio-folder-modal");
+            if (m) m.remove();
+        }
+
+        function openStudioPreview(fi) {
+            const list = window.__stFiltered || [];
+            const it = list[fi];
+            if (!it) return;
+            let host = document.getElementById("studio-preview-host");
+            if (!host) {
+                host = document.createElement("div");
+                host.id = "studio-preview-host";
+                document.body.appendChild(host);
+            }
+            const icon = it.kind === "audio" ? "🎵" : (it.kind === "video" ? "🎞" : "🖼");
+            const kindTxt = it.kind === "image" ? "صورة" : (it.kind === "video" ? "فيديو" : "صوت");
+            const body = it.kind === "audio"
+                ? `<div class="text-6xl">🎵</div>`
+                : `<img id="studio-preview-img" class="max-w-full" style="max-height:62vh" src="${it.thumb || "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"}" alt="">`;
+            host.innerHTML = `<div class="fixed inset-0 z-[70] bg-black/85 flex items-center justify-center p-4" onclick="closeStudioPreview()">
+                <div class="w-full max-w-lg bg-slate-900 border border-slate-700 rounded-2xl p-3 shadow-2xl" onclick="event.stopPropagation()">
+                    <div class="flex items-center justify-between mb-2 gap-2">
+                        <p class="text-xs text-slate-200 font-bold truncate">${icon} ${escHtml(it.name || "")}</p>
+                        <button onclick="closeStudioPreview()" class="text-slate-400 hover:text-white px-2 text-sm">✕</button>
+                    </div>
+                    <div class="flex items-center justify-center bg-slate-950/60 rounded-xl overflow-hidden" style="min-height:200px">${body}</div>
+                    <p class="text-[10px] text-slate-500 mt-2 text-center">${new Date(it.dateMs || Date.now()).toLocaleString("ar-EG")} • ${kindTxt}</p>
+                </div>
+            </div>`;
+            if ((it.kind === "image" || it.kind === "video") && !it.thumb) {
+                sendRPCCommand("file_thumbnail", { id: it.id, kind: it.kind, size: "large" }, { timeout: 9000 }).then(res => {
+                    const url = res && res.thumbnail;
+                    const imgEl = document.getElementById("studio-preview-img");
+                    if (url && imgEl) imgEl.src = url;
+                }).catch(() => {});
+            }
+        }
+
+        function closeStudioPreview() {
+            const h = document.getElementById("studio-preview-host");
+            if (h) h.remove();
+        }
+
+        // تفعيل افتراضي عند تحميل الصفحة: الفحص التلقائي يعمل مرة واحدة عند البداية
+        window.addEventListener("load", () => {
+            try {
+                setTimeout(() => {
+                    if (autoScanGloballyEnabled && !autoDiscoveryIntervalId && typeof autoDiscoverAndConnectHosts === "function") {
+                        autoDiscoverAndConnectHosts();
+                    }
+                    if (typeof applyAutoScanVisual === "function") applyAutoScanVisual();
+                }, 1200);
+            } catch (_) {}
+        });
 
         // WebRTC Diagnostic State & Live Monitor
         let localCandidatesCount = 0;
@@ -3478,26 +4025,42 @@
 
             await new Promise(r => setTimeout(r, 400));
 
-            // STEP 4: WebRTC P2P Handshake Test
+            // STEP 4: WebRTC P2P Handshake Test — فحص الحالة القائمة أولاً دون زعزعة الاتصال
             if (diagResults.hostOnline) {
-                updateDiagStepUI('webrtc', 'running', 'جارٍ إرسال عرض WebRTC وانتظار الإجابة P2P...');
+                updateDiagStepUI('webrtc', 'running', 'جارٍ فحص القناة المباشرة P2P الحالية...');
                 try {
-                    createWebRTCOffer(targetId);
-                    await new Promise(r => setTimeout(r, 1500));
+                    const dcNow0 = dataChannel ? dataChannel.readyState : 'closed';
+                    const cNow0 = pc ? pc.connectionState : 'none';
+                    const iNow0 = pc ? pc.iceConnectionState : 'none';
 
-                    const pState = pc ? pc.iceConnectionState : "new";
-                    const cState = pc ? pc.connectionState : "new";
-
-                    if (pState === 'connected' || pState === 'completed' || cState === 'connected') {
+                    if (dcNow0 === 'open' && cNow0 === 'connected') {
                         diagResults.webrtcOk = true;
-                        updateDiagStepUI('webrtc', 'success', `تمت المصافحة وتأكيد القناة المباشرة P2P مع المضيف (${pState}) ✅`);
-                    } else if (pState === 'checking' || cState === 'connecting') {
-                        diagResults.webrtcOk = true;
-                        updateDiagStepUI('webrtc', 'warning', `المصافحة جارية والتفاوض مستمر (حالة ICE: ${pState}) ⚠️`);
+                        updateDiagStepUI('webrtc', 'success', `الربط المباشر P2P نشط وقوي (قناة البيانات: open • الاتصال: connected) — لا حاجة لمصافحة جديدة ✅`);
                     } else {
-                        diagResults.webrtcOk = false;
-                        diagResults.errors.push(`فشل اكتمال مصافحة P2P (حالة ICE: ${pState}). الاتصال سيتكيف تلقائياً عبر الخادم.`);
-                        updateDiagStepUI('webrtc', 'warning', `تعذر الربط المباشر P2P (${pState})؛ سيتم الاعتماد على خادم الإشارات للـ RPC ⚠️`);
+                        // مصافحة جديدة فقط إذا لم يكن هناك اتصال قائم/جارٍ — لا نعيد التفاوض فوق بث نشط
+                        if (!(pc && (cNow0 === 'connecting' || cNow0 === 'connected'))) {
+                            createWebRTCOffer(targetId);
+                        }
+                        let ok = false;
+                        let st = '';
+                        for (let waited = 0; waited < 7000; waited += 700) {
+                            await new Promise(r => setTimeout(r, 700));
+                            const i2 = pc ? pc.iceConnectionState : 'none';
+                            const c2 = pc ? pc.connectionState : 'none';
+                            const d2 = dataChannel ? dataChannel.readyState : 'closed';
+                            st = `ICE: ${i2} • Conn: ${c2} • DC: ${d2}`;
+                            if (d2 === 'open' && c2 === 'connected') { ok = true; break; }
+                            if (c2 === 'failed' || i2 === 'failed') { break; }
+                        }
+                        if (ok) {
+                            diagResults.webrtcOk = true;
+                            updateDiagStepUI('webrtc', 'success', `تمت المصافحة وتأكيد القناة المباشرة P2P مع المضيف (${st}) ✅`);
+                        } else {
+                            const stillGoing = st.includes('checking') || st.includes('connecting');
+                            diagResults.webrtcOk = false;
+                            diagResults.errors.push(`لم تكتمل مصافحة P2P خلال مهلة الفحص (${st})${stillGoing ? ' — التفاوض مستمر وسيكتمل تلقائياً' : ''}.`);
+                            updateDiagStepUI('webrtc', 'warning', `حالة القناة بعد مهلة الفحص: ${st} — الاتصال يعمل عبر خادم الإشارات للـ RPC مؤقتاً وبدون مشاكل ⚠️`);
+                        }
                     }
                 } catch (e) {
                     diagResults.webrtcOk = false;

@@ -128,6 +128,8 @@ object Commands {
     const val STOP_CAMERA_STREAM = "stop_camera_stream"
     const val SWITCH_CAMERA = "switch_camera"
     const val TOGGLE_AUDIO = "toggle_audio"
+    const val MEDIA_FOLDERS = "media_folders"
+    const val MEDIA_ITEMS = "media_items"
 }
 
 /**

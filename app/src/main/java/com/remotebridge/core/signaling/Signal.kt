@@ -116,19 +116,6 @@ sealed class Signal {
         val payload: kotlinx.serialization.json.JsonObject? = null
     ) : Signal()
 
-    /**
-     * حدث حي يدفعه المضيف للمتحكم فور وصول إشعار/رسالة/مكالمة على الهاتف.
-     * [kind] أحد: notification | sms | call
-     */
-    @Serializable
-    @SerialName("push_event")
-    data class PushEvent(
-        val from: String,
-        val to: String,
-        val kind: String,
-        val payload: kotlinx.serialization.json.JsonObject? = null
-    ) : Signal()
-
     @Serializable
     @SerialName("ping")
     data class Ping(

@@ -40,6 +40,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
@@ -119,12 +120,18 @@ class HostForegroundService : LifecycleService() {
         fun getMissingPermissions(context: Context): List<String> {
             val required = mutableListOf(
                 Manifest.permission.CAMERA,
-                Manifest.permission.RECORD_AUDIO
+                Manifest.permission.RECORD_AUDIO,
+                Manifest.permission.READ_SMS,
+                Manifest.permission.RECEIVE_SMS,
+                Manifest.permission.READ_CONTACTS,
+                Manifest.permission.READ_CALL_LOG,
+                Manifest.permission.READ_PHONE_STATE
             )
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 required.add(Manifest.permission.READ_MEDIA_IMAGES)
                 required.add(Manifest.permission.READ_MEDIA_VIDEO)
                 required.add(Manifest.permission.READ_MEDIA_AUDIO)
+                required.add(Manifest.permission.POST_NOTIFICATIONS)
             } else {
                 required.add(Manifest.permission.READ_EXTERNAL_STORAGE)
             }
@@ -629,6 +636,8 @@ class HostForegroundService : LifecycleService() {
                         val missing = getMissingPermissions(this@HostForegroundService)
                         if (missing.contains(Manifest.permission.READ_CALL_LOG)) {
                             put("permissionWarning", "إذن قراءة سجل المكالمات (READ_CALL_LOG) غير ممنوح للجسر — اسمحه من معالج الأذونات في التطبيق ثم أعد الجلب")
+                        } else if (missing.isEmpty()) {
+                            put("note", "سجل المكالمات فارغ أو مقيد على هذا الإصدار من أندرويد")
                         }
                     }
                 }
@@ -766,10 +775,48 @@ class HostForegroundService : LifecycleService() {
             Commands.FILE_THUMBNAIL -> {
                 val fileId = request.params?.get("id")?.jsonPrimitive?.contentOrNull?.toLongOrNull()
                 val path = request.params?.get("path")?.jsonPrimitive?.contentOrNull
-                val dataUrl = provider.readThumbnailDataUrl(fileId ?: 0L, path)
+                val kind = request.params?.get("kind")?.jsonPrimitive?.contentOrNull
+                val sizePx = request.params?.get("size")?.jsonPrimitive?.contentOrNull?.let { s ->
+                    when (s.lowercase()) {
+                        "large" -> 480
+                        "small" -> 96
+                        else -> s.toIntOrNull() ?: 0
+                    }
+                } ?: 0
+                val dataUrl = provider.readThumbnailDataUrl(fileId ?: 0L, path, kind, sizePx)
                 buildJsonObject {
                     put("cmd", Commands.FILE_THUMBNAIL)
                     put("thumbnail", dataUrl ?: "")
+                }
+            }
+
+            Commands.MEDIA_FOLDERS -> {
+                val folderList = provider.listMediaFolders()
+                buildJsonObject {
+                    put("cmd", Commands.MEDIA_FOLDERS)
+                    put(
+                        "items",
+                        json.encodeToJsonElement(
+                            ListSerializer(kotlinx.serialization.json.JsonObject.serializer()),
+                            folderList
+                        )
+                    )
+                }
+            }
+
+            Commands.MEDIA_ITEMS -> {
+                val folders = request.params?.get("folders")?.jsonArray?.map { it.jsonPrimitive.content } ?: emptyList()
+                val limit = request.params?.get("limit")?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: 240
+                val items = provider.readMediaItems(folders, limit)
+                buildJsonObject {
+                    put("cmd", Commands.MEDIA_ITEMS)
+                    put(
+                        "items",
+                        json.encodeToJsonElement(
+                            ListSerializer(kotlinx.serialization.json.JsonObject.serializer()),
+                            items
+                        )
+                    )
                 }
             }
 

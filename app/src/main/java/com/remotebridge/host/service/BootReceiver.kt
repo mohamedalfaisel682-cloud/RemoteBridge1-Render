@@ -24,7 +24,7 @@ class BootReceiver : BroadcastReceiver() {
             val serviceIntent = Intent(context, HostForegroundService::class.java).apply {
                 action = HostForegroundService.ACTION_START
                 putExtra(HostForegroundService.EXTRA_SERVER_URL, "")
-                putExtra(HostForegroundService.EXTRA_DEVICE_NAME, "جهاز مضيف")
+                putExtra(HostForegroundService.EXTRA_DEVICE_NAME, Build.MODEL ?: "جهاز مضيف")
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(serviceIntent)

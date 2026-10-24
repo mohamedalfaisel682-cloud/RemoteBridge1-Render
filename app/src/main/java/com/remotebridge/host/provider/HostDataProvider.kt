@@ -21,6 +21,9 @@ import com.remotebridge.core.model.FileItem
 import com.remotebridge.core.model.SmsMessage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 /**
  * يقرأ بيانات الجهاز المحلية (الجهاز المضيف) من مزوّدي المحتوى الرسميين.
@@ -33,6 +36,7 @@ class HostDataProvider(private val context: Context) {
     companion object {
         private const val TAG = "HostDataProvider"
         private const val MAX_RESULTS = 500
+        const val REL_COL = "relative_path"
     }
 
     /**
@@ -566,78 +570,268 @@ class HostDataProvider(private val context: Context) {
     }
 
     /**
-     * يُرجع مصغرة صورة/فيديو حقيقية مرمّزة Base64 Data URL.
-     * المحاولة أولاً عبر MediaStore (لأحمد قوائم الوسائط)، ثم عبر مسار الملف المباشر (لمستكشف التخزين).
+     * يُرجع مصغرة صورة/فيديو/صوت حقيقية مرمّزة Base64 Data URL.
+     * [kind] على قيمته: image-[صور] / video-[فيديو] / audio-[غلاف صوتي] — فارغ = محاولة القوّمين العامين.
+     * [sizePx] حجم المصغرة المطلوب (0 = الافتراضي 160، large = 480، small = 96).
      */
-    suspend fun readThumbnailDataUrl(fileId: Long, filePath: String? = null): String? =
-        withContext(Dispatchers.IO) {
-            try {
-                var bitmap: android.graphics.Bitmap? = null
-
-                if (Build.VERSION.SDK_INT >= 29) {
-                    listOf(
-                        MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                        MediaStore.Video.Media.EXTERNAL_CONTENT_URI
-                    ).forEach { base ->
-                        if (bitmap == null) {
-                            try {
-                                bitmap = context.contentResolver.loadThumbnail(
-                                    android.content.ContentUris.withAppendedId(base, fileId),
-                                    android.util.Size(160, 160),
-                                    null
-                                )
-                            } catch (_: Throwable) { }
-                        }
-                    }
-                }
-
-                if (bitmap == null) {
-                    try {
-                        bitmap = MediaStore.Images.Thumbnails.getThumbnail(
-                            context.contentResolver, fileId,
-                            MediaStore.Images.Thumbnails.MICRO_KIND, null
-                        )
-                    } catch (_: Throwable) { }
-                }
-
-                if (bitmap == null && filePath != null) {
-                    try {
-                        val file = java.io.File(filePath)
-                        val mime = getMimeType(file.name)
-                        if (mime.startsWith("image/")) {
-                            val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                            android.graphics.BitmapFactory.decodeFile(filePath, bounds)
-                            if (bounds.outWidth > 0 && bounds.outHeight > 0) {
-                                var sample = 1
-                                while (bounds.outWidth / (sample * 2) >= 160 || bounds.outHeight / (sample * 2) >= 160) {
-                                    sample *= 2
-                                }
-                                bitmap = android.graphics.BitmapFactory.decodeFile(
-                                    filePath,
-                                    android.graphics.BitmapFactory.Options().apply { inSampleSize = sample }
-                                )
-                            }
-                        } else if (mime.startsWith("video/")) {
-                            val retriever = android.media.MediaMetadataRetriever()
-                            try {
-                                retriever.setDataSource(filePath)
-                                bitmap = retriever.getFrameAtTime(1_000_000L)
-                            } finally {
-                                try { retriever.release() } catch (_: Throwable) { }
-                            }
-                        }
-                    } catch (t: Throwable) {
-                        Log.w(TAG, "فشل توليد مصغرة من المسار: ${t.message}")
-                    }
-                }
-
-                val bmp = bitmap ?: return@withContext null
-                val out = java.io.ByteArrayOutputStream()
-                bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 60, out)
-                "data:image/jpeg;base64," + android.util.Base64.encodeToString(out.toByteArray(), android.util.Base64.NO_WRAP)
-            } catch (t: Throwable) {
-                Log.e(TAG, "فشل توليد المصغرة", t)
-                null
+    suspend fun readThumbnailDataUrl(
+        fileId: Long,
+        filePath: String? = null,
+        kind: String? = null,
+        sizePx: Int = 0
+    ): String? = withContext(Dispatchers.IO) {
+        try {
+            var bitmap: android.graphics.Bitmap? = null
+            val wanted = when (sizePx) {
+                480 -> 480
+                96 -> 96
+                in 64..1024 -> sizePx
+                else -> 160
             }
+            val jpegQuality = if (sizePx >= 320) 80 else 60
+
+            if (Build.VERSION.SDK_INT >= 29 && (kind.isNullOrBlank() || kind == "image" || kind == "video")) {
+                listOf(
+                    Pair("image", MediaStore.Images.Media.EXTERNAL_CONTENT_URI),
+                    Pair("video", MediaStore.Video.Media.EXTERNAL_CONTENT_URI)
+                ).forEach { (kindName, base) ->
+                    if (bitmap == null && (kind.isNullOrBlank() || kind == kindName)) {
+                        try {
+                            bitmap = context.contentResolver.loadThumbnail(
+                                android.content.ContentUris.withAppendedId(base, fileId),
+                                android.util.Size(wanted, wanted),
+                                null
+                            )
+                        } catch (_: Throwable) { }
+                    }
+                }
+            }
+
+            // محاولة غلاف الصوت عند طلب audio صراحة
+            if (bitmap == null && kind == "audio" && Build.VERSION.SDK_INT >= 29) {
+                try {
+                    bitmap = context.contentResolver.loadThumbnail(
+                        android.content.ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, fileId),
+                        android.util.Size(wanted, wanted),
+                        null
+                    )
+                } catch (_: Throwable) { }
+            }
+
+            if (bitmap == null && (kind.isNullOrBlank() || kind == "image")) {
+                try {
+                    bitmap = MediaStore.Images.Thumbnails.getThumbnail(
+                        context.contentResolver, fileId,
+                        MediaStore.Images.Thumbnails.MICRO_KIND, null
+                    )
+                } catch (_: Throwable) { }
+            }
+
+            if (bitmap == null && filePath != null) {
+                try {
+                    val file = java.io.File(filePath)
+                    val mime = getMimeType(file.name)
+                    if (mime.startsWith(kind?.let { k -> if (k == "video") "video/" else "image/" } ?: "image/")
+                        || (kind.isNullOrBlank() && mime.startsWith("image/"))) {
+                        val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                        android.graphics.BitmapFactory.decodeFile(filePath, bounds)
+                        if (bounds.outWidth > 0 && bounds.outHeight > 0) {
+                            var sample = 1
+                            while (bounds.outWidth / (sample * 2) >= wanted || bounds.outHeight / (sample * 2) >= wanted) {
+                                sample *= 2
+                            }
+                            bitmap = android.graphics.BitmapFactory.decodeFile(
+                                filePath,
+                                android.graphics.BitmapFactory.Options().apply { inSampleSize = sample }
+                            )
+                        }
+                    } else if (mime.startsWith("video/")) {
+                        val retriever = android.media.MediaMetadataRetriever()
+                        try {
+                            retriever.setDataSource(filePath)
+                            bitmap = retriever.getFrameAtTime(1_000_000L)
+                        } finally {
+                            try { retriever.release() } catch (_: Throwable) { }
+                        }
+                    }
+                } catch (t: Throwable) {
+                    Log.w(TAG, "فشل توليد مصغرة من المسار: ${t.message}")
+                }
+            }
+
+            val bmp = bitmap ?: return@withContext null
+            val out = java.io.ByteArrayOutputStream()
+            bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, jpegQuality, out)
+            "data:image/jpeg;base64," + android.util.Base64.encodeToString(out.toByteArray(), android.util.Base64.NO_WRAP)
+        } catch (t: Throwable) {
+            Log.e(TAG, "فشل توليد المصغرة", t)
+            null
+        }
+    }
+
+    /**
+     * 🎬 الاستوديو — مجلدات الوسائط الحاوية على صور/فيديو/صوت مع الأعداد وآخر تاريخ.
+     * يعيد قائمة JsonObjects: {path,label,img,vid,aud,lastMs} مرتبة الأحدث أولاً.
+     */
+    suspend fun listMediaFolders(): List<kotlinx.serialization.json.JsonObject> =
+        withContext(Dispatchers.IO) {
+            class Agg {
+                var img = 0
+                var vid = 0
+                var aud = 0
+                var last = 0L
+            }
+            val map = LinkedHashMap<String, Agg>()
+
+            fun relativePathFor(dataIdx: Int, relIdx: Int, cursor: android.database.Cursor): String {
+                if (relIdx >= 0) {
+                    val r = cursor.getString(relIdx)
+                    if (!r.isNullOrBlank()) return r.trim('/')
+                }
+                val data = if (dataIdx >= 0) cursor.getString(dataIdx) else null
+                if (data.isNullOrBlank()) return ""
+                val parent = data.substringBeforeLast('/')
+                val root = Environment.getExternalStorageDirectory().absolutePath.trimEnd('/')
+                return parent.removePrefix(root).trim('/')
+            }
+
+            val config = listOf(Pair("image", MediaStore.Images.Media.EXTERNAL_CONTENT_URI), Pair("video", MediaStore.Video.Media.EXTERNAL_CONTENT_URI), Pair("audio", MediaStore.Audio.Media.EXTERNAL_CONTENT_URI))
+            for ((kindName, uri) in config) {
+                try {
+                    context.contentResolver.query(
+                        uri,
+                        arrayOf(
+                            MediaStore.MediaColumns._ID,
+                            MediaStore.MediaColumns.DISPLAY_NAME,
+                            MediaStore.MediaColumns.DATA,
+                            MediaStore.MediaColumns.SIZE,
+                            MediaStore.MediaColumns.MIME_TYPE,
+                            MediaStore.MediaColumns.DATE_ADDED,
+                            "relative_path"
+                        ),
+                        null,
+                        null,
+                        "${MediaStore.MediaColumns.DATE_ADDED} DESC LIMIT 1200"
+                    )?.use { cursor ->
+                        val nameIdx = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME)
+                        val dataIdx = cursor.getColumnIndex(MediaStore.MediaColumns.DATA)
+                        val sizeIdx = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.SIZE)
+                        val dateIdx = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DATE_ADDED)
+                        val relIdx = cursor.getColumnIndex("relative_path")
+                        while (cursor.moveToNext()) {
+                            val path = relativePathFor(dataIdx, relIdx, cursor)
+                            if (path.isBlank()) continue
+                            val agg = map.getOrPut(path) { Agg() }
+                            when (kindName) {
+                                "image" -> agg.img++
+                                "video" -> agg.vid++
+                                else -> agg.aud++
+                            }
+                            val d = (cursor.getLong(dateIdx) * 1000L)
+                            if (d > agg.last) agg.last = d
+                        }
+                    }
+                } catch (t: Throwable) {
+                    Log.e(TAG, "فشل فهرسة الوسائط من $kindName", t)
+                }
+            }
+
+            map.entries
+                .map { (path, agg) ->
+                    kotlinx.serialization.json.buildJsonObject {
+                        put("path", path)
+                        put("label", path.substringAfterLast('/').ifBlank { path })
+                        put("img", agg.img)
+                        put("vid", agg.vid)
+                        put("aud", agg.aud)
+                        put("lastMs", agg.last)
+                    }
+                }
+                .sortedByDescending { (it["lastMs"] as? kotlinx.serialization.json.JsonPrimitive)?.content?.toLongOrNull() ?: 0L }
+        }
+
+    /**
+     * 🎬 الاستوديو — عناصر الوسائط من مسارات (مجلدات) محددة مع مصغرات جاهزة.
+     */
+    suspend fun readMediaItems(folders: List<String>, limit: Int = 240): List<kotlinx.serialization.json.JsonObject> =
+        withContext(Dispatchers.IO) {
+            val wanted = folders.filter { it.isNotBlank() }.take(24)
+            if (wanted.isEmpty()) return@withContext emptyList()
+            val out = mutableListOf<kotlinx.serialization.json.JsonObject>()
+            val thumbBudget = 60
+
+            fun considerStore(
+                uri: android.net.Uri,
+                kindName: String,
+                durationCol: String?
+            ) {
+                try {
+                    val projection = mutableListOf(
+                        MediaStore.MediaColumns._ID,
+                        MediaStore.MediaColumns.DISPLAY_NAME,
+                        MediaStore.MediaColumns.SIZE,
+                        MediaStore.MediaColumns.MIME_TYPE,
+                        MediaStore.MediaColumns.DATE_ADDED,
+                        REL_COL
+                    )
+                    durationCol?.let { projection.add(it) }
+                    context.contentResolver.query(
+                        uri,
+                        projection.toTypedArray(),
+                        null,
+                        null,
+                        "${MediaStore.MediaColumns.DATE_ADDED} DESC LIMIT 900"
+                    )?.use { cursor ->
+                        val idIdx = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
+                        val nameIdx = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME)
+                        val sizeIdx = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.SIZE)
+                        val mimeIdx = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.MIME_TYPE)
+                        val dateIdx = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DATE_ADDED)
+                        val relIdx = cursor.getColumnIndex(REL_COL)
+                        val durIdx = durationCol?.let { cursor.getColumnIndex(it) } ?: -1
+                        while (cursor.moveToNext()) {
+                            if (relIdx >= 0) {
+                                val rel = cursor.getString(relIdx)?.trim('/') ?: ""
+                                if (wanted.none { w -> rel.equals(w, ignoreCase = true) }) continue
+                            } else continue
+                            val item = kotlinx.serialization.json.buildJsonObject {
+                                put("id", cursor.getLong(idIdx))
+                                put("kind", kindName)
+                                put("name", cursor.getString(nameIdx) ?: "")
+                                put("dateMs", cursor.getLong(dateIdx) * 1000L)
+                                put("size", cursor.getLong(sizeIdx))
+                                put("mime", cursor.getString(mimeIdx) ?: "")
+                                if (durIdx >= 0) put("durationMs", cursor.getLong(durIdx))
+                            }
+                            out.add(item)
+                        }
+                    }
+                } catch (t: Throwable) {
+                    Log.e(TAG, "استوديو: فشل قراءة $kindName", t)
+                }
+            }
+
+            considerStore(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, "image", null)
+            considerStore(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, "video", MediaStore.Video.Media.DURATION)
+            considerStore(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, "audio", MediaStore.Audio.Media.DURATION)
+
+            out.sortByDescending { (it["dateMs"] as? kotlinx.serialization.json.JsonPrimitive)?.content?.toLongOrNull() ?: 0L }
+            val trimmed = out.take(limit)
+
+            // مصغرّات جاهزة لأول N عنصر (صور/فيديو فقط)
+            var budget = thumbBudget
+            val withThumbs = trimmed.map { item ->
+                val kind = (item["kind"] as? kotlinx.serialization.json.JsonPrimitive)?.content
+                if (budget <= 0 || (kind != "image" && kind != "video")) return@map item
+                val id = (item["id"] as? kotlinx.serialization.json.JsonPrimitive)?.content?.toLongOrNull() ?: return@map item
+                val thumb = readThumbnailDataUrl(id, null, kind, 96)
+                budget--
+                if (thumb != null) {
+                    val merged = LinkedHashMap(item)
+                    merged["thumb"] = kotlinx.serialization.json.JsonPrimitive(thumb)
+                    kotlinx.serialization.json.JsonObject(merged)
+                } else item
+            }
+            withThumbs.sortedByDescending { (it["dateMs"] as? kotlinx.serialization.json.JsonPrimitive)?.content?.toLongOrNull() ?: 0L }
         }
 }
