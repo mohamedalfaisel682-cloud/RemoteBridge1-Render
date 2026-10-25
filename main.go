@@ -199,6 +199,8 @@ func main() {
 	http.HandleFunc("/ws", handleWebSocket)
 	http.HandleFunc("/api/state", handleStateAPI)
 	http.HandleFunc("/api/blob", handleBlobAPI)
+	// B6: مسار القائمة التي تعتمد عليها لوحة الخزنة ونافذة الحالة في لوحة التحكم (كان يُرجع 404 صامتاً)
+	http.HandleFunc("/api/blob/list", handleBlobListAPI)
 
 	addr := "0.0.0.0:" + port
 	log.Printf("RemoteBridge Signaling Server starting on %s", addr)
@@ -780,4 +782,42 @@ func handleBlobAPI(w http.ResponseWriter, r *http.Request) {
 	default:
 		writeStateJSONError(w, http.StatusMethodNotAllowed, "طريقة غير مدعومة")
 	}
+}
+
+// B6: GET /api/blob/list?device=&kind= — قائمة أسماء الملفات المخزنة في ذاكرة خادم Render
+// لنوع (kind) معين بدون محتوى الملف (العنصر يتضمن sha256 و ts و size).
+// هذا هو المسار الذي تستعلمه لوحة التحكم لتصفح بيانات المضيف التي رُفعت
+// عندما كان المضيف متصلاً بالإنترنت والمتحكم غير متصل.
+func handleBlobListAPI(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Device-Id, X-Blob-Name, X-Blob-Sha")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if r.Method != http.MethodGet {
+		writeStateJSONError(w, http.StatusMethodNotAllowed, "طريقة غير مدعومة")
+		return
+	}
+	deviceID := strings.TrimSpace(r.URL.Query().Get("device"))
+	kind := strings.TrimSpace(r.URL.Query().Get("kind"))
+	if deviceID == "" || kind == "" {
+		writeStateJSONError(w, http.StatusBadRequest, "device و kind مطلوبتان في الرابط (query)")
+		return
+	}
+	blobMu.RLock()
+	var out []*BlobItem
+	if items, ok := blobData[deviceID][kind]; ok {
+		for _, it := range items {
+			out = append(out, it)
+		}
+	}
+	blobMu.RUnlock()
+	sort.Slice(out, func(i, j int) bool { return out[i].Ts < out[j].Ts })
+	w.Header().Set("Content-Type", "application/json")
+	if out == nil {
+		out = []*BlobItem{}
+	}
+	json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "items": out})
 }
