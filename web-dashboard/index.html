@@ -1674,6 +1674,7 @@
                         audioEl.play().catch(e => console.log("Audio auto-play policy:", e));
                     }
                     showToast("تم استقبال الصوت الحي من الميكروفون! 🎙️", "success");
+                    try { attachLiveAudioMeter(); } catch (_) {}
                 }
                 updateWebRTCDiagnosticUI();
             };
@@ -1823,6 +1824,777 @@
                 console.error("Binary chunk handling error:", e);
             }
         }
+
+        // ============================================================
+        //        🎬 B8 — مشغّل وسائط احترافي + سحب المحتوى القطعي
+        //   (فيديو/صوت/صورة من المعرض/المجلدات/الخزنة المفكوكة)
+        //        + موجة الصوت (صامت/مُصوات) + لقطات من المشغل والبث الحي
+        //        + Google Drive: رفع يدوي مفرد/متعدد + مزامنة تلقائية
+        // ============================================================
+        function rbMimeFromName(n) {
+            const s = String(n || '').toLowerCase();
+            const map = [['jpg', 'image/jpeg'], ['jpeg', 'image/jpeg'], ['png', 'image/png'], ['gif', 'image/gif'], ['webp', 'image/webp'], ['bmp', 'image/bmp'], ['mp4', 'video/mp4'], ['webm', 'video/webm'], ['3gp', 'video/3gpp'], ['mkv', 'video/x-matroska'], ['mov', 'video/quicktime'], ['mp3', 'audio/mpeg'], ['m4a', 'audio/mp4'], ['aac', 'audio/aac'], ['ogg', 'audio/ogg'], ['opus', 'audio/ogg'], ['wav', 'audio/wav'], ['flac', 'audio/flac'], ['amr', 'audio/amr'], ['json', 'application/json'], ['txt', 'text/plain'], ['pdf', 'application/pdf']];
+            const ext = s.includes('.') ? s.split('.').pop().split('?')[0] : '';
+            const hit = map.find(p => p[0] === ext);
+            return hit ? hit[1] : 'application/octet-stream';
+        }
+        function rbFmtMB(bytes) {
+            const b = Number(bytes) || 0;
+            if (b >= 1048576) return (b / 1048576).toFixed(1) + 'MB';
+            if (b >= 1024) return (b / 1024).toFixed(0) + 'KB';
+            return b + 'B';
+        }
+        function rbMpFmtTime(t) {
+            t = Math.max(0, Math.floor(Number(t) || 0));
+            const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t % 60;
+            return (h > 0 ? h + ':' + String(m).padStart(2, '0') : String(m)) + ':' + String(s).padStart(2, '0');
+        }
+        function rbMpBucketOf(kind) { return kind === 'video' ? 'videos' : (kind === 'audio' ? 'audio' : 'images'); }
+        function rbDataUrlToBlob(dataUrl) {
+            try {
+                const parts = String(dataUrl).split(',');
+                const mime = (parts[0].match(/:(.*?);/) || [])[1] || 'application/octet-stream';
+                const bin = atob(parts[1]);
+                const u8 = new Uint8Array(bin.length);
+                for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+                return new Blob([u8], { type: mime });
+            } catch (_) { return null; }
+        }
+
+        // —— سحب محتوى كامل قطعياً من الهاتف عبر قناة البيانات (رأس started/completed من W1) ——
+        function pullHostContent(o) {
+            return new Promise((resolve, reject) => {
+                try {
+                    const dc = dataChannel;
+                    if (!dc || dc.readyState !== 'open') {
+                        showToast('سحب المحتوى يحتاج الربط الحي (DataChannel) مفتوحاً — فعّل الربط الحي مع المضيف أولاً', 'warning');
+                        return reject(new Error('DataChannel closed'));
+                    }
+                    const reqId = 100000 + Math.floor(Math.random() * 100000); // نطاق مستقل عن sendRPCCommand
+                    const isFile = (o.fileId !== undefined && o.fileId !== null);
+                    const cmd = isFile ? 'file_open' : (o.path ? 'storage_open' : 'vault_open');
+                    const params = isFile ? { fileId: String(o.fileId), bucket: o.bucket || 'images' }
+                        : (o.path ? { path: o.path } : { kind: o.vaultKind, name: o.vaultName });
+                    activeFileDownloads[reqId] = [];
+                    const startedAt = Date.now();
+                    window.__rbContentHeaders = window.__rbContentHeaders || {};
+                    const timer = setInterval(() => {
+                        try {
+                            const hdr = window.__rbContentHeaders[reqId];
+                            const parts = activeFileDownloads[reqId] || [];
+                            let got = 0; parts.forEach(p => { got += p.byteLength; });
+                            const st = document.getElementById('mp-status');
+                            if (hdr && hdr.size > 0 && st) {
+                                st.textContent = Math.min(100, Math.round((got / hdr.size) * 100)) + '% • ' + rbFmtMB(got) + ' / ' + rbFmtMB(hdr.size);
+                            }
+                            if (hdr && hdr.size > 0 && got >= hdr.size) {
+                                clearInterval(timer);
+                                delete window.__rbContentHeaders[reqId];
+                                const blobParts = activeFileDownloads[reqId] || [];
+                                delete activeFileDownloads[reqId];
+                                resolve({ blob: new Blob(blobParts, { type: o.mime || 'application/octet-stream' }), size: got, name: hdr.name || o.name || '' });
+                                return;
+                            }
+                            if (Date.now() - startedAt > 180000) {
+                                clearInterval(timer);
+                                delete activeFileDownloads[reqId];
+                                delete window.__rbContentHeaders[reqId];
+                                reject(new Error('انتهت مهلة سحب المحتوى (180 ثانية)'));
+                            }
+                        } catch (e2) { clearInterval(timer); reject(e2); }
+                    }, 300);
+                    try { dc.send(JSON.stringify({ id: reqId, cmd: cmd, params: params })); }
+                    catch (e3) { clearInterval(timer); delete activeFileDownloads[reqId]; reject(e3); }
+                } catch (e) { reject(e); }
+            });
+        }
+
+        // —— هيكل المشغل (يُنشأ مرة واحدة) ——
+        function ensureMediaPlayerShell() {
+            if (document.getElementById('mp-overlay')) return;
+            const div = document.createElement('div');
+            div.id = 'mp-overlay';
+            div.setAttribute('onclick', 'mpOverlayClick(event)');
+            div.innerHTML = `
+                <div class="relative w-full max-w-3xl bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden" onclick="event.stopPropagation()">
+                    <div class="flex items-center justify-between px-4 py-2.5 bg-slate-950/80 border-b border-slate-800 gap-2">
+                        <p id="mp-title" class="text-xs font-bold text-slate-100 truncate" style="direction:ltr">وسائط</p>
+                        <div class="flex items-center gap-1.5 shrink-0">
+                            <button onclick="mpFullscreen()" title="ملء الشاشة" class="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs">⛶</button>
+                            <button onclick="mpClose()" title="إغلاق" class="w-7 h-7 rounded-lg bg-rose-900/70 hover:bg-rose-800 text-rose-200 text-xs">✕</button>
+                        </div>
+                    </div>
+                    <div id="mp-stage" class="relative bg-slate-950 flex items-center justify-center" style="min-height:240px">
+                        <video id="mp-video" class="hidden w-full" style="max-height:58vh" playsinline></video>
+                        <img id="mp-img" class="hidden max-w-full" style="max-height:58vh" alt="">
+                        <audio id="mp-audio"></audio>
+                        <div id="mp-wave-wrap" class="hidden relative w-full px-4 pt-6 pb-10">
+                            <canvas id="mp-wave" class="w-full cursor-pointer" style="height:110px"></canvas>
+                            <div id="mp-needle" class="absolute top-4 bottom-9 w-0.5 bg-amber-400/90 pointer-events-none opacity-0" style="left:0%"></div>
+                        </div>
+                        <p id="mp-status" class="absolute bottom-2 right-3 text-[10px] text-slate-400 ts-en">—</p>
+                    </div>
+                    <div id="mp-controls" class="px-3 py-2.5 bg-slate-950/70 border-t border-slate-800 flex flex-wrap items-center gap-2 text-[11px]">
+                        <button id="mp-play" onclick="mpToggle()" class="w-9 h-9 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white font-bold shrink-0">▶</button>
+                        <span id="mp-time" class="text-slate-400 ts-en shrink-0">0:00 / 0:00</span>
+                        <input id="mp-seek" type="range" min="0" max="100" step="0.05" value="0" oninput="mpSeekTo(this.value)" class="flex-1 min-w-[130px] accent-emerald-500">
+                        <button id="mp-mute" onclick="mpToggleMute()" class="w-9 h-9 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 shrink-0">🔊</button>
+                        <input id="mp-vol" type="range" min="0" max="1" step="0.01" value="1" oninput="mpVolume(this.value)" class="w-20 accent-emerald-500 hidden md:block">
+                        <span class="flex-1"></span>
+                        <button id="mp-shot" onclick="mpScreenshot()" title="لقطة شاشة من الإطار الحالي" class="px-2.5 py-1.5 rounded-lg bg-indigo-700 hover:bg-indigo-600 text-white font-bold shrink-0">📸 لقطة</button>
+                        <button onclick="mpDownload()" title="تنزيل النسخة المفكوكة" class="px-2.5 py-1.5 rounded-lg bg-emerald-800 hover:bg-emerald-700 text-emerald-100 font-bold shrink-0">⬇️ تنزيل</button>
+                        <button onclick="mpDriveCurrent()" title="رفع إلى Google Drive" class="px-2.5 py-1.5 rounded-lg bg-sky-800 hover:bg-sky-700 text-sky-100 font-bold shrink-0">▲ Drive</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(div);
+        }
+        function mpOverlayClick(e) { if (e.target && e.target.id === 'mp-overlay') mpClose(); }
+        let mpState = { blob: null, url: null, name: '', mime: '', kind: '', waveBars: null, waveDrawn: false };
+        function mpStatus(t, isError) {
+            const st = document.getElementById('mp-status');
+            if (st) { st.textContent = t || '—'; st.className = 'absolute bottom-2 right-3 text-[10px] ' + (isError ? 'text-rose-400 font-bold' : 'text-slate-400'); }
+        }
+        function mpClose() {
+            try {
+                const v = document.getElementById('mp-video'); if (v) { v.pause(); v.removeAttribute('src'); v.load(); }
+                const a = document.getElementById('mp-audio'); if (a) { a.pause(); a.removeAttribute('src'); a.load(); }
+            } catch (_) {}
+            try { if (mpState.url) { URL.revokeObjectURL(mpState.url); } } catch (_) {}
+            mpState = { blob: null, url: null, name: '', mime: '', kind: '', waveBars: null, waveDrawn: false };
+            stopLiveAudioMeter();
+            const ov = document.getElementById('mp-overlay');
+            if (ov) ov.remove();
+        }
+        function mpFullscreen() {
+            const stage = document.getElementById('mp-stage');
+            const el = document.getElementById('mp-video');
+            const tgt = (stage && document.fullscreenElement) ? document : (stage || el);
+            try {
+                if (document.fullscreenElement) { document.exitFullscreen(); }
+                else if (tgt && tgt.requestFullscreen) { tgt.requestFullscreen(); }
+            } catch (_) {}
+        }
+        function mpToggle() {
+            const v = document.getElementById('mp-video'), a = document.getElementById('mp-audio'), b = document.getElementById('mp-play');
+            const media = (mpState.kind === 'video') ? v : a;
+            if (!media || !media.src) return;
+            try {
+                if (media.paused) { media.play().catch(() => {}); if (b) b.textContent = '⏸'; }
+                else { media.pause(); if (b) b.textContent = '▶'; }
+            } catch (_) {}
+        }
+        function mpSeekTo(val) {
+            const media = (mpState.kind === 'video') ? document.getElementById('mp-video') : document.getElementById('mp-audio');
+            try { if (media && media.duration && isFinite(media.duration)) media.currentTime = (Number(val) / 100) * media.duration; } catch (_) {}
+        }
+        function mpToggleMute() {
+            const media = (mpState.kind === 'video') ? document.getElementById('mp-video') : document.getElementById('mp-audio');
+            const b = document.getElementById('mp-mute');
+            if (!media) return;
+            media.muted = !media.muted;
+            if (b) b.textContent = media.muted ? '🔇' : '🔊';
+        }
+        function mpVolume(v) {
+            const media = (mpState.kind === 'video') ? document.getElementById('mp-video') : document.getElementById('mp-audio');
+            try { if (media) { media.volume = Number(v); media.muted = (Number(v) === 0); const b = document.getElementById('mp-mute'); if (b) b.textContent = media.muted ? '🔇' : '🔊'; } } catch (_) {}
+        }
+        function mpWireMedia(media) {
+            if (!media) return;
+            const seek = document.getElementById('mp-seek'), tim = document.getElementById('mp-time'), play = document.getElementById('mp-play'), needle = document.getElementById('mp-needle');
+            media.onloadedmetadata = () => {
+                if (seek) { seek.max = 100; seek.value = 0; }
+                mpUpdateTime();
+            };
+            media.ontimeupdate = () => {
+                mpUpdateTime();
+                try {
+                    if (needle && media.duration && isFinite(media.duration)) {
+                        needle.style.left = (media.currentTime / media.duration * 100) + '%';
+                        needle.classList.remove('opacity-0');
+                    }
+                    mpDrawWaveNeedle();
+                } catch (_) {}
+            };
+            media.onplay = () => { if (play) play.textContent = '⏸'; };
+            media.onpause = () => { if (play) play.textContent = '▶'; };
+            media.onended = () => { if (play) play.textContent = '▶'; };
+        }
+        function mpUpdateTime() {
+            const media = (mpState.kind === 'video') ? document.getElementById('mp-video') : document.getElementById('mp-audio');
+            const seek = document.getElementById('mp-seek'), tim = document.getElementById('mp-time');
+            if (!media) return;
+            const dur = (media.duration && isFinite(media.duration)) ? media.duration : 0;
+            if (tim) tim.textContent = rbMpFmtTime(media.currentTime) + ' / ' + (dur ? rbMpFmtTime(dur) : '—');
+            if (seek && dur) seek.value = (media.currentTime / dur) * 100;
+        }
+
+        async function openMediaPlayer(o) {
+            ensureMediaPlayerShell();
+            const overlay = document.getElementById('mp-overlay');
+            const v = document.getElementById('mp-video'), img = document.getElementById('mp-img'),
+                au = document.getElementById('mp-audio'), wrap = document.getElementById('mp-wave-wrap'),
+                seek = document.getElementById('mp-seek'), shot = document.getElementById('mp-shot');
+            try { if (mpState.url) URL.revokeObjectURL(mpState.url); } catch (_) {}
+            mpState = { blob: null, url: null, name: o.name || '', mime: o.mime || '', kind: '', waveBars: null, waveDrawn: false };
+            v.classList.add('hidden'); img.classList.add('hidden'); wrap.classList.add('hidden'); au.removeAttribute('src');
+            if (seek) seek.value = 0; mpStatus('جارٍ سحب المحتوى من الهاتف…');
+            const mime = o.mime || rbMimeFromName(o.name || '');
+            const m = String(mime);
+            let kind = 'image';
+            if (m.startsWith('video/')) kind = 'video';
+            else if (m.startsWith('audio/') || m === 'application/ogg') kind = 'audio';
+            else if (m.startsWith('image/')) kind = 'image';
+            else {
+                const ext = String(o.name || '').toLowerCase().split('.').pop();
+                if (['mp4', 'webm', '3gp', 'mkv', 'mov'].includes(ext)) kind = 'video';
+                else if (['mp3', 'm4a', 'aac', 'ogg', 'opus', 'wav', 'flac', 'amr'].includes(ext)) kind = 'audio';
+            }
+            mpState.kind = kind;
+            const titleEl = document.getElementById('mp-title');
+            if (titleEl) titleEl.textContent = o.name || 'وسيط';
+            if (shot) shot.style.display = (kind === 'video') ? '' : 'none';
+            document.getElementById('mp-controls').style.display = '';
+            if (kind === 'audio') { wrap.classList.remove('hidden'); mpStatus('جارٍ سحب الصوت ثم تحليل الموجة…'); }
+            try {
+                const res = await pullHostContent({ fileId: o.fileId, bucket: o.bucket, path: o.path, vaultKind: o.vaultKind, vaultName: o.vaultName, name: o.name, mime: mime });
+                mpState.blob = res.blob;
+                mpState.mime = mime;
+                mpState.name = res.name || o.name || mpState.name;
+                mpState.url = URL.createObjectURL(res.blob);
+                if (kind === 'image') {
+                    img.src = mpState.url; img.classList.remove('hidden');
+                    mpStatus('صورة • ' + rbFmtMB(res.size), false);
+                } else if (kind === 'video') {
+                    v.src = mpState.url; v.classList.remove('hidden'); mpWireMedia(v);
+                    mpStatus('فيديو • ' + rbFmtMB(res.size), false);
+                    v.play().catch(() => {});
+                } else {
+                    au.src = mpState.url; mpWireMedia(au);
+                    mpStatus('صوت • ' + rbFmtMB(res.size) + ' • جارٍ التحليل…', false);
+                    mpBuildWaveform(res.blob);
+                }
+            } catch (e) {
+                mpStatus('فشل: ' + String(e && e.message || e), true);
+                showToast('فشل فتح المشغل: ' + String(e && e.message || e), 'error');
+            }
+        }
+        function mpFromFb(fi) {
+            const it = (window.__fbItems || [])[fi];
+            if (!it) return;
+            openMediaPlayer({ fileId: it.id, bucket: rbMpBucketOf(it.kind), kind: it.kind, name: it.name, mime: it.mime || rbMimeFromName(it.name || '') });
+        }
+        function mpFromStudio(fi) {
+            const it = (window.__stFiltered || [])[fi];
+            if (!it) return;
+            openMediaPlayer({ fileId: it.id, bucket: rbMpBucketOf(it.kind), kind: it.kind, name: it.name, mime: it.mime || rbMimeFromName(it.name || '') });
+        }
+        function mpFromVault(kind, name) {
+            openMediaPlayer({ vaultKind: kind, vaultName: name, name: String(name || ''), mime: rbMimeFromName(String(name || '')) });
+        }
+        function mpRecItemAt(idx) {
+            try {
+                const items = (recordingsCache || []).filter(it => it.recKind === recordingsFolderCurrent);
+                return items.slice(0, 96)[idx];
+            } catch (_) { return null; }
+        }
+        function mpFromRec(idx) {
+            const it = mpRecItemAt(idx);
+            if (!it) { showToast('العنصر غير متاح', 'warning'); return; }
+            const vk = it.recKind === 'screenshot' ? 'screenshots' : it.recKind;
+            openMediaPlayer({ vaultKind: vk, vaultName: it.name, name: it.name, mime: rbMimeFromName(it.name || '') });
+        }
+        async function mpDriveUploadRec(idx) {
+            const it = mpRecItemAt(idx);
+            if (!it) { showToast('العنصر غير متاح', 'warning'); return; }
+            const vk = it.recKind === 'screenshot' ? 'screenshots' : it.recKind;
+            await driveUploadVaultBlob(vk, it.name, false);
+        }
+        function mpDownload() {
+            try {
+                if (!mpState.blob) { showToast('لا محتوى محمّل بعد', 'warning'); return; }
+                const a = document.createElement('a');
+                a.href = mpState.url; a.download = mpState.name || ('rb_media_' + Date.now());
+                document.body.appendChild(a); a.click(); a.remove();
+            } catch (e) { showToast('فشل التنزيل: ' + String(e && e.message || e), 'error'); }
+        }
+        async function mpDriveCurrent() {
+            if (!mpState.blob) { showToast('لا محتوى محمّل بعد', 'warning'); return; }
+            await rbDriveUpload(mpState.name || ('rb_media_' + Date.now()), mpState.blob, mpState.mime, false);
+        }
+
+        // —— موجة الصوت: قمم + RMS مع تمييز الفواصل الصامتة ——
+        async function mpBuildWaveform(blob) {
+            try {
+                const AC = window.AudioContext || window.webkitAudioContext;
+                if (!AC) { mpStatus('المتصفح لا يدعم تحليل الموجة', true); return; }
+                const ac = new AC();
+                const arr = await blob.arrayBuffer();
+                const buf = await ac.decodeAudioData(arr.slice(0));
+                try { ac.close(); } catch (_) {}
+                const ch = buf.getChannelData(0);
+                const N = 260;
+                const step = Math.max(1, Math.floor(ch.length / N));
+                const bars = [];
+                for (let i = 0; i < N; i++) {
+                    const s = i * step, e2 = Math.min(ch.length, s + step);
+                    let peak = 0, sum = 0, cnt = 0;
+                    for (let j = s; j < e2; j++) { const w = Math.abs(ch[j]); if (w > peak) peak = w; sum += w * w; cnt++; }
+                    bars.push({ peak: peak, rms: cnt ? Math.sqrt(sum / cnt) : 0 });
+                }
+                mpState.waveBars = bars;
+                const c = document.getElementById('mp-wave');
+                if (!c) return;
+                c.width = Math.max(320, (c.clientWidth || 600) * 2);
+                c.height = 220;
+                c.onclick = (ev) => {
+                    try {
+                        const r = c.getBoundingClientRect();
+                        const p = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width));
+                        const a = document.getElementById('mp-audio');
+                        if (a && a.duration && isFinite(a.duration)) a.currentTime = p * a.duration;
+                    } catch (_) {}
+                };
+                mpState.waveDrawn = true;
+                mpDrawWaveform(-1);
+                const a = document.getElementById('mp-audio');
+                if (a) a.play().catch(() => {});
+            } catch (e) { mpStatus('تعذر تحليل الموجة: ' + String(e && e.message || e), true); }
+        }
+        function mpDrawWaveform(hoverPct) {
+            const c = document.getElementById('mp-wave');
+            if (!c || !mpState.waveBars) return;
+            const ctx = c.getContext('2d');
+            const W = c.width, H = c.height, mid = H / 2;
+            ctx.clearRect(0, 0, W, H);
+            ctx.fillStyle = '#020617';
+            ctx.fillRect(0, 0, W, H);
+            ctx.strokeStyle = 'rgba(148,163,184,0.25)';
+            ctx.beginPath(); ctx.moveTo(0, mid); ctx.lineTo(W, mid); ctx.stroke();
+            const bars = mpState.waveBars;
+            const bw = W / bars.length;
+            for (let i = 0; i < bars.length; i++) {
+                const b = bars[i];
+                const h = Math.max(2, b.peak * (H * 0.92));
+                const silent = b.rms < 0.02;
+                ctx.fillStyle = silent ? '#3f4a5c' : (i / bars.length <= (hoverPct >= 0 ? hoverPct : 0) ? '#14b8a6' : '#2dd4bf');
+                ctx.fillRect(i * bw + 1, mid - h / 2, Math.max(1.5, bw - 2), h);
+            }
+            ctx.fillStyle = 'rgba(148,163,184,0.8)';
+            ctx.font = '18px monospace';
+            ctx.fillText('الصامت ⌐ رمادي، المُصوَّت ⌐ تركوازي', 14, 24);
+        }
+        function mpDrawWaveNeedle() {
+            try {
+                if (!mpState.waveDrawn) return;
+                const a = document.getElementById('mp-audio'), c = document.getElementById('mp-wave');
+                if (!a || !c || !a.duration) return;
+                mpDrawWaveform(a.currentTime / a.duration);
+            } catch (_) {}
+        }
+        function mpScreenshot() {
+            try {
+                const v = document.getElementById('mp-video');
+                if (!v || !v.videoWidth) { showToast('لا إطار فيديو متاح للقطة', 'warning'); return; }
+                const c = document.createElement('canvas');
+                c.width = v.videoWidth; c.height = v.videoHeight;
+                c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+                ensureCaptureShell(c.toDataURL('image/png'), 'rb_player_shot_' + Date.now() + '.png');
+                showToast('أُخذت لقطة من الفيديو المشغّل 📸', 'success');
+            } catch (e) { showToast('فشل التقاط اللقطة: ' + String(e && e.message || e), 'error'); }
+        }
+        function ensureCaptureShell(dataUrl, name) {
+            try { ensureStreamModalsShell(); } catch (_) {}
+            const existing = document.getElementById('rb-capture-shell');
+            if (existing) existing.remove();
+            const div = document.createElement('div');
+            div.id = 'rb-capture-shell';
+            div.innerHTML = `
+                <div class="fixed inset-0 z-[85] bg-black/90 flex items-center justify-center p-4" onclick="rbCaptureClose()">
+                    <div class="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl p-4 shadow-2xl" onclick="event.stopPropagation()">
+                        <div class="flex items-center justify-between mb-2 gap-2">
+                            <p class="text-xs font-bold text-indigo-300 truncate" style="direction:ltr">${escHtml(name || 'لقطة.png')}</p>
+                            <button onclick="rbCaptureClose()" class="text-slate-400 hover:text-white px-1 text-sm">✕</button>
+                        </div>
+                        <img src="${dataUrl}" class="w-full rounded-xl border border-slate-700" alt="">
+                        <div class="flex flex-wrap items-center gap-2 mt-3 justify-center">
+                            <a href="${dataUrl}" download="${escHtml(name || 'rb_shot.png')}" class="text-[11px] font-bold bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-2 rounded-xl transition">⬇️ حفظ</a>
+                            <button onclick="rbCaptureDrive()" class="text-[11px] font-bold bg-sky-800 hover:bg-sky-700 text-sky-100 px-3 py-2 rounded-xl transition">▲ رفع إلى Drive</button>
+                        </div>
+                    </div>
+                </div>`;
+            document.body.appendChild(div);
+            window.__rbLastCapture = { dataUrl: dataUrl, name: name || ('rb_shot_' + Date.now() + '.png') };
+            try {
+                const cfg = rbDriveCfg();
+                if (cfg.autoUploadCaptures && cfg.scriptUrl) {
+                    const blob = rbDataUrlToBlob(dataUrl);
+                    if (blob) rbDriveUpload(window.__rbLastCapture.name, blob, 'image/png', true);
+                }
+            } catch (_) {}
+        }
+        function rbCaptureClose() { const el = document.getElementById('rb-capture-shell'); if (el) el.remove(); }
+        async function rbCaptureDrive() {
+            try {
+                if (!window.__rbLastCapture) return;
+                const blob = rbDataUrlToBlob(window.__rbLastCapture.dataUrl);
+                if (!blob) { showToast('تعذر تجهيز الصورة للرفع', 'error'); return; }
+                await rbDriveUpload(window.__rbLastCapture.name, blob, 'image/png', false);
+            } catch (e) { showToast('فشل: ' + String(e && e.message || e), 'error'); }
+        }
+        function openLiveScreenshot() {
+            try {
+                const v = document.getElementById('remote-video');
+                if (!v || !v.videoWidth) { showToast('لا فيديو حي معروض — فعّل البث الحي أولاً', 'warning'); return; }
+                const c = document.createElement('canvas');
+                c.width = v.videoWidth; c.height = v.videoHeight;
+                c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+                ensureCaptureShell(c.toDataURL('image/png'), 'rb_live_shot_' + Date.now() + '.png');
+                showToast('لُقطت لقطة من البث الحي مباشرة 📸', 'success');
+            } catch (e) { showToast('فشل التقاط لقطة البث: ' + String(e && e.message || e), 'error'); }
+        }
+
+        // —— مقياس مستوى الصوت الحي (AnalyserNode على الدفق الوارد — بلا صدى) ——
+        function attachLiveAudioMeter() {
+            try {
+                if (window.__rbLiveMeter) return;
+                if (!remoteMediaStream || !remoteMediaStream.getAudioTracks().length) return;
+                const host = document.createElement('div');
+                host.className = 'fixed bottom-3 left-3 z-[75] bg-slate-900/95 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden';
+                host.style.width = '200px';
+                host.innerHTML = `
+                    <div class="flex items-center justify-between px-2.5 py-1.5 border-b border-slate-800 bg-slate-950/80">
+                        <p class="text-[10px] font-bold text-teal-300">📊 مستوى الصوت الحي</p>
+                        <button onclick="stopLiveAudioMeter()" class="text-slate-500 hover:text-white text-xs px-1">✕</button>
+                    </div>
+                    <canvas id="rb-lam-c" width="392" height="88" style="width:196px;height:44px;display:block"></canvas>`;
+                document.body.appendChild(host);
+                const AC = window.AudioContext || window.webkitAudioContext;
+                const ac = new AC();
+                const src = ac.createMediaStreamSource(remoteMediaStream);
+                const an = ac.createAnalyser();
+                an.fftSize = 512;
+                src.connect(an); // لا نصل للوجهة — بلا صدى
+                window.__rbLiveMeter = { host: host, raf: 0, ac: ac };
+                const canvas = document.getElementById('rb-lam-c'), ctx = canvas.getContext('2d');
+                const hist = new Array(62).fill(0);
+                let hIdx = 0;
+                const buf = new Uint8Array(an.fftSize);
+                const tick = () => {
+                    try {
+                        if (!window.__rbLiveMeter) return;
+                        an.getByteTimeDomainData(buf);
+                        let sum = 0;
+                        for (let i = 0; i < buf.length; i++) { const dv = (buf[i] - 128) / 128; sum += dv * dv; }
+                        const rms = Math.sqrt(sum / buf.length);
+                        hist[hIdx % 62] = rms; hIdx++;
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                        ctx.fillStyle = '#020617'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        const bw = canvas.width / 62;
+                        for (let i = 0; i < 62; i++) {
+                            const v = hist[i];
+                            const h = Math.max(2, v * canvas.height * 1.7);
+                            ctx.fillStyle = v < 0.02 ? '#3f4a5c' : '#2dd4bf';
+                            ctx.fillRect(i * bw + 1, canvas.height - h - 2, Math.max(1.5, bw - 2), h);
+                        }
+                        window.__rbLiveMeter.raf = requestAnimationFrame(tick);
+                    } catch (_) {}
+                };
+                tick();
+            } catch (e) { try { stopLiveAudioMeter(); } catch (_) {} }
+        }
+        function stopLiveAudioMeter() {
+            const m = window.__rbLiveMeter;
+            if (!m) return;
+            try { if (m.raf) cancelAnimationFrame(m.raf); } catch (_) {}
+            try { if (m.ac) m.ac.close(); } catch (_) {}
+            try { m.host.remove(); } catch (_) {}
+            window.__rbLiveMeter = null;
+        }
+
+        // ============================================================
+        //      ☁️ B8 — Google Drive (Apps Script Web App) — رفع + مزامنة
+        // ============================================================
+        const RB_DRIVE_CFG_KEY = 'rb_drive_cfg_v1';
+        const RB_DRIVE_LOG_KEY = 'rb_drive_log_v1';
+        const RB_DRIVE_SEEN_KEY = 'rb_drive_seen_v1';
+        const RB_APPS_SCRIPT_CODE = [
+            'function jsonOut(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }',
+            'function doGet(e) { return jsonOut({ ok: true, ping: 1, script: "RemoteBridge Drive Uploader" }); }',
+            'function doPost(e) {',
+            '  try {',
+            '    var body = JSON.parse(e.postData.contents);',
+            '    var name = body.name || ("file_" + Date.now());',
+            '    var mime = body.mime || "application/octet-stream";',
+            '    var folderName = body.folder || "RemoteBridge";',
+            '    var folders = DriveApp.getFoldersByName(folderName);',
+            '    var dir = folders.hasNext() ? folders.next() : DriveApp.createFolder(folderName);',
+            '    var blob = Utilities.newBlob(Utilities.base64Decode(body.data), mime, name);',
+            '    var file = dir.createFile(blob);',
+            '    return jsonOut({ ok: true, name: name, id: file.getId(), url: file.getUrl() });',
+            '  } catch (err) {',
+            '    return jsonOut({ ok: false, error: String(err) });',
+            '  }',
+            '}'
+        ].join('\n');
+        function rbDriveDefaults() {
+            return { scriptUrl: '', folder: 'RemoteBridge', autoSync: false, syncCallRec: true, syncScreen: false, syncShots: false, syncLocation: false, intervalMin: 15, autoUploadCaptures: false };
+        }
+        function rbDriveCfg() {
+            try { return Object.assign(rbDriveDefaults(), JSON.parse(localStorage.getItem(RB_DRIVE_CFG_KEY) || '{}') || {}); }
+            catch (_) { return rbDriveDefaults(); }
+        }
+        function rbDriveSaveCfg(patch) {
+            const c = rbDriveCfg();
+            Object.assign(c, patch || {});
+            try { localStorage.setItem(RB_DRIVE_CFG_KEY, JSON.stringify(c)); } catch (_) {}
+            rbDriveRestartSync();
+            return c;
+        }
+        function rbDriveGetLog() {
+            try { return JSON.parse(localStorage.getItem(RB_DRIVE_LOG_KEY) || '[]') || []; } catch (_) { return []; }
+        }
+        function rbDriveLogAdd(entry) {
+            try {
+                const log = rbDriveGetLog();
+                log.unshift(Object.assign({ ts: Date.now() }, entry || {}));
+                localStorage.setItem(RB_DRIVE_LOG_KEY, JSON.stringify(log.slice(0, 40)));
+            } catch (_) {}
+        }
+        function rbDriveSeen() {
+            try { return new Set(JSON.parse(localStorage.getItem(RB_DRIVE_SEEN_KEY) || '[]')); } catch (_) { return new Set(); }
+        }
+        function rbDriveMarkSeen(set) {
+            try { localStorage.setItem(RB_DRIVE_SEEN_KEY, JSON.stringify([...set].slice(-2000))); } catch (_) {}
+        }
+        function rbB64FromUint8(u8) {
+            let bin = '';
+            const CH = 0x8000;
+            for (let i = 0; i < u8.length; i += CH) {
+                bin += String.fromCharCode.apply(null, u8.subarray(i, Math.min(u8.length, i + CH)));
+            }
+            return btoa(bin);
+        }
+        async function rbDriveUpload(name, blob, mime, quiet) {
+            const cfg = rbDriveCfg();
+            if (!cfg.scriptUrl) {
+                if (!quiet) showToast('اربط حساب Google Drive من الإعدادات ⚙️ أولاً (رابط Apps Script)', 'warning');
+                rbDriveLogAdd({ name: name, ok: false, err: 'غير مربوط' });
+                return false;
+            }
+            try {
+                const u8 = new Uint8Array(await blob.arrayBuffer());
+                if (u8.length > 45 * 1024 * 1024) {
+                    rbDriveLogAdd({ name: name, ok: false, err: 'أكبر من 45MB' });
+                    if (!quiet) showToast('الملف أكبر من 45MB — Discard', 'error');
+                    return false;
+                }
+                const payload = JSON.stringify({ name: name || ('file_' + Date.now()), mime: mime || 'application/octet-stream', folder: cfg.folder || 'RemoteBridge', data: rbB64FromUint8(u8) });
+                const r = await fetch(cfg.scriptUrl, { method: 'POST', body: payload });
+                const j = await r.json();
+                if (j && j.ok) {
+                    rbDriveLogAdd({ name: name, ok: true });
+                    if (!quiet) showToast('رُفع إلى Google Drive ✅ ' + (name || ''), 'success');
+                    return true;
+                }
+                rbDriveLogAdd({ name: name, ok: false, err: (j && j.error) || 'فشل غير معروف' });
+                if (!quiet) showToast('فشل الرفع: ' + String((j && j.error) || 'خطأ'), 'error');
+                return false;
+            } catch (e) {
+                rbDriveLogAdd({ name: name, ok: false, err: String(e && e.message || e) });
+                if (!quiet) showToast('فشل الرفع إلى Drive: ' + String(e && e.message || e), 'error');
+                return false;
+            }
+        }
+        async function rbDriveTest() {
+            try {
+                const cfg = rbDriveCfg();
+                const input = document.getElementById('drv-url');
+                const url = (input && input.value.trim()) || cfg.scriptUrl;
+                if (!url) { showToast('الصق رابط Apps Script Web App أولاً', 'warning'); return; }
+                showToast('جارٍ اختبار الربط…', 'info');
+                const r = await fetch(url);
+                const j = await r.json();
+                if (j && j.ok) {
+                    rbDriveSaveCfg({ scriptUrl: url });
+                    showToast('الربط سليم وجاهز ✅ (حُفظ الرابط)', 'success');
+                    renderSettingsIfOpen();
+                } else { showToast('الرد غير متوقع من السكربت', 'error'); }
+            } catch (e) { showToast('فشل اختبار الربط: ' + String(e && e.message || e), 'error'); }
+        }
+        async function driveUploadVaultBlob(kind, name, silent) {
+            try {
+                if (!dataChannel || dataChannel.readyState !== 'open') {
+                    if (!silent) showToast('سحب محتوى الخزنة يحتاج الربط الحي (DataChannel) مفتوحاً', 'warning');
+                    return false;
+                }
+                const nm = String(name || '');
+                const mime = rbMimeFromName(nm);
+                const res = await pullHostContent({ vaultKind: kind, vaultName: nm, name: nm, mime: mime });
+                return await rbDriveUpload(res.name || nm, res.blob, mime, !!silent);
+            } catch (e) {
+                if (!silent) showToast('فشل سحب عنصر الخزنة: ' + String(e && e.message || e), 'error');
+                return false;
+            }
+        }
+        async function rbVaultBulkUploadAll() {
+            try {
+                const items = (window.__vaultBlobsCache || []).filter(b => b.__isNew).slice(0, 30);
+                if (!items.length) { showToast('لا عناصر جديدة لرفعها', 'info'); return; }
+                if (!dataChannel || dataChannel.readyState !== 'open') { showToast('الرفع يحتاج الربط الحي مفتوحاً', 'warning'); return; }
+                showToast('بدء رفع ' + items.length + ' عنصر جديد إلى Drive…', 'info');
+                let okCnt = 0;
+                for (const b of items) {
+                    const ok = await driveUploadVaultBlob(b.kind, b.name, true);
+                    if (ok) okCnt++; 
+                }
+                showToast('انتهى الرفع: ' + okCnt + ' / ' + items.length + ' ✅', okCnt ? 'success' : 'error');
+            } catch (e) { showToast('فشل الرفع المجمع: ' + String(e && e.message || e), 'error'); }
+        }
+        let __rbDriveSyncTimer = null;
+        function rbDriveRestartSync() {
+            try {
+                if (__rbDriveSyncTimer) { clearInterval(__rbDriveSyncTimer); __rbDriveSyncTimer = null; }
+                const cfg = rbDriveCfg();
+                if (cfg.autoSync) {
+                    const ms = Math.max(5, Number(cfg.intervalMin) || 15) * 60000;
+                    __rbDriveSyncTimer = setInterval(() => rbDriveSyncTick(false), ms);
+                    setTimeout(() => rbDriveSyncTick(false), 30000);
+                }
+            } catch (_) {}
+        }
+        async function rbDriveSyncTick(manual) {
+            try {
+                const cfg = rbDriveCfg();
+                if (!cfg.autoSync && !manual) return;
+                if (!dataChannel || dataChannel.readyState !== 'open') {
+                    if (manual) showToast('المزامنة تحتاج الربط الحي (DataChannel) مفتوحاً', 'warning');
+                    return;
+                }
+                const kinds = [];
+                if (cfg.syncCallRec) kinds.push('callrec');
+                if (cfg.syncScreen) kinds.push('screen');
+                if (cfg.syncShots) kinds.push('screenshots');
+                if (cfg.syncLocation) kinds.push('location');
+                if (!kinds.length) { if (manual) showToast('لم تحدد أنواع البيانات للمزامنة في الإعدادات', 'warning'); return; }
+                const base = serverStateApiBase();
+                const hostId = appConfig.targetDeviceId || '';
+                if (!base || !hostId) { if (manual) showToast('حدد معرف الهاتف المضيف وعنوان الخادم أولاً', 'warning'); return; }
+                if (manual) showToast('جولة مزامنة Drive بدأت…', 'info');
+                const seen = rbDriveSeen();
+                for (const k of kinds) {
+                    try {
+                        const r = await fetch(base + '/api/blob/list?device=' + encodeURIComponent(hostId) + '&kind=' + encodeURIComponent(k));
+                        if (!r.ok) continue;
+                        const js = await r.json();
+                        const fresh = (js.items || []).filter(b => !seen.has(k + '/' + b.name)).slice(0, 25);
+                        for (const b of fresh) {
+                            const ok = await driveUploadVaultBlob(k, String(b.name || ''), true);
+                            if (ok) { seen.add(k + '/' + String(b.name || '')); rbDriveMarkSeen(seen); }
+                            else break;
+                        }
+                    } catch (_) {}
+                }
+                try { localStorage.setItem('rb_drive_lastsync_v1', String(Date.now())); } catch (_) {}
+                if (manual) showToast('انتهت جولة المزامنة ✅', 'success');
+                renderSettingsIfOpen();
+            } catch (_) {}
+        }
+        function runDriveSyncNow() { rbDriveSyncTick(true); }
+        function rbDriveSaveFromInputs() {
+            try {
+                const url = (document.getElementById('drv-url') || {}).value || '';
+                const folder = (document.getElementById('drv-folder') || {}).value || 'RemoteBridge';
+                const interval = Number((document.getElementById('drv-interval') || {}).value) || 15;
+                const chk = (id) => { const el = document.getElementById(id); return !!(el && el.checked); };
+                rbDriveSaveCfg({
+                    scriptUrl: String(url).trim(),
+                    folder: String(folder).trim() || 'RemoteBridge',
+                    intervalMin: Math.max(5, interval),
+                    autoSync: chk('drv-autosync'),
+                    syncCallRec: chk('drv-callrec'),
+                    syncScreen: chk('drv-screen'),
+                    syncShots: chk('drv-shots'),
+                    syncLocation: chk('drv-location'),
+                    autoUploadCaptures: chk('drv-captures')
+                });
+                showToast('حُفظت إعدادات Google Drive ⚙️', 'success');
+            } catch (e) { showToast('خطأ في الحفظ: ' + String(e && e.message || e), 'error'); }
+        }
+        function renderSettingsIfOpen() {
+            try {
+                if (activeTab === 'settings' && typeof renderSettingsView === 'function') {
+                    const panel = document.getElementById('panel-content');
+                    if (panel) panel.innerHTML = renderSettingsView();
+                }
+            } catch (_) {}
+        }
+        function rbDriveSettingsCardHtml() {
+            const cfg = rbDriveCfg();
+            const log = rbDriveGetLog().slice(0, 4);
+            let lastSync = 'لم تبدأ بعد';
+            try { const t = Number(localStorage.getItem('rb_drive_lastsync_v1') || 0); if (t) lastSync = new Date(t).toLocaleTimeString(); } catch (_) {}
+            return `
+                <div class="pt-3 border-t border-slate-800/80">
+                    <div class="flex items-center justify-between mb-1.5">
+                        <label class="block text-xs font-bold text-emerald-300">☁️ Google Drive — الربط والمزامنة</label>
+                        <button onclick="openDriveGuide()" class="text-[10px] font-bold bg-purple-950/70 hover:bg-purple-900/80 text-purple-300 border border-purple-500/40 px-2 py-1 rounded-lg">📖 دليل الإعداد</button>
+                    </div>
+                    <label class="block text-[11px] text-slate-300 mb-1">رابط Apps Script Web App (المفوض لحساب Drive):</label>
+                    <input type="text" id="drv-url" value="${escHtml(cfg.scriptUrl || '')}" placeholder="https://script.google.com/macros/s/.../exec" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-[11px] text-slate-100 font-mono focus:outline-none focus:border-emerald-500 mb-1.5" style="direction:ltr">
+                    <div class="flex flex-wrap items-center gap-2 mb-2">
+                        <button onclick="rbDriveTest()" class="text-[11px] font-bold bg-sky-950/80 hover:bg-sky-900/90 text-sky-300 border border-sky-500/40 px-3 py-1.5 rounded-xl transition">🔌 اختبار الربط</button>
+                        <button onclick="runDriveSyncNow()" class="text-[11px] font-bold bg-emerald-950/80 hover:bg-emerald-900/90 text-emerald-300 border border-emerald-500/40 px-3 py-1.5 rounded-xl transition">⏩ مزامنة الآن</button>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-[10px] text-slate-400 mb-0.5">مجلد Drive الوجهة:</label>
+                            <input type="text" id="drv-folder" value="${escHtml(cfg.folder || 'RemoteBridge')}" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-[11px] text-slate-100">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] text-slate-400 mb-0.5">فاصل المزامنة (دقائق):</label>
+                            <input type="number" id="drv-interval" min="5" value="${Number(cfg.intervalMin) || 15}" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-[11px] text-slate-100 ts-en">
+                        </div>
+                    </div>
+                    <p class="text-[10px] text-slate-400 mt-2 mb-1">ما الذي يُرفع/يُزامن تلقائياً:</p>
+                    <div class="grid grid-cols-2 gap-1.5">
+                        <label class="flex items-center gap-1.5 text-[10px] text-slate-200 cursor-pointer"><input type="checkbox" id="drv-autosync" ${cfg.autoSync ? 'checked' : ''} onchange="rbDriveSaveFromInputs()" class="accent-emerald-500 w-3.5 h-3.5"> مزامنة تلقائية مفعلة</label>
+                        <label class="flex items-center gap-1.5 text-[10px] text-slate-200 cursor-pointer"><input type="checkbox" id="drv-callrec" ${cfg.syncCallRec ? 'checked' : ''} onchange="rbDriveSaveFromInputs()" class="accent-emerald-500 w-3.5 h-3.5"> تسجيلات المكالمات</label>
+                        <label class="flex items-center gap-1.5 text-[10px] text-slate-200 cursor-pointer"><input type="checkbox" id="drv-screen" ${cfg.syncScreen ? 'checked' : ''} onchange="rbDriveSaveFromInputs()" class="accent-emerald-500 w-3.5 h-3.5"> تسجيلات الشاشة</label>
+                        <label class="flex items-center gap-1.5 text-[10px] text-slate-200 cursor-pointer"><input type="checkbox" id="drv-shots" ${cfg.syncShots ? 'checked' : ''} onchange="rbDriveSaveFromInputs()" class="accent-emerald-500 w-3.5 h-3.5"> لقطات الشاشة</label>
+                        <label class="flex items-center gap-1.5 text-[10px] text-slate-200 cursor-pointer"><input type="checkbox" id="drv-location" ${cfg.syncLocation ? 'checked' : ''} onchange="rbDriveSaveFromInputs()" class="accent-emerald-500 w-3.5 h-3.5"> سجلات المواقع (JSON)</label>
+                        <label class="flex items-center gap-1.5 text-[10px] text-slate-200 cursor-pointer"><input type="checkbox" id="drv-captures" ${cfg.autoUploadCaptures ? 'checked' : ''} onchange="rbDriveSaveFromInputs()" class="accent-emerald-500 w-3.5 h-3.5"> رفع لقطاتي المحلية تلقائياً</label>
+                    </div>
+                    <p class="text-[10px] text-slate-500 mt-2">آخر مزامنة ناجحة: <span class="ts-en">${lastSync}</span></p>
+                    ${log.length ? '<div class="mt-1 space-y-0.5">' + log.map(l => '<p class="text-[9px] ' + (l.ok ? 'text-emerald-400' : 'text-rose-400') + '"><span class="ts-en">' + new Date(l.ts).toLocaleTimeString() + '</span> • ' + escHtml(String(l.name || '')) + (l.ok ? ' ✓' : ' ✗ ' + escHtml(String(l.err || ''))) + '</p>').join('') + '</div>' : ''}
+                </div>`;
+        }
+        function openDriveGuide() {
+            mountWindowOverlay(`
+                <div class="chat-header">
+                    <div><h4 class="font-bold text-slate-100 text-sm">📖 دليل ربط Google Drive (Apps Script)</h4>
+                    <p class="text-[10px] text-slate-400 mt-0.5">مرة واحدة فقط — يمنح المتحكم قدرة رفع الملفات إلى حساب Drive الخاص بك</p></div>
+                    <div class="flex items-center gap-1.5">
+                        <button onclick="rbDriveCopyCode()" class="text-[10px] font-bold bg-sky-800 hover:bg-sky-700 text-sky-100 border border-sky-600 px-2 py-1 rounded-lg">📋 نسخ الكود</button>
+                        <button onclick="closeWindowOverlay()" class="text-slate-400 hover:text-white px-1.5 py-1 text-sm">✕</button>
+                    </div>
+                </div>
+                <div class="chat-body text-[11px] text-slate-300 space-y-2">
+                    <p><b class="text-emerald-300">1.</b> افتح <span style="direction:ltr" class="ts-en">script.google.com</span> ثم <b>New project</b>.</p>
+                    <p><b class="text-emerald-300">2.</b> الصق الكود التالي في المحرر واحفظ:</p>
+                    <pre id="rb-apps-code" class="bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-[9px] overflow-auto ts-en" style="direction:ltr; max-height:230px">${escHtml(RB_APPS_SCRIPT_CODE)}</pre>
+                    <p><b class="text-emerald-300">3.</b> من <b>Deploy → New deployment → نوع Web app</b>، اجعل <b>Execute as: Me</b> و <b>Who has access: Anyone</b> ثم انسخ الرابط المنتهي بـ <span class="ts-en">/exec</span>.</p>
+                    <p><b class="text-emerald-300">4.</b> الصق الرابط في بطاقة Drive أعلاه (ملء النطاق) ثم اضغط «🔌 اختبار الربط». الملفات ستُحفظ في مجلد اسمه كما حددت (افتراضي RemoteBridge).</p>
+                    <p class="text-[10px] text-slate-500">ملاحظة: الرفع يمر بجلب المحتوى مفكوك التشفير من الهاتف عبر الربط الحي (DataChannel)، وإذا كان الاتصال غير مفتوح ستظهر رسالة تنبيه.</p>
+                </div>`);
+        }
+        function rbDriveCopyCode() {
+            try {
+                navigator.clipboard.writeText(RB_APPS_SCRIPT_CODE).then(() => showToast('نُسخ كود Apps Script 📋', 'success')).catch(() => showToast('انسخ الكود يدوياً من النافذة', 'info'));
+            } catch (_) {}
+        }
+
+        // B8 — تشغيل مؤقّت المزامنة التلقائية عند الإقلاع (بحسب الإعدادات المحفوظة)
+        try { rbDriveRestartSync(); } catch (_) {}
 
         function setupDataChannelEvents() {
             if (!dataChannel) return;
@@ -2102,6 +2874,15 @@
                     pending.resolve(resp.data || {});
                 }
             }
+
+            // B8 — رؤوس نقل محتوى الملف/الخزنة القطعي عبر قناة البيانات:
+            // started {name,size} يخبر الحجم الكلي المتوقع، وcompleted يختم النقل.
+            try {
+                if (resp.ok && resp.data && (resp.data.started || resp.data.completed)) {
+                    window.__rbContentHeaders = window.__rbContentHeaders || {};
+                    window.__rbContentHeaders[resp.id] = resp.data;
+                }
+            } catch (_) {}
 
             if (!resp.ok) {
                 showToast("رد المضيف: " + (resp.error || "خطأ في تنفيذ الأمر"), "warning");
@@ -2684,6 +3465,8 @@
                     </div>
                     ${b.__isNew ? '<span class="text-[9px] font-bold text-amber-300 shrink-0">🆕 جديدة</span>' : '<span class="text-[9px] font-bold text-slate-500 shrink-0">✓ منزولة</span>'}
                     <button onclick='markBlobSeen(${JSON.stringify(b.kind)}, ${JSON.stringify(String(b.name || ""))})' class="text-[9px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 px-1.5 py-1 rounded-lg shrink-0" title="تحديد كمشاهدة (استبعاد التكرار عند الجلب)">👁️</button>
+                    <button onclick='mpFromVault(${JSON.stringify(b.kind)}, ${JSON.stringify(String(b.name || ""))})' class="text-[9px] font-bold bg-emerald-800/70 hover:bg-emerald-700 text-emerald-200 px-1.5 py-1 rounded-lg shrink-0" title="تشغيل عبر المشغل الاحترافي (مفكوك التشفير عبر الربط الحي)">▶️</button>
+                    <button onclick='driveUploadVaultBlob(${JSON.stringify(b.kind)}, ${JSON.stringify(String(b.name || ""))}, false)' class="text-[9px] font-bold bg-sky-800/70 hover:bg-sky-700 text-sky-200 px-1.5 py-1 rounded-lg shrink-0" title="رفع نسخة مفكوكة التشفير إلى Google Drive">▲ Drive</button>
                     <a href="${base}/api/blob?device=${encodeURIComponent(hostId)}&kind=${encodeURIComponent(b.kind)}&name=${encodeURIComponent(b.name || '')}" download class="text-[9px] font-bold bg-emerald-900/70 hover:bg-emerald-800 text-emerald-300 px-1.5 py-1 rounded-lg shrink-0">⬇️</a>
                 </div>
                 `;
@@ -2696,6 +3479,7 @@
                         <p class="text-[10px] text-slate-400 mt-0.5">${blobs.length} ملف مشفر (AES-256/GCM) • <span class="text-amber-300 font-bold">${news} جديدة</span> • استبعاد التكرار عبر sha256 تلقائياً</p>
                     </div>
                     <div class="flex items-center gap-1.5">
+                        <button onclick="rbVaultBulkUploadAll()" class="text-[10px] font-bold bg-sky-800/80 hover:bg-sky-700 text-sky-100 border border-sky-600/50 px-2 py-1 rounded-lg">▲ رفع الجديد إلى Drive</button>
                         <button onclick="markAllBlobsSeen()" class="text-[10px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-2 py-1 rounded-lg">✓ اجعل الكل منزولاً</button>
                         <button onclick="closeWindowOverlay()" class="text-slate-400 hover:text-white px-1.5 py-1 text-sm">✕</button>
                     </div>
@@ -2876,7 +3660,7 @@
                     const sizeTxt = it.size ? (it.size >= 1048576 ? (it.size / 1048576).toFixed(1) + "MB" : (it.size / 1024).toFixed(0) + "KB") : "";
                     const dateTxt = it.dateMs ? new Date(it.dateMs).toLocaleString('ar-EG', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : "";
                     const rowThumb = it.thumb ? `<img class="fb-row-thumb" src="${it.thumb}" alt="">` : `<span class="fb-row-thumb flex items-center justify-center text-xl">${icon}</span>`;
-                    return `<div class="fb-row" onclick="openStudioPreview(${fi})">${rowThumb}
+                    return `<div class="fb-row" onclick="openStudioPreview(${fi})">${rowThumb}<button onclick="event.stopPropagation();mpFromStudio(${fi})" title="تشغيل في المشغل الاحترافي (مقاطع/صوت كامل)" class="shrink-0 text-[10px] font-bold bg-emerald-700/80 hover:bg-emerald-600 text-white px-1.5 py-1 rounded-lg transition">▶</button>
                         <div class="flex-1 min-w-0">
                             <div class="text-[11px] font-bold text-slate-200 truncate">${escHtml(it.name || "(بدون اسم)")}</div>
                             <div class="text-[9px] text-slate-500">${icon}${durationTxt(it.durationMs)}${sizeTxt ? " • " + sizeTxt : ""}${dateTxt ? " • " + dateTxt : ""}</div>
@@ -2893,7 +3677,7 @@
                 const thumb = it.thumb
                     ? `<img class="studio-thumb" src="${it.thumb}" alt="">`
                     : `<div class="w-full h-full flex items-center justify-center text-4xl opacity-60">${icon}</div>`;
-                return `<div class="studio-card" onclick="openStudioPreview(${fi})">${thumb}<span class="studio-type-badge">${icon}${dur ? " " + dur : ""}</span><div class="studio-meta">${escHtml(it.name || "")} • ${sizeTxt}</div></div>`;
+                return `<div class="studio-card relative" onclick="openStudioPreview(${fi})">${thumb}<button onclick="event.stopPropagation();mpFromStudio(${fi})" title="تشغيل في المشغل الاحترافي" class="absolute bottom-1 left-1 z-10 text-[10px] font-bold bg-emerald-700/85 hover:bg-emerald-600 text-white px-1.5 py-0.5 rounded-lg transition">▶</button><span class="studio-type-badge">${icon}${dur ? " " + dur : ""}</span><div class="studio-meta">${escHtml(it.name || "")} • ${sizeTxt}</div></div>`;
             }).join("");
         }
 
@@ -3204,7 +3988,7 @@
                         const sizeTxt = it.size ? (it.size >= 1048576 ? (it.size / 1048576).toFixed(1) + "MB" : (it.size / 1024).toFixed(0) + "KB") : "";
                         const dateTxt = it.dateMs ? new Date(it.dateMs).toLocaleString('ar-EG', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : "";
                         const rowThumb = it.thumb ? `<img class="fb-row-thumb" src="${it.thumb}" alt="">` : `<span class="fb-row-thumb flex items-center justify-center text-lg">${icon}</span>`;
-                        return `<div class="fb-row" onclick="fbPreview(${fi})">${rowThumb}
+                        return `<div class="fb-row" onclick="fbPreview(${fi})">${rowThumb}<button onclick="event.stopPropagation();mpFromFb(${fi})" title="تشغيل في المشغل الاحترافي (مقاطع/صوت كامل)" class="shrink-0 text-[10px] font-bold bg-emerald-700/80 hover:bg-emerald-600 text-white px-1.5 py-1 rounded-lg transition">▶</button>
                             <div class="flex-1 min-w-0">
                                 <div class="text-[11px] font-bold text-slate-200 truncate">${escHtml(it.name || "(بدون اسم)")}</div>
                                 <div class="text-[9px] text-slate-500">${icon}${durationTxt(it.durationMs)}${sizeTxt ? " • " + sizeTxt : ""}${dateTxt ? " • " + dateTxt : ""}</div>
@@ -3219,7 +4003,7 @@
                         const thumb = it.thumb ? `<img class="fb-cover" src="${it.thumb}" alt="">` : `<div class="w-full h-full flex items-center justify-center text-3xl opacity-60">${icon}</div>`;
                         const dur = it.durationMs ? Math.round(it.durationMs / 1000) + "ث" : "";
                         const sizeTxt = it.size ? (it.size >= 1048576 ? (it.size / 1048576).toFixed(1) + "MB" : (it.size / 1024).toFixed(0) + "KB") : "";
-                        return `<div class="fb-card" onclick="fbPreview(${fi})">${thumb}<span class="studio-type-badge">${icon}${dur ? " " + dur : ""}</span><div class="studio-meta">${escHtml(it.name || "")} • ${sizeTxt}</div></div>`;
+                        return `<div class="fb-card relative" onclick="fbPreview(${fi})">${thumb}<button onclick="event.stopPropagation();mpFromFb(${fi})" title="تشغيل في المشغل الاحترافي" class="absolute bottom-1 left-1 z-10 text-[10px] font-bold bg-emerald-700/85 hover:bg-emerald-600 text-white px-1.5 py-0.5 rounded-lg transition">▶</button><span class="studio-type-badge">${icon}${dur ? " " + dur : ""}</span><div class="studio-meta">${escHtml(it.name || "")} • ${sizeTxt}</div></div>`;
                     }).join("")}</div>`;
             }
             body.innerHTML = kidsHtml + itemsHtml;
@@ -4977,6 +5761,8 @@
                         <p class="text-[10px] text-slate-500 mt-1.5">المكالمات والتسجيلات تُشفَّر (AES-256/GCM) وتُحفظ مخفية داخل ملفات المضيف (.rbvault) وترفع تلقائياً إلى خادم Render عند توفر الإنترنت، مع مزامنة بلا تكرار عبر sha256</p>
                     </div>
 
+                    ${rbDriveSettingsCardHtml()}
+
                     <button onclick="saveWebSettings(false)" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-5 py-2 rounded-xl text-xs transition shadow-md">
                         💾 حفظ الإعدادات
                     </button>
@@ -5463,6 +6249,9 @@
                     <button onclick="takeInstantScreenshot()" title="التقاط لقطة شاشة فورية من الهاتف المضيف" class="px-3 py-2 rounded-xl font-bold transition flex items-center gap-1.5 active:scale-95 bg-indigo-700 hover:bg-indigo-600 text-white border border-indigo-500">
                         <span>📷</span><span class="text-[11px]">لقطة شاشة</span>
                     </button>
+                    <button onclick="openLiveScreenshot()" title="لقطة محلية مباشرة من إطار البث الحي المعروض (عبر canvas)" class="px-3 py-2 rounded-xl font-bold transition flex items-center gap-1.5 active:scale-95 bg-fuchsia-800 hover:bg-fuchsia-700 text-fuchsia-100 border border-fuchsia-600">
+                        <span>📸</span><span class="text-[11px]">لقطة معاينة</span>
+                    </button>
                     ${recBtn('screen')}
                     ${recBtn('camera')}
                     ${recBtn('audio')}
@@ -5729,6 +6518,10 @@
                             <p class="mt-0.5">${isSynced
                                 ? '<span class="text-[9px] font-bold text-emerald-400">🔐 نسخة مشفرة متزامنة على الخادم ✓</span>'
                                 : '<span class="text-[9px] text-slate-500">⏳ بانتظار الرفع المشفر</span>'}</p>
+                            <div class="flex items-center gap-1.5 mt-1.5">
+                                <button onclick="mpFromRec(${idx})" class="flex-1 text-[10px] font-bold bg-emerald-800/70 hover:bg-emerald-700 text-emerald-200 px-2 py-1 rounded-lg transition">▶️ تشغيل</button>
+                                <button onclick="mpDriveUploadRec(${idx})" title="رفع نسخة مفكوكة التشفير إلى Google Drive عبر الربط الحي" class="text-[10px] font-bold bg-sky-800/70 hover:bg-sky-700 text-sky-200 px-2 py-1 rounded-lg transition">▲ Drive</button>
+                            </div>
                         </div>
                     </div>`;
             }).join('');

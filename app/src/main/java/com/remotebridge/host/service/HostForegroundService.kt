@@ -179,6 +179,9 @@ class HostForegroundService : LifecycleService() {
     private var hostDeviceName: String = ""
     // 🔐 B4: الخزنة المشفرة المسمدة + مسجل المكالمات الهاتفية (حفظ مشفر + رفع إلى Render)
     private var vaultManager: HostVaultManager? = null
+
+    /// 🔧 B8 — حد أقصى لحجم نقل محتوى الملف/الخزنة عبر قناة البيانات (48MB)
+    private val MAX_CHUNK_FILE_BYTES: Long = 48L * 1024L * 1024L
     private var callRecorder: HostCallRecorder? = null
 
     override fun onBind(intent: Intent): IBinder? {
@@ -559,6 +562,30 @@ class HostForegroundService : LifecycleService() {
                 val bucket = request.params?.get("bucket")?.jsonPrimitive?.content ?: "images"
                 if (fileId != null) {
                     sendFileToController(manager, request.id, fileId, bucket)
+                }
+                return
+            }
+
+            // 🔧 B8 — محتوى حقيقي للمشغّل الاحترافي ورفع Drive:
+            // 1) ملف تخزين عبر مسار كامل (متصفح المجلدات/الاستوديو)
+            if (request.cmd == Commands.STORAGE_OPEN) {
+                val path = request.params?.get("path")?.jsonPrimitive?.contentOrNull
+                if (!path.isNullOrBlank()) {
+                    sendPathToController(manager, request.id, path)
+                } else {
+                    manager.sendResponse(BridgeResponse(request.id, false, "مسار الملف مفقود", null))
+                }
+                return
+            }
+
+            // 2) عنصر خزنة مشفرة يُفكّ تشفيره في الذاكرة ثم يُرسل قطعاً (استدعاء تسجيلات وكاميرا وصوت)
+            if (request.cmd == Commands.VAULT_OPEN) {
+                val kind = request.params?.get("kind")?.jsonPrimitive?.contentOrNull ?: ""
+                val name = request.params?.get("name")?.jsonPrimitive?.contentOrNull ?: ""
+                if (kind.isNotBlank() && name.isNotBlank()) {
+                    sendVaultToController(manager, request.id, kind, name)
+                } else {
+                    manager.sendResponse(BridgeResponse(request.id, false, "معرفات الخزنة مفقودة", null))
                 }
                 return
             }
@@ -1576,6 +1603,131 @@ class HostForegroundService : LifecycleService() {
                     }
                 )
             )
+        }
+    }
+
+    /**
+     * 🔧 B8 — إرسال ملف تخزين حسب مساره الكامل قطعاً عبر قناة البيانات
+     * (يعتمد عليه مشغّل الوسائط الاحترافي + الرفع إلى Drive للمتحكم).
+     * حد أقصى 48MB للحماية من الطلبات الجائعة.
+     */
+    private suspend fun sendPathToController(
+        manager: PeerConnectionManager,
+        requestId: Int,
+        path: String
+    ) {
+        val f = java.io.File(path)
+        if (!f.exists() || !f.isFile) {
+            manager.sendResponse(BridgeResponse(requestId, false, "الملف غير موجود: $path", null))
+            return
+        }
+        if (f.length() > MAX_CHUNK_FILE_BYTES) {
+            manager.sendResponse(BridgeResponse(requestId, false, "الملف أكبر من الحد المسموح (48MB)", null))
+            return
+        }
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                f.inputStream().use { input ->
+                    manager.sendResponse(
+                        BridgeResponse(
+                            requestId, true, null,
+                            buildJsonObject {
+                                put("started", true)
+                                put("name", f.name)
+                                put("size", f.length())
+                            }
+                        )
+                    )
+                    val buffer = ByteArray(FrameProtocol.MAX_PAYLOAD)
+                    var seq = 0
+                    var totalSent = 0L
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read <= 0) break
+                        manager.sendBinaryChunk(requestId, seq, -1, buffer, 0, read)
+                        seq++
+                        totalSent += read
+                    }
+                    manager.sendResponse(
+                        BridgeResponse(
+                            requestId, true, null,
+                            buildJsonObject {
+                                put("completed", true)
+                                put("size", totalSent)
+                            }
+                        )
+                    )
+                }
+            } catch (t: Throwable) {
+                manager.sendResponse(BridgeResponse(requestId, false, t.message ?: "فشل إرسال الملف", null))
+            }
+        }
+    }
+
+    /**
+     * 🔧 B8 — عنصر خزنة مشفرة يُفكّ تشفيره في الذاكرة ثم يُرسل قطعاً للمتحكم
+     * (الاستدعاء: kind + name بدون بادئة نوع وبدون لاحقة .rbenc — مع تحمّل الصيغ القديمة).
+     * يقبل حتى 48MB قبل فك التشفير كيلا يستهلك الذاكرة بلا حدود.
+     */
+    private suspend fun sendVaultToController(
+        manager: PeerConnectionManager,
+        requestId: Int,
+        kind: String,
+        name: String
+    ) {
+        val vault = vaultManager
+        if (vault == null) {
+            manager.sendResponse(BridgeResponse(requestId, false, "الخزنة غير مهيأة على المضيف", null))
+            return
+        }
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val clean = name.substringAfter("__").removeSuffix(".rbenc")
+                val candidates = listOf(
+                    java.io.File(vault.vaultDir(), "${kind}__${clean}.rbenc"),
+                    java.io.File(vault.vaultDir(), "${kind}__${name}"),
+                    java.io.File(vault.vaultDir(), "${kind}__${name}.rbenc")
+                )
+                val f = candidates.firstOrNull { it.exists() }
+                if (f == null) {
+                    manager.sendResponse(BridgeResponse(requestId, false, "عنصر الخزنة غير موجود: $kind/$name", null))
+                    return@withContext
+                }
+                if (f.length() > MAX_CHUNK_FILE_BYTES) {
+                    manager.sendResponse(BridgeResponse(requestId, false, "عنصر الخزنة أكبر من الحد المسموح (48MB)", null))
+                    return@withContext
+                }
+                val plain = HostVaultCrypto.decrypt(HostVaultCrypto.getOrCreateKey(applicationContext), f.readBytes())
+                manager.sendResponse(
+                    BridgeResponse(
+                        requestId, true, null,
+                        buildJsonObject {
+                            put("started", true)
+                            put("name", clean)
+                            put("size", plain.size)
+                        }
+                    )
+                )
+                var off = 0
+                var seq = 0
+                while (off < plain.size) {
+                    val n = minOf(FrameProtocol.MAX_PAYLOAD, plain.size - off)
+                    manager.sendBinaryChunk(requestId, seq, -1, plain, off, n)
+                    off += n
+                    seq++
+                }
+                manager.sendResponse(
+                    BridgeResponse(
+                        requestId, true, null,
+                        buildJsonObject {
+                            put("completed", true)
+                            put("size", plain.size)
+                        }
+                    )
+                )
+            } catch (t: Throwable) {
+                manager.sendResponse(BridgeResponse(requestId, false, t.message ?: "فشل فك تشفير عنصر الخزنة", null))
+            }
         }
     }
 

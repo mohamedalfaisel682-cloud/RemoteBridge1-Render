@@ -139,6 +139,9 @@ object Commands {
     // B4 — تسجيل المكالمات + تدفق الخزنة المشفرة إلى الخادم
     const val CALL_RECORD_SET = "call_record_set"
     const val VAULT_FLUSH = "vault_flush"
+    // B8 — نقل محتوى حقيقي للمشغّل والرفع إلى Drive: وفق ملف تخزين كامل المسار، ووفق عنصر خزنة مفكوك التشفير
+    const val STORAGE_OPEN = "storage_open"
+    const val VAULT_OPEN = "vault_open"
 }
 
 /**

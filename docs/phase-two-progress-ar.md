@@ -422,3 +422,77 @@
 | go build + go vet | =0 |
 | gradlew.bat :app:assembleDebug | GRADLE_EXIT=0 (سجل gradle_b7.log) |
 | وثيقة جديدة | docs/system-full-report-ar.md — التقرير المرجعي الشامل (الإصدار B7) |
+
+## الدفعة B8 — الوصمة RB-2026-10-25-B8 (25-10-2026) — مشغّل وسائط احترافي + نقل محتوى حقيقي عبر قناة البيانات + Google Drive (رفع/مزامنة) + تحليل WebRTC والبث الشامل
+الوسم: `RB-2026-10-25-B8` • تحليل تفصيلي: `docs/webrtc-analysis-b8-ar.md`
+
+### ① تفعيل أنبوب النقل القطعي الميت منذ البداية (المشكلة الهيكلية الأعمق)
+- الواقع قبلاً: المضيف كان يملك `FILE_OPEN → sendFileToController → sendBinaryChunk` (قطع 16KB عبر DataChannel)، والويب يملك `handleBinaryChunk` يراكم القطع في `activeFileDownloads` — **لكن** الويب لم يُرسل `file_open` قط، ولا كان أي منطق يقفل التراكم (لا رأس لمفهوم size/started/completed). بدأ الإعمار الوسائطي كله على مثغير معطل.
+- **B8 من جانب المضيف (Kotlin):**
+  - `Models.kt`: أمران جديدان عند نهاية Commands — `STORAGE_OPEN = "storage_open"` (فتح ملف حسب مسار كامل) و `VAULT_OPEN = "vault_open"` (عنصر خزنة: kind+name → فك تشفير في الذاكرة ثم إرسال).
+  - `HostForegroundService.kt`:
+    - فرعان مبكران في `handleRequest` (قبيل `processRequest`): يستقبلان `{path}` أو `{kind,name}` ويوجحان الإرسال مباشرة.
+    - مساعد `sendPathToController`: رد `started {name,size}` ثم قطع 16KB ثم `completed {size}` — سقف 48MB.
+    - مساعد `sendVaultToController`: فك التشفير عبر `HostVaultCrypto.decrypt(getOrCreateKey(ctx), bytes)` بعد قياس السقف، ثم إرسال مفكوكاً (تسميات متسامحة: يجرّب `${kind}__${clean}.rbenc` ثم `${kind}__${name}` ثم `${kind}__${name}.rbenc` — الأصل أن اسم الخادم قد يحمل بادئة النوع ولاحقة .rbenc).
+    - ثابت جديد `MAX_CHUNK_FILE_BYTES = 48MB` قرب حقول الحالة.
+    - تصحيح خطأ تجميع حقيقي: الاستقراء `"$kind__$x"` يُفسَّر `kind__` معرفاً غير معرّف — الحل التوثيق بأقواس: `"${kind}__${clean}"` (3 مواضع).
+- **B8 من جانب المتحكم (web):**
+  - خطاف `handleRPCResponse` (W1): يستثمر رأس `started/completed {name,size}` إلى `window.__rbContentHeaders[resp.id]` ما سمح بإغلاق التراكم بالحجم المتوقع بدل اعتماد رسالة الختم.
+  - `pullHostContent(o)` (W2): بروتوكول عميل كامل — يفتح رقماً مستقلاً (نطاق 100000+ عالي حد لتفادي تصادم عناصر `sendRPCCommand`)، يرسل `{id, cmd, params}` عبر DataChannel، يحتكر يميّز التراكم حتى `got >= header.size` ثم يفرغ `activeFileDownloads[id]` ويعيد `{Blob، size، name}`؛ سقف زمني 180 ثانية مع مؤشر تقدم معياري % الفعلي في `#mp-status`.
+
+### ② المشغّل الاحترافي (overlay) وواجهته
+- هيكل كامل `#mp-overlay`: شريط عناوين (اسم الملف LTR) + أزرار ⛶ ملء الشاشة و✕ إغلاق + منبر عرض (video/img/audio مخفيان تبعاً للنوع + شريط الموجة `#mp-wave` والاختيار الجارٍ `#mp-needle`) + شريط تحضت أسفل فيه: ▶/⏸ تشغيل، الوقت `ts-en`، شريط القفز `range`، 🔊/🔇 كتم، مروى صوت، 📸 لقطة، ⬇️ تنزيل، ▲ Drive.
+- نكوه الكتابة الرسمية: `openMediaPlayer(o)` يدعم ثلاثة مصادر موحدة: `{fileId,bucket}` (معرض MediaStore عبر file_open)، `{path}` (متصفح/مستكشف عبر storage_open)، `{vaultKind,vaultName}` (سجل/لقطات/تسجيل خزنة مفكوك).
+- حل يدرك الامدادات: `mpFromFb(fi)` (متصل بصفوف/بطاقات fbPreviewVictim عبر `window.__fbItems`)، `mpFromStudio(fi)` (صفوف الاستوديو عبر `window.__stFiltered`)، `mpFromVault(kind,name)` (صفوف الخزنة)، `mpFromRec(idx) + mpDriveUploadRec(idx)` (شبكة تسجيلات عبر `mpRecItemAt` وربط خزنة النوع `screenshot→screenshots`).
+
+### ③ موجة الصوت (مكان الصامت/المعمول)
+- `mpBuildWaveform(blob)` — AudioContext `decodeAudioData` على المصدر بعد سحبه، ثم حساب قمم + RMS بـ **260 مستطيلاً**، أسماء ألوان دلالية: RMS < 0.02 = فاصل **صامت رمادي** داكن، ما فوقه **تروقازي** دلالياً (المورد الكامل لمادة حربونية) وعرض حقيقي في canvas مضاعف الدقة.
+- تفاعل مباشر: النقر على الشريط جُهُف قفزة إلى الموضع (x/width × duration)، وإبرة القراءة `#mp-needle` تنزلق مع currentTime من `ontimeupdate` (مع تلوين الجزء المشغّول بلون أدكن) بلا إطاثة الرسم إلا عند كل نبضة.
+
+### ④ لقطات من المشغل ومن معاينة البث الحي
+- `mpScreenshot()`: مشي صفحة من `video.videoWidth/Height` → canvas → PNG dataURL → `ensureCaptureShell` (نافذة بطاقة به مط وحفظ ⬇️ وررف Drive ▲).
+- `openLiveScreenshot()`: تنزيل ذكي من `#remote-video` مباشرة (بلا أمر RPC، يصطلح حتى عند كتم خادم معين لأن المصدر أساسي)، زر مستقل في شريط الأدوات الثاني بعنوان «لقطة معاينة» مع علم وطبingerزي ملون.
+- `ensureCaptureShell(dataUrl, name)`: تنفيذ موحد capture للتشغيل والبث معاً، وبند خفي الرفع التلقائي عند تفعخ التحملكة (`autoUploadCaptures`).
+
+### ⑤ مقياس مستوى الصوت الحي (الميكروفون)
+- `attachLiveAudioMeter()` في فرع audio بدل ontrack — `AnalyserNode.fftSize=512` على `remoteMediaStream` **بلا وصل وجهة** (بلا صدى)، لوحة ثابتة أسفل الطراق 196px ترسم 62 مستطيلاً بألوان الرمال (رمادي صامت / تروقازي مُصوات) مع زر ✕ يقطع الحلقة (rAF) ويغلو AudioContext.
+- فإذا استياب أقطاب، لا مسعايات إحالة أو نصوص زائدة.
+
+### ⑥ Google Drive — رفع يدوي مفرد/متعدد + مزامنة تلقائية
+- الطريقة المختارة: **Apps Script Web App** (بلا OAuth ولا مفاتيح داخل كود) — POST JSON `{name,mime,folder,data:base64}` مع نص `/relative` بسيط بلا preflight، وربط اختبار ping `doGet`، مجلد تنقبض (`RemoteBridge` افتراضياً) تنشأ تلقائياً في Drive باستخدام `DriveApp`.
+- المفاريد المحفوظة: `rb_drive_cfg_v1` (الإعداد) • `rb_drive_log_v1` (أحدث 40 عملية) • `rb_drive_seen_v1` (مُظة 2000) • `rb_drive_lastsync_v1` (الوقت الوحي).
+- نقل JSON→btoa بمسمار 32768 بتعبئة chunk مع بناء رؤساء إصلاح (ببعض `(4MB+)*400 upload slice`).
+- تفسير ايجابي: ربط السكربت مفتاح مرة (ادخل الرابط → اختبار) وبطاقة HTML كاملة في الإعدادات: مجلد الوجهة، فاصل المزامنة (دقائق)، خيارات **kind** مفعلة افتراضياً (تسجيلات مكالمات/شاشة/لقطات/مواقع JSON)، مع تحقق زر ✅ وسجلت آخر 4 عمليات.
+- تنفيز الخلف: `rbDriveSyncTick(manual)` يسأل `/api/blob/list` لكل kind **أو `/api/blob/shots+location`** الجدد التي لم تُرفع، يعرجها س([[pullHostContent]]) ثم يربعها بعد كل انجاز، بينما `rbVaultBulkUploadAll` علم الكذب الد soluciones.
+- `openDriveGuide()` نافذة توثيق (mountWindowOverlay) تعرض كود Apps Script كامل ونُسخها مباشرة 📋 ثم خطا التثبيت (Deploy → Web app → Execute as: Me → Access: Anyone).
+
+### ⑦ نقاط التدخل الأزرار (كل قائمة الحفظ والنداء المطلوبة)
+| الموضع | ما مضاف | التنفيذ |
+|---|---|---|
+| صفوف الاستوديو (`fb-row` × openStudioPreview) | زر ▶ | `mpFromStudio(fi)` مع stopPropagation |
+| بطاقة استوديو (`studio-card`) | زر ▶ داخل متر (relative) | `mpFromStudio(fi)` |
+| صفوف متصفح مجلدات (`fb-row` × fbPreview) | زر ▶ | `mpFromFb(fi)` |
+| بطاقة مجلدات (`fb-card`) | زر ▶ | `mpFromFb(fi)` |
+| صفوف الخزنة Render | زر ▶️ + زر ▲ Drive | `mpFromVault` / `driveUploadVaultBlob` |
+| ترويسة لوحة الخزنة | زر **▲ رفع الجديد إلى Drive** | `rbVaultBulkUploadAll` (مقيد 30 عنصر) |
+| بطاقات شبكة تسجيلات | زر ▶️ تشغيل + ▲ Drive | `mpFromRec` / `mpDriveUploadRec` |
+| شريط كاميرا الثانوي | زر 📸 لقطة معاينة | `openLiveScreenshot` (بصورة من مسار `remote-video`) |
+| إعدادات (قبل زر الحفظ) | بطاقة Drive الكاملة | `rbDriveSettingsCardHtml` (اختيار/مزامنة/فاصل/مجلد/سجل/دليل) |
+
+### ⑧ التحقق باتش B8
+| خطوة | نتيجة |
+|---|---|
+| أكبر `<script>` + `node --check` | **PASS** (كتلة ≈ 395,262 B) |
+| `go build ./...` | **GO_EXIT=0** |
+| `gradlew.bat :app:assembleDebug` | **GRADLE_EXIT=0** بعد إصلاح `kind__` (سجل gradle_b8.log — 2 محاولات) |
+| اختبار تفاعل متصفح حقيقي (localhost 8899) | **PASS**: بطاقة Drive تُرسم (`drv-url`/`drv-interval`/زر الاختبار) • `ensureMediaPlayerShell` (`mp-overlay`/`mp-controls` + نص Drive) • `openDriveGuide` (كود Apps Script مرئي) • بلا استثناءات غير مُتوقَّعة (التعنصر الوحيد خطا 404 أيقونة + RPC بلا خادم — أراك تُرى (سابقة)) |
+| فحص تكرار الأسماء | 22 دالة/مصطلح B8 كلها يخصّا مفرداً (لا تصادم) |
+
+### 📁 الملفات المعدّلة في B8
+| ملف | التغيير |
+|---|---|
+| `web-dashboard/index.html` | خطاف بدء/ختم + وحدة نقل قطعي + مشغل كامل + موجة + لقطات + متر + نواة Drive + بطاقة إعدادات + دليل + أزرار 9 مواضع |
+| `app/.../core/model/Models.kt` | `STORAGE_OPEN` + `VAULT_OPEN` |
+| `app/.../host/service/HostForegroundService.kt` | فرعان مبكران + `sendPathToController` + `sendVaultToController` + `MAX_CHUNK_FILE_BYTES` + إصلاح استقراء `kind__` |
+| `docs/webrtc-analysis-b8-ar.md` | وثيقة التحليل الجديدة (الأصل الرئيسي للمساس ولماذا مات البث) |
+
