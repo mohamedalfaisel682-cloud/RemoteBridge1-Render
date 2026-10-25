@@ -412,6 +412,12 @@ class HostForegroundService : LifecycleService() {
                 )
             }
 
+            is Signal.Answer -> {
+                // B5 — توافق مستقبلي: إن أصدر المضيف عرضاً (تفاوض) يُطبَّق الرد هنا
+                Log.d(TAG, "استقبال إجابة WebRTC من المتحكم ${signal.from} — تطبيقها")
+                peerManager?.setRemoteAnswer(signal.sdp, signal.sdpType)
+            }
+
             is Signal.Ice -> {
                 Log.d(TAG, "استقبال مرشح ICE من المتحكم [${signal.from}]: mid=${signal.sdpMid}, mLineIndex=${signal.sdpMLineIndex}")
                 peerManager?.addIceCandidate(signal.sdpMid, signal.sdpMLineIndex, signal.sdp)
@@ -690,6 +696,7 @@ class HostForegroundService : LifecycleService() {
                 )
             }
 
+            // 🔧 B5 — إصلاح استيراد سجل المكالمات: رسالة تحذير إذن أوضح (كان الرد يوصل والمتحكم يعرض القائمة الفارغة فقط)
             Commands.CALLS_LIST -> {
                 val calls = provider.readCallLog()
                 buildJsonObject {

@@ -216,34 +216,55 @@ class PeerConnectionManager(
         onSuccess: (String) -> Unit,
         onFailure: (String) -> Unit
     ) {
-        val conn = connection
-        if (conn != null && conn.signalingState() != PeerConnection.SignalingState.STABLE && conn.signalingState() != PeerConnection.SignalingState.CLOSED) {
-            Log.w(TAG, "إعادة تهيئة PeerConnection لقبول عرض جديد (حالة الإشارات السابقة: ${conn.signalingState()})")
-            try { conn.close(); conn.dispose() } catch (_: Throwable) {}
+        // 🔧 B5 — منع تخريب تفاوض قائم بعرض جديد (عاصفة العروض/Glare):
+        // يُغلق الاتصال القديم فقط إذا كان تفاوضه غير مكتمل (Have-Local/Remote-Offer)؛
+        // أما الاتصال المفاوض المستقر فيقبض العرض الجديد كإعادة تفاوض على نفس الاتصال.
+        val current = connection
+        if (current != null && current.signalingState() == PeerConnection.SignalingState.HAVE_LOCAL_OFFER ||
+            current != null && current.signalingState() == PeerConnection.SignalingState.HAVE_REMOTE_OFFER
+        ) {
+            Log.w(TAG, "إعادة تهيئة PeerConnection لقبول عرض جديد (تفاوض سابق غير مكتمل)")
+            try { current.close(); current.dispose() } catch (_: Throwable) {}
             connection = null
         }
-        val connection = ensureConnection() ?: run {
+        val conn = ensureConnection() ?: run {
             onFailure("فشل تهيئة الاتصال")
             return
         }
-        // 🔧 إعادة إرفاق مسارات البث الحية إن وجدت — من دونها تصل الإجابة بلا مسارات
-        // (تظهر نافذة البث سوداء/فارغة على المتحكم رغم أن التقاط الشاشة يعمل)
-        reattachExistingTracks(connection)
-        val type = if (sdpType.equals("OFFER", ignoreCase = true))
-            SessionDescription.Type.OFFER else SessionDescription.Type.OFFER
 
-        connection.setRemoteDescription(
-            SimpleSdpObserver {
-                drainPendingIceCandidates()
-                connection.createAnswer(object : SdpObserver {
-                    override fun onCreateSuccess(sdp: SessionDescription?) {
-                        if (sdp == null) {
+        val type = if (sdpType.equals("ANSWER", ignoreCase = true))
+            SessionDescription.Type.ANSWER else SessionDescription.Type.OFFER
+
+        // 🔧 B5 — الترتيب الصحيح: تُطبَّق وصفة العرض البعيد أولاً (فينشأ مسارا تفاوض
+        // للفيديو/الصوت من العرض نفسه)، ثم تُرفق المسارات الحالية على
+        // مرسِلي المسارات — عوضاً عن addTrack الذي كان ينشئ سطر m-line إضافياً
+        // فتنتهج الإجابة بعدد أسطر أكبر من العرض فيرفضها setLocalDescription
+        // بصمت (onSetFailure كان يُهمل!) فلا تصل الإجابة للمتحكم أبداً.
+        conn.setRemoteDescription(object : SdpObserver {
+            override fun onCreateSuccess(sdp: SessionDescription?) {}
+            override fun onSetSuccess() {
+                Log.d(TAG, "B5: طُبّق العرض البعيد — إرفاق المسارات على مسارات التفاوض")
+                attachTracksToNegotiatedTransceivers(conn)
+                conn.createAnswer(object : SdpObserver {
+                    override fun onCreateSuccess(answer: SessionDescription?) {
+                        if (answer == null) {
                             onFailure("إجابة فارغة")
                             return
                         }
-                        connection.setLocalDescription(SimpleSdpObserver {
-                            onSuccess(sdp.description)
-                        }, sdp)
+                        conn.setLocalDescription(object : SdpObserver {
+                            override fun onCreateSuccess(desc: SessionDescription?) {}
+                            override fun onCreateFailure(error: String?) {}
+                            override fun onSetSuccess() {
+                                Log.d(TAG, "B5: الإجابة جاهزة — إرسالها إلى المتحكم")
+                                onSuccess(answer.description)
+                            }
+
+                            override fun onSetFailure(error: String?) {
+                                // 🔧 لم يعد يُهمل: فشل التطبيق المحلي يجب أن يعلن
+                                Log.e(TAG, "B5: فشل ضبط الإجابة محلياً: $error")
+                                onFailure("فشل ضبط الإجابة محلياً: ${error ?: "سبب غير معروف"}")
+                            }
+                        }, answer)
                     }
 
                     override fun onCreateFailure(error: String?) {
@@ -253,16 +274,30 @@ class PeerConnectionManager(
                     override fun onSetSuccess() {}
                     override fun onSetFailure(error: String?) {}
                 }, MediaConstraints())
-            },
-            SessionDescription(type, sdp)
-        )
+            }
+
+            override fun onCreateFailure(error: String?) {
+                onFailure(error ?: "خطأ غير متوقع")
+            }
+
+            override fun onSetFailure(error: String?) {
+                // 🔧 إبلاغ صريح بدل الصمت — يعرف المتحكم السبب عبر Reject
+                Log.e(TAG, "B5: فشل تطبيق العرض البعيد: $error")
+                onFailure("فشل تطبيق العرض البعيد: ${error ?: "سبب غير معروف"}")
+            }
+        }, SessionDescription(type, sdp))
     }
 
     /**
-     * 🔧 عند إعادة بناء PeerConnection أثناء تفاوض جديد (حالة الإشارات أو "التعارض الصاخب")
-     * تُفقد مسارات البث الحية؛ هذه الدالة تربطها ثانية بالإجابة الجديدة فتستمر الصورة.
+     * 🔧 B5 — إرفاق مسارات البث الحية (الموجودة بالفعل أو بعد إعادة بناء الاتصال)
+     * على مسارات تفاوض (Transceivers) أُنشئت من العرض البعيد نفسه.
+     *
+     * هذه هي الوسيلة الوحيدة الصحيحة في Unified-Plan هنا: لا يُستخدم addTrack
+     * لأنه ينشئ مساراً جديداً خارج عرض المتحكم (فيتجاوز عدد أسطر العرض) ويكسر الإجابة.
+     * تغيير الاتجاه إلى SEND_RECV آمن قبل الإجابة (تطبق مكتبة WebRTC التقاطع تلقائياً)،
+     * وبعد الإجابة يبقى setTrack في المرسِل مشغلاً بالاتجاه المتفاوض عليه (dispatch sendrecv/sendonly).
      */
-    private fun reattachExistingTracks(pc: PeerConnection) {
+    private fun attachTracksToNegotiatedTransceivers(pc: PeerConnection) {
         try {
             var attached = 0
             val vt = videoTrack
@@ -270,22 +305,30 @@ class PeerConnectionManager(
                 val videoTr = pc.transceivers.firstOrNull {
                     it.mediaType == MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO
                 }
-                if (videoTr != null) videoTr.sender.setTrack(vt, true)
-                else pc.addTrack(vt, listOf("screenStream"))
-                attached++
+                if (videoTr != null) {
+                    try { videoTr.direction = RtpTransceiver.RtpTransceiverDirection.SEND_RECV } catch (_: Throwable) {}
+                    videoTr.sender.setTrack(vt, true)
+                    attached++
+                } else {
+                    Log.w(TAG, "لا مسار مفاوض للفيديو في العرض — سيُرفق عند التفاوض القادم")
+                }
             }
             val at = audioTrack
             if (at != null) {
                 val audioTr = pc.transceivers.firstOrNull {
                     it.mediaType == MediaStreamTrack.MediaType.MEDIA_TYPE_AUDIO
                 }
-                if (audioTr != null) audioTr.sender.setTrack(at, true)
-                else pc.addTrack(at, listOf("screenStream"))
-                attached++
+                if (audioTr != null) {
+                    try { audioTr.direction = RtpTransceiver.RtpTransceiverDirection.SEND_RECV } catch (_: Throwable) {}
+                    audioTr.sender.setTrack(at, true)
+                    attached++
+                } else {
+                    Log.w(TAG, "لا مسار مفاوض للصوت في العرض — سيُرفق عند التفاوض القادم")
+                }
             }
-            if (attached > 0) Log.d(TAG, "🔁 أُعيد إرفاق ${attached} مسار (بث) بعد إعادة بناء الاتصال")
+            if (attached > 0) Log.d(TAG, "🔁 أُرفق $attached مساراً بمسارات التفاوض (بلا تفاوض إضافي)")
         } catch (t: Throwable) {
-            Log.w(TAG, "فشل إعادة إرفاق المسارات: ${t.message}")
+            Log.w(TAG, "فشل إرفاق المسارات: ${t.message}")
         }
     }
 
@@ -337,10 +380,12 @@ class PeerConnectionManager(
 
     fun startScreenStreaming(mediaProjectionPermissionResultData: Intent): Boolean {
         val factory = this.factory ?: return false
-        val connection = this.connection ?: return false
-        if (videoTrack != null) return true
 
         try {
+            // 🔧 B5 — إيقاف أي بث سابق (كاميرا/شاشة) قبل الفتح؛ كان الشرط القديم
+            // `videoTrack != null → return true` يلغي التحويل من كاميرا إلى شاشة تماماً
+            stopStreaming()
+
             surfaceTextureHelper = SurfaceTextureHelper.create(
                 "ScreenCaptureThread",
                 EglBaseProvider.eglBase.eglBaseContext
@@ -362,7 +407,7 @@ class PeerConnectionManager(
             videoCapturer?.startCapture(1280, 720, 30)
 
             videoTrack = factory.createVideoTrack("ARDAMSv0", videoSource!!)
-            connection.addTrack(videoTrack, listOf("screenStream"))
+            attachOrPrepareTracks()
 
             // صوت الشاشة: يُنشأ الميكروفون مساراً مكتوماً افتراضياً (السياسة الجديدة)
             // ليستطيع المتحكم تفعيله لاحقاً بنقرة على مكبر الصوت خلال بث الشاشة.
@@ -372,7 +417,7 @@ class PeerConnectionManager(
                 audioTrack = factory.createAudioTrack("ARDAMSa0", audioSource)
                 isAudioStreamingEnabled = false
                 audioTrack?.setEnabled(false)
-                connection.addTrack(audioTrack, listOf("screenStream"))
+                attachOrPrepareTracks()
             } catch (t: Throwable) {
                 Log.w(TAG, "تعذّر تهيئة مسار الصوت مع بث الشاشة (سيبقى البث صامتاً): ${t.message}")
             }
@@ -388,7 +433,8 @@ class PeerConnectionManager(
      */
     fun startCameraStreaming(frontCamera: Boolean, withAudio: Boolean = true): Boolean {
         val factory = this.factory ?: return false
-        val connection = this.connection ?: return false
+        // 🔧 B5 — لم يعد يتطلب اتصالاً مفاوضاً: تُحضَّر المصادر ويُرفق المسارات
+        // تلقائياً عند اكتمال ربط WebRTC (معالجة ذاتية بدل رفض الأمر)
         stopStreaming()
 
         try {
@@ -428,30 +474,14 @@ class PeerConnectionManager(
             capturer.startCapture(1280, 720, 30)
 
             videoTrack = factory.createVideoTrack("ARDAMSv0", videoSource!!)
-            val videoTransceiver = connection.transceivers.firstOrNull {
-                it.mediaType == MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO
-            }
-            if (videoTransceiver != null) {
-                videoTransceiver.direction = RtpTransceiver.RtpTransceiverDirection.SEND_ONLY
-                videoTransceiver.sender.setTrack(videoTrack, true)
-            } else {
-                connection.addTrack(videoTrack, listOf("mediaStream"))
-            }
+            attachOrPrepareTracks()
 
             if (withAudio) {
                 val audioConstraints = MediaConstraints()
                 val audioSource = factory.createAudioSource(audioConstraints)
                 audioTrack = factory.createAudioTrack("ARDAMSa0", audioSource)
                 isAudioStreamingEnabled = true
-                val audioTransceiver = connection.transceivers.firstOrNull {
-                    it.mediaType == MediaStreamTrack.MediaType.MEDIA_TYPE_AUDIO
-                }
-                if (audioTransceiver != null) {
-                    audioTransceiver.direction = RtpTransceiver.RtpTransceiverDirection.SEND_ONLY
-                    audioTransceiver.sender.setTrack(audioTrack, true)
-                } else {
-                    connection.addTrack(audioTrack, listOf("mediaStream"))
-                }
+                attachOrPrepareTracks()
             }
 
             Log.i(TAG, "تم بدء بث الكاميرا بنجاح: front=$isFrontFacingCamera, audio=$withAudio")
@@ -467,7 +497,6 @@ class PeerConnectionManager(
      */
     fun startAudioOnlyStreaming(): Boolean {
         val factory = this.factory ?: return false
-        val connection = this.connection ?: return false
         stopStreaming()
 
         try {
@@ -475,21 +504,27 @@ class PeerConnectionManager(
             val audioSource = factory.createAudioSource(audioConstraints)
             audioTrack = factory.createAudioTrack("ARDAMSa0", audioSource)
             isAudioStreamingEnabled = true
-            val audioTransceiver = connection.transceivers.firstOrNull {
-                it.mediaType == MediaStreamTrack.MediaType.MEDIA_TYPE_AUDIO
-            }
-            if (audioTransceiver != null) {
-                audioTransceiver.direction = RtpTransceiver.RtpTransceiverDirection.SEND_ONLY
-                audioTransceiver.sender.setTrack(audioTrack, true)
-            } else {
-                connection.addTrack(audioTrack, listOf("mediaStream"))
-            }
+            attachOrPrepareTracks()
 
             Log.i(TAG, "تم بدء بث الصوت فقط من الميكروفون بنجاح")
             return true
         } catch (t: Throwable) {
             Log.e(TAG, "فشل بدء بث الصوت فقط", t)
             return false
+        }
+    }
+
+    /**
+     * 🔧 B5 — ربط المسارات الحالية على مسارات التفاوض إن كان الاتصال مفاوضاً
+     * (تعمل فوراً بلا تفاوض إضافي لأن اتجاه الأسطور العرض sendrecv)،
+     * وإلا تبقى المسارات معدة وتُرفق تلقائياً لحظة إجابة التفاوض التالية.
+     */
+    private fun attachOrPrepareTracks() {
+        val conn = connection
+        if (conn != null && conn.signalingState() == PeerConnection.SignalingState.STABLE &&
+            conn.getRemoteDescription() != null
+        ) {
+            attachTracksToNegotiatedTransceivers(conn)
         }
     }
 

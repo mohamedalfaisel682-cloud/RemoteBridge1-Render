@@ -268,3 +268,84 @@
 - `ui/screens/settings/SettingsScreen.kt` + `ui/screens/settings/HostPermissionsSection.kt` (جديد) + `ui/screens/host/HostScreen.kt` + `ui/screens/home/HomeScreen.kt`.
 - `ui/screens/dashboard/DashboardScreen.kt` + `ui/screens/files/FileListScreen.kt` – Locale.US.
 - APK: `app-debug.apk` = 66,636,607 B (تجميعان ناجحان: الأول بعد طبقة الخزنة/الخدمة، والثاني بعد تغييرات Compose — تم التحقق أن APK الأخير حديث ويحوي كلاسات B4: UiThemePrefs/AppModePrefs/HostPermissionsSection/HostVault + أمر call_record_set داخل dex).
+
+---
+
+# الدفعة B5 — علامة القسم: `RB-2026-10-25-B5`
+
+## 🔬 التحليل العميق الجذري لعطل البث الحي (WebRTC)
+
+**العَرَض المُبلَّغ:** «فشل إنشاء اتصال WebRTC بعد عدة محاولات» + تلميح `ICE: new • Conn: new • DC: connecting` — بينما RPC يعمل عبر خادم الإشارات بنجاح والوسائط لا تظهر أبداً.
+
+### سلسلة الأعطال المستخرجة (3 أعطال متسلسلة + عطلان فرعيان):
+| # | الطبقة | العطل | الأثر الملاحظ |
+|---|---|---|---|
+| 1 | المضيف `acceptOffer` | إرفاق المسارات **قبل** تطبيق العرض البعيد (`reattachExistingTracks/addTrack` قبل `setRemoteDescription`). في Unified-Plan يُنشئ `addTrack` مسار تفاوض جديداً خارج العرض → الإجابة تحمل m-lines أكثر من العرض → `setLocalDescription(answer)` **يفشل صامتاً** لأن `onSetFailure` كان يُهمل داخل `SimpleSdpObserver` | لا إجابة تُرسل مطلقاً → ICE new/Conn new/DC connecting → «فشل بعد عدة محاولات» — مطابق حرفياً للعرض |
+| 2 | المتحكم | عاصفة عروض: `onnegotiationneeded` يولّد عرضاً تلقائياً لكل transceiver (×2 recvonly) + عرض ثالث عند إنشاء `createDataChannel` + العرض الصريح الرابع = عروض متزاحمة | المضيف (يغلق أي PC غير مستقر) يسقط الاتصال ويعيد بناءه أثناء تحضير إجابة سابقة → إجابات عهدة/ضائعة وسقوطات متتالية |
+| 3 | المضيف بعد الاتصال | إضافة مسارات الوسائط بعد تفاوض ناجح **بلا تفاوض إضافي** (addTrack/تعديل اتجاه بعد الإجابة مع اتجاه العرض recvonly لا يقبل الإرسال) | الصورة/الصوت لا يمران أبداً حتى مع اتصال مكتمل (شاشة سوداء مع DC مفتوحة) |
+| ف1 | المتحكم `waitForIceConnection` | يستبدل `oniceconnectionstatechange` الدائم بمؤقِّته ثم يتركه `null` نهائياً بعد الغلق | تعطيل منطق إعادة تشغيل ICE التلقائي بعد أول انتظار |
+| ف2 | مضيف `startScreenStreaming` | `if (videoTrack != null) return true` يُخرج نجاحاً كاذباً | منع التحول كاميرا↔شاشة نهائياً |
+
+### الحل المعماري المنفَّذ:
+**المضيف — `PeerConnectionManager.kt`:**
+- `acceptOffer` بالترتيب الصحيح: `setRemoteDescription` **أولاً** → داخل `onSetSuccess` إرفاق المسارات على **مسارات التفاوض الناتجة عن العرض نفسه** (`attachTracksToNegotiatedTransceivers` — `sender.setTrack(...)` بلا `addTrack` إطلاقاً) → `createAnswer` → `setLocalDescription` مع **إعلان فشل صريح** (`onSetFailure → onFailure` → `Signal.Reject` بالسبب العربي) → إرسال الإجابة.
+- إعادة بناء ذكية: الإغلاق فقط إذا كان التفاوض غير مكتمل (`HAVE_LOCAL/REMOTE_OFFER`)؛ أما الاتصال المستقر فيستقبل العرض الجديد **كإعادة تفاوض على نفس الاتصال** (بلا إسقاط ولا فقدان ICE).
+- `attachOrPrepareTracks()`: إرفاق فوري إن كان الاتصال مفاوضاً (اتجاه العرض `sendrecv` يسمح بالإرسال بلا تفاوض إضافي)، وإلا تبقى المسارات مجهّزة وتُرفق تلقائياً عند قبول العرض التالي (**معالجة ذاتية** — بدء البث قبل اكتمال الربط يستأنف وحده).
+- بدءات البث الثلاثة (`startScreenStreaming`/`startCameraStreaming`/`startAudioOnlyStreaming`) لم تعد تتطلب اتصالاً مفعّلاً؛ `startScreenStreaming` يوقف أي بث أولاً (تُفعِّل التحويل كاميرا↔شاشة) ويفتح صوت الشاشة **مكتوماً افتراضياً** (سياسة الكتم).
+- فرع `Signal.Answer` في الخدمة (توافق مستقبلي مع أي تفاوض صادر من المضيف) مع نقله إلى `setRemoteAnswer`.
+
+**المتحكم — `web-dashboard/index.html`:**
+- transceivers باتجاه `sendrecv` بدلاً من `recvonly` (هذه هي البوابة القانونية لإرسال المضيف).
+- قناة البيانات تُنشأ **داخل `initPeerConnection` قبل أول عرض** → عرض شامل واحد (transceivers + m=application) بلا تفاوض ثانٍ.
+- تعطيل `onnegotiationneeded` (سجل فقط) — العروض الصريحة فقط لا غير.
+- `offerInFlight` guard + `pc.__expectingAnswer`: الإجابة بدون عرض معلَق منها **تُهمل** (حماية الإجابات العهدة) وتُصفَّر على المسارين.
+- `waitForIceConnection` **يغلّف** المعالج الدائم ويستعيد دائماً (استئناف التشغيل الآلي عند الفشل اللاحق).
+- `case "reject"` جديد: إظهار السبب العربي من المضيف (ولا يقفل اتصالاً نشطاً).
+- `ensureStreamRenegotiation` متوافق (بلا إنشاء DC، عرض صريح وحيد).
+
+## 🎨 إعادة تصميم الصفَين تحت شاشة العرض المباشر
+- **الصف 1 (تحكم مصدر البث):** «📷 بث الكاميرا» + **أيقونة عدسة دائرية واحدة تفاعلية** (🤳/📷 مع شارة «أ/خ» وحلقة نبض عند نشاط البث — النقر يبدّل الأمامية/الخلفية دائماً) + أيقونة **مكبر الصوت** (CSS قائم: `.speaker-btn-on` وميض أخضر 1.4s + `.speaker-btn-off` أحمر مع شطبة `.speaker-slash`) + «🎙️ بث الميكروفون فقط» + «🛑 إيقاف البث الحي».
+- **الصف 2 (أدوات إضافية):** 🖥️ بث الشاشة **انتقل بجانب 📷 لقطة شاشة** مباشرة (بنبض أخضر عند نشاطه) + أزرار التسجيل الثلاثة + الجدولة + مجلدات الأرشيف + خريطة المواقع.
+
+## 🗂 متصفح مجلدات الهاتف + أوضاع العرض (S/M/L/تفاصيل)
+- **متصفح مجلدات المضيف (جديد):** `openMediaFolderBrowser()` — تراكب z-70 بفتات مسار هرمية (🏠 الذاكرة المشتركة › DCIM › …)، تجميع المستوى العلوي من `media_folders`، **حساب المجلدات الفرعية تلقائياً من `relative_path`** (بلا تعديل على المضيف)، جلب عناصر المجلد الحالي عبر `media_items {folders:[path]}` مع المصغرات الحقيقية، ومعاينة داخلية `fbPreview()`.
+- **أوضاع العرض** (S/M/L/تفاصيل) محفوظة دائماً: المتصفح `rb_fb_view_v1` والاستديو `rb_studio_view_v1` — CSS جديد: `viewsize-btn.vs-active` + شبكات `vs-s/vs-l/vs-details` + صفوف تفصيلية `fb-row` (الاسم • النوع • الحجم • التاريخ) + أزرار الحجم في شريط الاستديو نفسه وخيار «🗂 تصفح المجلدات» كمدخل إضافي من `renderStudioView()`.
+- **عزل الحالة**: عناصر التصفح تُوجَّه إلى `window.__fbItems` أثناء انتظار المتصفح (بلا مساس بحالة الاستديو)، والكاش دائم في `window.__fbFoldersCache`، والقناة تُغلق بعد الاستجابة (`window.__fbOnFolders = null`).
+
+## 📋 تحليل قائمة التعديلات المطلوبة (مكرر/ناقص/ضار)
+| المطلب | الحالة | القرار |
+|---|---|---|
+| إشعارات حية (toast) عند وصول إشعار/رسالة/اتصال | منفذ (B4: `push_event` → `handlePushEvent`) | تجاوز — الدفع الحي يعمل |
+| دوائر عدد غير المعاين (إشعارات/رسائل/ملفات) | منفذ (B4: `bumpUnread/refreshAllBadges/markTabSeen`) | تجاوز |
+| دردشة SMS باسم جهة الاتصال (فقاعات + فصل أيام) | منفذ (B4: نافذة الدردشة المتقدمة) | تجاوز |
+| تجميع الإشعارات بنفس هيئة الدردشة | منفذ مسبقاً | تجاوز |
+| كتم تلقائي افتراضي عند بدء البث (شاشة/كاميرا) | منفذ (مضيف: صوت الشاشة يبدأ مكتوماً + المتحكم: `audioEnabled=false` في كل بدء) | تجاوز — وثُبِّت على المضيف أيضاً |
+| أيقونة مكبر الصوت (أخضر وميض/أحمر شطب) | CSS موجود | تجاوز — أُعيد دمجه في الصف الجديد |
+| أيقونة واحدة لتبديل الكاميرا | موجودة | تطوير التصميم — أصبحت أيقونة دائرية بنبض وشارة حالة |
+| بث الشاشة بجانب لقطة الشاشة | كان بالصف 1 | **منفَّذ الآن (B5)** |
+| فتح المجلد وتصفح محتوياته | المستكشف النصي يغطي الملفات فقط (storage_explore) | **متصفح وسائط هرمي جديد (B5)** |
+| أحجام عرض S/M/L/تفاصيل | متوفر للملفات والجهات (`renderModeButtons`) | **مضاف للوسائط/الاستديو والمتصفح (B5)** |
+| إصلاح استيراد سجل المكالمات | يعمل؛ تحذير الإذن يظهر (B4) | مكتمل — حسّننا صياغة تنبيه المضيف فقط |
+
+## 🧭 الجولة الشاملة على قنوات الاتصال (تأكيد عدم التعارض)
+1. تسجيل/قلوب: `register/ping/pong` عبر WebSocket (خادم Render).
+2. RPC: `rpc_request/rpc_response` — قناة الأوامر (device_info/calls_list/media_items/…) عبر نفس WS.
+3. المصافحة P2P: `offer/answer/ice/reject` — خصَّ relay فقط في الخادم (main.go 340-382؛ لا تغيير مطلوب).
+4. قناة البيانات P2P `bridgeData`: طلبات خادم-ضيف سريعة؛ مفتوحة بعد المصافحة.
+5. مسارات الوسائط RTP: كاميرا/شاشة/ميكروفون عبر إجابات `sendrecv` المسموح بها قانونياً.
+6. دفع الأحداث الحية `push_event`: إشعارات/SMS/اتصالات/موقع/نبض البث — إلى نظير واحد.
+7. الخزنة المشفرة: POST `/api/blob` مع `X-Blob-Sha` sha256 + GET للقوائم.
+- **لا تعارض**: المصافحة الآن اتجاه واحد صحيح (المتحكم يعرض؛ المضيف يجيب)، وقناة البيانات تُفتح من العرض الشامل الأول — جميع القنوات متعاونة.
+
+## 🧪 ملاحظة فنية مهمة
+- معايرة المكتبة `io.getstream:stream-webrtc-android:1.3.9` تفرض `getRemoteDescription()` (وليس `remoteDescription()` — أُثبت عبر `javap` على الأرشيف الفعلي من Gradle cache)؛ سقط صامت كان سيلوث التجميع، وسبب رفض التجميع الأول كان تكرار `onCreateFailure`.
+
+## 📦 الملفات المعدّلة (B5)
+- `app/src/main/java/com/remotebridge/core/webrtc/PeerConnectionManager.kt` — إعادة كتابة `acceptOffer` + `attachTracksToNegotiatedTransceivers` + `attachOrPrepareTracks` + إصلاح بدءات البث الثلاثة.
+- `app/src/main/java/com/remotebridge/host/service/HostForegroundService.kt` — فرع `Signal.Answer` + تنبيه CALLS_LIST أوضح.
+- `web-dashboard/index.html` — إصلاحات WebRTC (sendrecv/offerInFlight/__expectingAnswer/waitForIceConnection/reject) + إعادة تصميم الصفَين + متصفح المجلدات + أوضاع العرض S/M/L/تفاصيل.
+
+## ✅ التحقق (B5)
+- `node --check` — **ناجح** (كتلة السكربت الأساسية ≈314.0KB، فُحص مرتين قبل وبعد التعديلات الأخيرة).
+- `gradlew.bat :app:assembleDebug` — **GRADLE_EXIT=0** بعد إصلاح خطي التجميع (تكرار `onCreateFailure` + توقيع `getRemoteDescription()` عبر فحص `javap`).
+- APK: `app-debug.apk` = **66,636,607 B** حديث — تحقق DEX إيجابي لرموز B5: `attachTracksToNegotiatedTransceivers` ✔ / `attachOrPrepareTracks` ✔ / نصوص الإخفاق العربية الصريحة ✔.
