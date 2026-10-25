@@ -1164,6 +1164,14 @@
                 if (hostId && data && (data.batteryLevel !== undefined || data.battery !== undefined)) {
                     const lvl = data.batteryLevel !== undefined ? data.batteryLevel : data.battery;
                     hostBatteryChip[hostId] = { level: lvl, charging: data.isCharging === true, ts: Date.now() };
+                    // B7 — إظهار أيقونة «جارٍ الشحن» تحت سعة البطارية في بطاقة نظام التشغيل عند اتصال الشاحن
+                    try {
+                        const ci = document.getElementById('dash-charge-icon');
+                        if (ci) {
+                            if (data.isCharging === true) ci.classList.remove('hidden');
+                            else ci.classList.add('hidden');
+                        }
+                    } catch (_) {}
                 }
                 if (hostId && data) renderHostList();
             } catch (_) {}
@@ -2347,7 +2355,7 @@
 
             if (batteryEl) {
                 const chargingText = data.isCharging ? " (جارٍ الشحن ⚡)" : " (على البطارية)";
-                batteryEl.innerText = `${data.batteryLevel}%${chargingText}`;
+                batteryEl.innerText = `🔋 ${data.batteryLevel}%${chargingText}`;
             }
             if (storageEl) {
                 const freeGb = (data.storageFreeBytes / 1073741824).toFixed(1);
@@ -3528,20 +3536,21 @@
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 md:gap-4 mb-4">
-                    <!-- B6 — بطاقة بنصفين: النصف الأول لمستوى البطارية • النصف الثاني للموقع (عند النقر تفتح الخريطة الحقيقية) ويحوي عدّاد «آخر رؤية» المتصل للوقت المنقضي -->
+                    <!-- B7 — بطاقة بنصفين للموقع وآخر الرؤية فقط (خطوط أكبر لمعاينة واضحة) • تفاصيل البطارية نُقلت إلى بطاقة نظام التشغيل مع أيقونة الشحن -->
                     <div class="bg-slate-900/80 rounded-xl border border-slate-800 grid grid-cols-2 overflow-hidden">
-                        <div class="p-3.5 flex items-center gap-3">
-                            <div class="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-xl shrink-0">🔋</div>
+                        <div class="p-4 flex items-center gap-3 cursor-pointer hover:bg-slate-900/70 transition select-none" onclick="openLocationMapView()" title="انقر لفتح الخريطة التفاعلية الحقيقية (قمر صناعي + طريق سير وشوارع)">
+                            <div class="w-12 h-12 rounded-xl bg-teal-500/10 border border-teal-500/25 flex items-center justify-center text-2xl shrink-0">🗺️</div>
                             <div class="min-w-0">
-                                <p class="text-[11px] text-slate-400 font-medium">مستوى البطارية</p>
-                                <p id="dash-battery" class="text-sm md:text-base font-bold text-slate-100 truncate">${batteryText}</p>
+                                <p class="text-[11px] text-slate-400 font-medium">الموقع</p>
+                                <p class="text-sm md:text-lg font-bold text-teal-200 truncate">خريطة تفاعلية</p>
+                                <p class="text-[10px] text-slate-500 truncate">قمر صناعي + شوارع ← انقر</p>
                             </div>
                         </div>
-                        <div class="p-3.5 flex items-center gap-2.5 border-r border-slate-800 bg-slate-950/50 cursor-pointer hover:bg-slate-900/70 transition select-none" onclick="openLocationMapView()" title="انقر لفتح الخريطة التفاعلية الحقيقية (قمر صناعي + طريق سير وشوارع)" >
-                            <div class="w-10 h-10 rounded-xl bg-teal-500/10 border border-teal-500/25 flex items-center justify-center text-xl shrink-0">🗺️</div>
-                            <div class="min-w-0 flex-1">
-                                <p class="text-[11px] text-slate-400 font-medium">الموقع — آخر رؤية</p>
-                                <p id="dash-lastseen" class="text-sm md:text-base font-bold text-amber-200 font-mono truncate" title="الوقت المنقضي منذ آخر رؤية (يُعدّ باستمرار)">${lastSeenText}</p>
+                        <div class="p-4 flex items-center gap-3 border-r border-slate-800 bg-slate-950/50">
+                            <div class="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-2xl shrink-0">🕒</div>
+                            <div class="min-w-0">
+                                <p class="text-[11px] text-slate-400 font-medium">آخر رؤية — المنقضي</p>
+                                <p id="dash-lastseen" class="text-base md:text-xl font-bold text-amber-200 font-mono truncate" title="الوقت المنقضي منذ آخر رؤية (يُعدّ باستمرار كل ثانية)">${lastSeenText}</p>
                                 <p id="dash-lastseen-detail" class="text-[10px] text-slate-500 truncate">${escapeHtml2(lastSeenDetail)}</p>
                             </div>
                         </div>
@@ -3555,9 +3564,12 @@
                     </div>
                     <div class="bg-slate-900/80 p-3.5 rounded-xl border border-slate-800 flex items-center gap-3">
                         <div class="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-xl">📱</div>
-                        <div>
+                        <div class="min-w-0">
                             <p class="text-[11px] text-slate-400 font-medium">نظام التشغيل</p>
-                            <p id="dash-os" class="text-sm md:text-base font-bold text-slate-100">${osText}</p>
+                            <p id="dash-os" class="text-sm md:text-base font-bold text-slate-100 truncate">${osText}</p>
+                            <!-- B7 — تفاصيل البطارية (نُقلت إلى هنا) + أيقونة جاري الشحن عند اتصال الشاحن -->
+                            <p id="dash-battery" class="text-[11px] font-bold text-emerald-300 mt-0.5 truncate">🔋 ${batteryText}</p>
+                            <span id="dash-charge-icon" class="text-[10px] font-bold text-yellow-300 hidden">⚡ جارٍ الشحن الآن</span>
                         </div>
                     </div>
                 </div>
