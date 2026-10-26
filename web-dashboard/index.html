@@ -168,6 +168,93 @@
             box-shadow: 0 0 12px rgba(56,189,248,0.15);
         }
 
+        /* ===== B9 — شريط تنقّل جانبي (أول/سابق/تالي/آخر) لكل نوافذ الدردشة ===== */
+        .chat-window.rb-rail-ready { position: relative; }
+        .rb-chat-rail {
+            position: absolute; top: 50%; transform: translateY(-50%);
+            right: 3px; z-index: 20;
+            display: flex; flex-direction: column; gap: 4px;
+            padding: 4px; border-radius: 12px;
+            background: rgba(2, 6, 23, 0.74);
+            border: 1px solid rgba(51, 65, 85, 0.9);
+            backdrop-filter: blur(6px);
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+        }
+        .rb-chat-rail button {
+            width: 26px; height: 26px; font-size: 11px; line-height: 1;
+            border-radius: 8px; color: #7dd3fc;
+            background: rgba(15, 23, 42, 0.88);
+            border: 1px solid rgba(56, 189, 248, 0.25);
+            transition: transform .15s, background .15s;
+        }
+        .rb-chat-rail button:hover { background: rgba(56, 189, 248, 0.2); transform: scale(1.14); }
+
+        /* ===== B9 — طيّ الرسائل الطويلة: 10 أسطر ثم «إظهار الكل» ===== */
+        .rb-msg-clamped {
+            display: -webkit-box;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 10;
+            overflow: hidden;
+        }
+        .rb-msg-fade { -webkit-mask-image: linear-gradient(180deg, #000 72%, transparent 100%); }
+        .rb-more-btn {
+            margin-top: 5px; padding: 1px 8px; font-size: 9.5px; font-weight: 800;
+            border-radius: 999px; color: #7dd3fc;
+            background: rgba(56, 189, 248, 0.12);
+            border: 1px solid rgba(56, 189, 248, 0.35);
+            transition: background .15s;
+        }
+        .rb-more-btn:hover { background: rgba(56, 189, 248, 0.24); }
+
+        /* ===== B9 — منصة البث الحي الاحترافية ===== */
+        .rb-stream-stage {
+            background: linear-gradient(180deg, #020617 0%, #0b1220 100%);
+            border: 1px solid rgba(51, 65, 85, 0.9);
+            transition: box-shadow .35s, border-color .35s;
+        }
+        .rb-stream-stage.rb-live-glow {
+            border-color: rgba(16, 185, 129, 0.65);
+            box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.35), 0 0 34px rgba(16, 185, 129, 0.18), 0 18px 50px rgba(0, 0, 0, 0.55);
+        }
+        .rb-stream-stage .rb-state-chip {
+            position: absolute; top: 8px; left: 8px; z-index: 10;
+            display: flex; align-items: center; gap: 5px;
+            padding: 2.5px 9px; border-radius: 999px;
+            font-size: 9.5px; font-weight: 800; font-family: "Consolas", ui-monospace, monospace;
+            background: rgba(2, 6, 23, 0.82);
+            border: 1px solid rgba(51, 65, 85, 0.95);
+            backdrop-filter: blur(6px);
+            letter-spacing: .3px;
+        }
+        .rb-stream-card {
+            padding: 12px 11px; border-radius: 16px;
+            border: 1px solid rgba(51, 65, 85, 0.95);
+            background: linear-gradient(180deg, rgba(15, 23, 42, 0.96), rgba(2, 6, 23, 0.96));
+            color: #cbd5e1;
+            display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+            transition: transform .22s, border-color .22s, box-shadow .22s;
+            text-align: right;
+        }
+        .rb-stream-card:hover {
+            transform: translateY(-2px);
+            border-color: rgba(45, 212, 191, 0.5);
+            box-shadow: 0 10px 28px rgba(45, 212, 191, 0.09);
+        }
+        .rb-stream-card.rb-stream-card-on {
+            border-color: rgba(16, 185, 129, 0.72);
+            background: linear-gradient(180deg, rgba(6, 78, 59, 0.38), rgba(2, 6, 23, 0.92));
+            box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.35), 0 0 26px rgba(16, 185, 129, 0.16);
+        }
+        .rb-stream-ico { font-size: 22px; line-height: 1; }
+        .rb-stream-t { font-weight: 800; font-size: 12px; color: #e2e8f0; }
+        .rb-stream-d { font-size: 9.5px; color: #64748b; letter-spacing: .1px; }
+        .rb-stream-chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+        .rb-stream-chip-hint {
+            font-size: 10px; color: #64748b;
+            padding: 6px 10px; border-radius: 12px;
+            border: 1px dashed rgba(71, 85, 105, 0.6);
+        }
+
         /* ===== B4 — تأثير مرئي للتبويب/الأيقونة النشطة (توهج نابض + شريط سفلي) ===== */
         .tab-btn, .tab-btn-mobile { position: relative; transition: box-shadow .25s, background .2s, color .2s; }
         .active-tab {
@@ -4797,27 +4884,29 @@
                 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-2.5 mb-2.5 border-b border-slate-800 gap-2">
                     <div>
                         <h2 class="text-lg md:text-xl font-bold text-emerald-300 flex items-center gap-2">
-                            <span>📡 البث الحي المباشر (شاشة، كاميرا، مايك)</span>
+                            <span>📡 البث الحي المباشر</span>
+                            <span class="text-[10px] font-normal text-slate-500 hidden sm:inline">(شاشة • كاميرا • ميكروفون عبر WebRTC P2P)</span>
                         </h2>
-                        <p class="text-xs text-slate-400">بث شاشة الجوال المباشرة، الكاميرا، أو الميكروفون المباشر عبر WebRTC</p>
+                        <p class="text-xs text-slate-400">بطاقات المصادر أدناه — انقر بطاقة لبدء بثها عبر الربط الحي، وانقرها مجدداً لإيقافه</p>
                     </div>
                     <div class="flex items-center gap-2">
                         <span class="text-xs px-2.5 py-1 rounded-full font-bold flex items-center gap-1.5 transition-all duration-300 ${streamState.active ? 'bg-emerald-950/90 text-emerald-300 border border-emerald-500/50 shadow-lg shadow-emerald-900/40 animate-pulse' : 'bg-slate-900/80 text-rose-400 border border-rose-500/30'}">
                             <span class="w-2.5 h-2.5 rounded-full ${streamState.active ? 'bg-emerald-400' : 'bg-rose-500'}"></span>
-                            ${streamState.active ? (isScreenActive ? 'بث الشاشة الحية نشط 🖥️' : isAudioActive ? 'بث الصوت الحي نشط 🎙️' : 'بث الكاميرا نشط 🎥') : 'البث الحي متوقف 🛑'}
+                            ${streamState.active ? (isScreenActive ? 'بث الشاشة نشط 🖥️' : isAudioActive ? 'بث الصوت نشط 🎙️' : 'بث الكاميرا نشط 🎥') : 'البث الحي متوقف 🛑'}
                         </span>
                     </div>
                 </div>
 
-                <!-- Video / Screen / Audio Display Window -->
-                <div class="bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden relative aspect-video max-h-[340px] flex items-center justify-center mb-3 shadow-2xl transition-all">
+                <!-- 🔯 B9 — منصة العرض: توهج نابض عند النشاط + شريحة حالة اتصال حقيقية (بلا مؤشرات مزيفة) -->
+                <div class="rb-stream-stage ${streamState.active ? 'rb-live-glow' : ''} border-0 rounded-2xl overflow-hidden relative aspect-video max-h-[340px] flex items-center justify-center mb-3">
                     <video id="remote-video" autoplay playsinline class="w-full h-full object-contain ${streamState.active && !isAudioActive ? '' : 'hidden'}"></video>
-                    
-                    <!-- Audio-Only Visualizer Placeholder -->
+
+                    <!-- Audio-Only Visualizer (تجسيم بصري) -->
                     ${isAudioActive ? `
                         <div class="text-center p-6 flex flex-col items-center justify-center gap-3">
                             <div class="w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-3xl animate-bounce shadow-lg shadow-emerald-900/30">🎙️</div>
-                            <p class="text-sm font-bold text-emerald-300">جارٍ استقبال بث الصوت الحي من الميكروفون المباشر...</p>
+                            <p class="text-sm font-bold text-emerald-300">جارٍ استقبال بث الصوت الحي من الميكروفون...</p>
+                            <p class="text-[10px] text-slate-500">مقياس المستوى الحي (AnalyserNode) يظهر تلقائياً أسفل يسار الشاشة</p>
                             <div class="flex items-center gap-1.5 h-9 mt-1">
                                 <div class="w-2 bg-emerald-400 rounded-full h-full animate-pulse"></div>
                                 <div class="w-2 bg-emerald-500 rounded-full h-2/3 animate-pulse delay-75"></div>
@@ -4830,57 +4919,71 @@
                         <div id="video-placeholder" class="text-center p-4 ${streamState.active && !isAudioActive ? 'hidden' : 'block'}">
                             <div class="w-14 h-14 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-2xl mx-auto mb-2">📹</div>
                             <p class="text-xs md:text-sm font-bold text-slate-300">شاشة العرض المباشر مستعدة</p>
-                            <p class="text-[11px] text-slate-500 mt-1">اختر نوع البث المرغوب: بث شاشة الجوال، الكاميرا والصوت معاً، أو بث الميكروفون فقط</p>
+                            <p class="text-[11px] text-slate-500 mt-1">ابدأ من بطاقة «بث الشاشة» أو «بث الكاميرا» أو «ميكروفون فقط» — تُؤسَّس الإشارات تلقائياً لحظة بدء البث</p>
                         </div>
                     `}
 
-                    <div class="absolute top-2 left-2 bg-slate-950/80 backdrop-blur border border-slate-800 text-[10px] px-2.5 py-0.5 rounded-lg font-mono text-emerald-300 flex items-center gap-1.5">
-                        <span>FPS: 30</span>
+                    <div class="rb-state-chip text-emerald-300">
+                        <span class="w-2 h-2 rounded-full ${(pc && pc.connectionState === 'connected') ? 'bg-emerald-400' : 'bg-slate-600'}"></span>
+                        <span>P2P: ${(pc && pc.connectionState) ? pc.connectionState : 'غير مُنشأ'}</span>
                         <span>•</span>
-                        <span>${isScreenActive ? 'SCREEN 1080p' : isAudioActive ? 'AUDIO ONLY' : 'CAM 720p'}</span>
+                        <span>${dataChannel && dataChannel.readyState === 'open' ? 'DC مفتوح' : 'DC مغلق'}</span>
                     </div>
+
+                    ${isScreenActive || (streamState.active && !isAudioActive && !isScreenActive) ? `
+                    <div class="absolute top-8 left-2 z-10 bg-slate-950/80 backdrop-blur border border-slate-800 rounded-xl p-1 flex flex-col gap-1">
+                        <button onclick="openLiveScreenshot()" title="لقطة محلية فورية من الإطار الحي المعروض" class="text-sm leading-none px-1.5 py-1 rounded-lg hover:bg-emerald-700/40 transition">📸</button>
+                    </div>` : ''}
                 </div>
 
-                <!-- Controls Row with Dynamic Color Transition — B5 تصميم احترافي أعاد تنظيمه -->
-                <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-2.5 text-xs shadow-xl">
-                    <div class="flex flex-wrap items-center gap-2">
-                        <!-- Camera Stream Toggle Button (الصف الأول: تحكم الكاميرا فقط) -->
-                        <button onclick="toggleLiveCameraStream()" class="px-3.5 py-2 rounded-xl font-bold transition-all duration-300 flex items-center gap-1.5 shadow-md active:scale-95 ${isCamActive ? 'bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-400 shadow-emerald-950/60 ring-2 ring-emerald-500/50' : 'bg-slate-800 hover:bg-emerald-600/30 text-slate-200 border border-slate-700'}">
-                            <span>📷 بث الكاميرا</span>
-                        </button>
+                <!-- 🧭 B9 — بطاقات مصادر البث (نقرة على بطاقة غير نشطة = بدء، ونقرة على نشطة = إيقاف) -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+                    <button onclick="toggleScreenStream()" class="rb-stream-card ${isScreenActive ? 'rb-stream-card-on' : ''}" title="بث شاشة الهاتف المضيف مباشرة — يتطلب موافقة MediaProjection على الهاتف لحظة الطلب">
+                        <span class="rb-stream-ico">🖥️</span>
+                        <span class="rb-stream-t">${isScreenActive ? 'بث الشاشة نشط — انقر للإيقاف' : 'بث الشاشة'}</span>
+                        <span class="rb-stream-d">يبدأ مكتوماً (سياسة صامتة) ويمتد الصوت عبر stream_started</span>
+                    </button>
+                    <button onclick="toggleLiveCameraStream()" class="rb-stream-card ${isCamActive ? 'rb-stream-card-on' : ''}" title="بث الكاميرا الأمامية/الخلفية مباشرة عبر الربط الحي">
+                        <span class="rb-stream-ico">${streamState.isFront ? '🤳' : '📷'}</span>
+                        <span class="rb-stream-t">${isCamActive ? 'بث الكاميرا نشط — انقر للإيقاف' : 'بث الكاميرا'}</span>
+                        <span class="rb-stream-d">العدسة الحالية: ${streamState.isFront ? 'أمامية 🤳' : 'خلفية 📷'} — تحتاج إذن كاميرا على الهاتف</span>
+                    </button>
+                    <button onclick="startAudioOnlyStream()" class="rb-stream-card ${isAudioActive ? 'rb-stream-card-on' : ''}" title="بث صوت الميكروفون فقط — مقياس مستوى حي يظهر تلقائياً عند الاستقبال">
+                        <span class="rb-stream-ico">🎙️</span>
+                        <span class="rb-stream-t">${isAudioActive ? 'بث الصوت نشط — انقر للإيقاف' : 'ميكروفون فقط'}</span>
+                        <span class="rb-stream-d">مقياس حي (AnalyserNode) بلا صدى + لقطة معاينة حسب الحالة</span>
+                    </button>
+                </div>
 
-                        <!-- 🔧 B5 — أيقونة عدسة دائرية واحدة تفاعلية: النقر يبدّل فوراً بين الأمامية والخلفية -->
-                        <button onclick="switchLiveCameraLens()" title="النقر يبدّل فوراً بين الكاميرا الأمامية والخلفية — الحالية: ${streamState.isFront ? 'الأمامية 🤳' : 'الخلفية 📷'}" class="w-10 h-10 rounded-full font-bold transition-all duration-300 flex items-center justify-center relative active:scale-90 shadow-md ${streamState.isFront ? 'bg-purple-600/40 hover:bg-purple-500/50 text-purple-200 border border-purple-400/70' : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600'} ${isCamActive ? 'ring-2 ring-emerald-500/60 animate-pulse' : ''}">
-                            <span class="text-lg leading-none">${streamState.isFront ? '🤳' : '📷'}</span>
-                            <span class="absolute -bottom-0.5 -left-0.5 w-4 h-4 rounded-full text-[8px] font-black flex items-center justify-center ${streamState.isFront ? 'bg-purple-500 text-white' : 'bg-slate-600 text-white'} border border-slate-900">${streamState.isFront ? 'أ' : 'خ'}</span>
-                        </button>
+                <!-- B9 — خيارات دقيقة (عدسة/صوت) + إيقاف موحد: نفس دوال B5 بلا تعارض -->
+                <div class="rb-stream-chips mt-2.5">
+                    <button onclick="switchLiveCameraLens()" title="النقر يبدّل فوراً بين الكاميرا الأمامية والخلفية — الحالية: ${streamState.isFront ? 'الأمامية 🤳' : 'الخلفية 📷'}" class="w-10 h-10 rounded-full font-bold transition-all duration-300 flex items-center justify-center relative active:scale-90 shadow-md ${streamState.isFront ? 'bg-purple-600/40 hover:bg-purple-500/50 text-purple-200 border border-purple-400/70' : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600'} ${isCamActive ? 'ring-2 ring-emerald-500/60 animate-pulse' : ''}">
+                        <span class="text-lg leading-none">${streamState.isFront ? '🤳' : '📷'}</span>
+                        <span class="absolute -bottom-0.5 -left-0.5 w-4 h-4 rounded-full text-[8px] font-black flex items-center justify-center ${streamState.isFront ? 'bg-purple-500 text-white' : 'bg-slate-600 text-white'} border border-slate-900">${streamState.isFront ? 'أ' : 'خ'}</span>
+                    </button>
+                    <span class="text-[10px] text-slate-500">تبديل العدسة</span>
 
-                        <!-- Speaker / Mic Button — أيقونة مكبر صوت: تومض بالأخضر عند التفعيل، حمراء مع خط شطب عند الكتم -->
-                        <button onclick="toggleLiveAudio()" title="${streamState.audioEnabled ? 'الصوت مفعّل — انقر للكتم' : 'الصوت مكتوم — انقر للتفعيل'}" class="speaker-btn ${streamState.audioEnabled ? 'speaker-btn-on' : 'speaker-btn-off'} px-3 py-2 rounded-xl font-bold transition flex items-center gap-2">
-                            <svg class="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <!-- جسم مكبر الصوت -->
-                                <path d="M11 5 L6 9 H3 v6 h3 l5 4 z" fill="currentColor" fill-opacity="0.25"></path>
-                                <path d="M11 5 L6 9 H3 v6 h3 l5 4 z"></path>
-                                <path d="M15.5 8.5 a5 5 0 0 1 0 7"></path>
-                                <path d="M18 6 a7.5 7.5 0 0 1 0 12"></path>
-                                <!-- خط الشطب عند الكتم -->
-                                <line class="speaker-slash" x1="4" y1="4" x2="21" y2="20" stroke="currentColor" stroke-width="2.2"></line>
-                            </svg>
-                            <span class="text-[10px] ${streamState.audioEnabled ? 'text-emerald-300' : 'text-rose-300'}">${streamState.audioEnabled ? 'الصوت مفعّل' : 'الصوت مكتوم'}</span>
-                        </button>
-
-                        <!-- Audio Stream Toggle Button -->
-                        <button onclick="startAudioOnlyStream()" class="px-3.5 py-2 rounded-xl font-bold transition-all duration-300 flex items-center gap-1.5 shadow-md active:scale-95 ${isAudioActive ? 'bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-400 shadow-emerald-950/60 ring-2 ring-emerald-500/50' : 'bg-slate-800 hover:bg-blue-600/30 text-slate-200 border border-slate-700'}">
-                            <span>🎙️ بث الميكروفون فقط</span>
-                        </button>
-                    </div>
+                    <!-- أيقونة مكبر الصوت: تومض بالأخضر عند التفعيل، حمراء مع خط شطب عند الكتم (B5 الأصلي) -->
+                    <button onclick="toggleLiveAudio()" title="${streamState.audioEnabled ? 'الصوت مفعّل — انقر للكتم' : 'الصوت مكتوم — انقر للتفعيل'}" class="speaker-btn ${streamState.audioEnabled ? 'speaker-btn-on' : 'speaker-btn-off'} px-3 py-2 rounded-xl font-bold transition flex items-center gap-2">
+                        <svg class="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <!-- جسم مكبر الصوت -->
+                            <path d="M11 5 L6 9 H3 v6 h3 l5 4 z" fill="currentColor" fill-opacity="0.25"></path>
+                            <path d="M11 5 L6 9 H3 v6 h3 l5 4 z"></path>
+                            <path d="M15.5 8.5 a5 5 0 0 1 0 7"></path>
+                            <path d="M18 6 a7.5 7.5 0 0 1 0 12"></path>
+                            <!-- خط الشطب عند الكتم -->
+                            <line class="speaker-slash" x1="4" y1="4" x2="21" y2="20" stroke="currentColor" stroke-width="2.2"></line>
+                        </svg>
+                        <span class="text-[10px] ${streamState.audioEnabled ? 'text-emerald-300' : 'text-rose-300'}">${streamState.audioEnabled ? 'الصوت مفعّل' : 'الصوت مكتوم'}</span>
+                    </button>
+                    <span class="text-[10px] text-slate-500">صوت البث (كتم/تفعيل)</span>
 
                     ${streamState.active ? `
+                        <span class="flex-1"></span>
                         <button onclick="stopLiveStream()" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-4 py-2 rounded-xl transition shadow-lg shadow-rose-950/50 active:scale-95 flex items-center gap-1">
                             <span>🛑 إيقاف البث الحي</span>
                         </button>
-                        <span class="text-[10px] text-slate-500 hidden sm:block">🖥️ بث الشاشة انتقل للشريط الثاني بجانب 📷 لقطة شاشة</span>
-                    ` : ''}
+                    ` : `<span class="rb-stream-chip-hint">ابدأ من بطاقة أعلاه — أدوات اللقطة/التسجيل/الأرشيف في الشريط التالي</span>`}
                 </div>
                 ${renderStreamExtraToolbar()}
             `;
@@ -5132,6 +5235,58 @@
             if (el) el.remove();
             document.removeEventListener('keydown', window.__overlayEscHandler || (() => {}));
             window.__overlayEscHandler = null;
+            window.__rbChatRailTarget = null;
+        }
+
+        // B9 — تنقّل نافذة الدردشة (بداية/سابق/تالي/نهاية) بأسلوب تطبيقات الدردشة الحديثة
+        function rbChatRailScroll(dir) {
+            const body = window.__rbChatRailTarget;
+            if (!body) return;
+            const page = Math.max(140, body.clientHeight * 0.8);
+            if (dir === 'top') body.scrollTo({ top: 0, behavior: 'smooth' });
+            else if (dir === 'bottom') body.scrollTo({ top: body.scrollHeight, behavior: 'smooth' });
+            else if (dir === 'up') body.scrollBy({ top: -page, behavior: 'smooth' });
+            else body.scrollBy({ top: page, behavior: 'smooth' });
+        }
+        // B9 — طيّ الرسائل الطويلة: 10 أسطر + زر «إظهار الكل» أسفل السطور
+        function rbChatRailClampLongMessages(body) {
+            try {
+                body.querySelectorAll('.bubble').forEach(b => {
+                    if (b.querySelector('.rb-more-btn')) return;
+                    let span = null;
+                    for (const n of Array.from(b.childNodes)) {
+                        if (n.nodeType === 3 && (n.textContent || '').trim()) {
+                            if (!span) span = document.createElement('span');
+                            span.appendChild(n.cloneNode(true));
+                            n.remove();
+                        }
+                    }
+                    if (!span) return;
+                    b.insertBefore(span, b.querySelector('.bubble-time'));
+                    const st = getComputedStyle(span);
+                    const lh = parseFloat(st.lineHeight) || (parseFloat(st.fontSize) || 13) * 1.65;
+                    // عناصر السطر (display:inline) تعيد scrollHeight=0 في Chrome — نعتمد الارتفاع الحقيقي من getBoundingClientRect
+                    const naturalH = Math.max(span.scrollHeight, span.getBoundingClientRect().height);
+                    if (naturalH > lh * 10 + 10) {
+                        span.classList.add('rb-msg-clamped', 'rb-msg-fade');
+                        const btn = document.createElement('button');
+                        btn.className = 'rb-more-btn';
+                        btn.type = 'button';
+                        btn.textContent = 'إظهار الكل ▾';
+                        btn.setAttribute('onclick', 'rbMsgToggle(this)');
+                        b.insertBefore(btn, b.querySelector('.bubble-time'));
+                    }
+                });
+            } catch (_) {}
+        }
+        function rbMsgToggle(btn) {
+            try {
+                const span = btn.previousElementSibling;
+                if (!span) return;
+                const clamped = span.classList.toggle('rb-msg-clamped');
+                span.classList.toggle('rb-msg-fade', clamped);
+                btn.textContent = clamped ? 'إظهار الكل ▾' : 'طَيّ ▴';
+            } catch (_) {}
         }
 
         function mountWindowOverlay(innerHtml) {
@@ -5146,6 +5301,24 @@
             `;
             wrap.addEventListener('click', (e) => { if (e.target === wrap) closeWindowOverlay(); });
             document.body.appendChild(wrap);
+            // B9 — شريط تنقّل جانبي (بداية/سابق/تالي/نهاية) + طيّ الرسائل الطويلة — يُخصّ نكل نوافذ الدردشة تلقائياً
+            try {
+                const winW = wrap.querySelector('.chat-window');
+                const bodyW = wrap.querySelector('.chat-body');
+                if (winW && bodyW) {
+                    winW.classList.add('rb-rail-ready');
+                    const rail = document.createElement('div');
+                    rail.className = 'rb-chat-rail';
+                    rail.innerHTML = '<button onclick="rbChatRailScroll(\'top\')" title="بداية الدردشة">⏮️</button>' +
+                        '<button onclick="rbChatRailScroll(\'up\')" title="انتقال للأعلى (صفحة)">⬆️</button>' +
+                        '<button onclick="rbChatRailScroll(\'down\')" title="انتقال للأسفل (صفحة)">⬇️</button>' +
+                        '<button onclick="rbChatRailScroll(\'bottom\')" title="نهاية الدردشة">⏭️</button>';
+                    winW.appendChild(rail);
+                    rbChatRailClampLongMessages(bodyW);
+                    window.__rbChatRailTarget = bodyW;
+                    bodyW.scrollTop = 0;
+                }
+            } catch (_) {}
             window.__overlayEscHandler = (e) => { if (e.key === 'Escape') closeWindowOverlay(); };
             document.addEventListener('keydown', window.__overlayEscHandler);
         }
@@ -6242,10 +6415,7 @@
             };
             return `
                 <div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-2.5 flex flex-wrap items-center gap-2 text-xs shadow-lg mt-2">
-                    <!-- 🔧 B5 — زر بث الشاشة الحية انتقل من الصف الأول ليكون بجانب لقطة الشاشة مباشرة -->
-                    <button onclick="toggleScreenStream()" title="بث شاشة الجوال الحية مباشرة عبر WebRTC" class="px-3 py-2 rounded-xl font-bold transition flex items-center gap-1.5 active:scale-95 ${(streamState.active && streamState.mode === 'screen') ? 'bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-400 ring-2 ring-emerald-500/50 shadow-lg shadow-emerald-950/50 animate-pulse' : 'bg-slate-800 hover:bg-emerald-600/30 text-slate-200 border border-slate-700'}">
-                        <span>🖥️</span><span class="text-[11px]">${(streamState.active && streamState.mode === 'screen') ? 'بث الشاشة نشط' : 'بث الشاشة'}</span>
-                    </button>
+                    <!-- 🧭 B9 — زر بث الشاشة انتقل إلى بطاقة المصادر أعلاه (منع التكرار) — يبقى هنا: اللقطات + التسجيلات + الجدولة + الأرشيف -->
                     <button onclick="takeInstantScreenshot()" title="التقاط لقطة شاشة فورية من الهاتف المضيف" class="px-3 py-2 rounded-xl font-bold transition flex items-center gap-1.5 active:scale-95 bg-indigo-700 hover:bg-indigo-600 text-white border border-indigo-500">
                         <span>📷</span><span class="text-[11px]">لقطة شاشة</span>
                     </button>

@@ -423,76 +423,105 @@
 | gradlew.bat :app:assembleDebug | GRADLE_EXIT=0 (سجل gradle_b7.log) |
 | وثيقة جديدة | docs/system-full-report-ar.md — التقرير المرجعي الشامل (الإصدار B7) |
 
-## الدفعة B8 — الوصمة RB-2026-10-25-B8 (25-10-2026) — مشغّل وسائط احترافي + نقل محتوى حقيقي عبر قناة البيانات + Google Drive (رفع/مزامنة) + تحليل WebRTC والبث الشامل
-الوسم: `RB-2026-10-25-B8` • تحليل تفصيلي: `docs/webrtc-analysis-b8-ar.md`
+# الدفعة B8 — الوصمة RB-2026-10-25-B8 (2026-10-25)
+**المشروع**: تفعيل أنبوب نقل المحتوى الميت + مشغّل وسائط احترافي + Google Drive (رفع/مزامنة) + تحليل WebRTC العميق.
+**وثيقة التحليل المرافقة**: `docs/webrtc-analysis-b8-ar.md`
 
-### ① تفعيل أنبوب النقل القطعي الميت منذ البداية (المشكلة الهيكلية الأعمق)
-- الواقع قبلاً: المضيف كان يملك `FILE_OPEN → sendFileToController → sendBinaryChunk` (قطع 16KB عبر DataChannel)، والويب يملك `handleBinaryChunk` يراكم القطع في `activeFileDownloads` — **لكن** الويب لم يُرسل `file_open` قط، ولا كان أي منطق يقفل التراكم (لا رأس لمفهوم size/started/completed). بدأ الإعمار الوسائطي كله على مثغير معطل.
-- **B8 من جانب المضيف (Kotlin):**
-  - `Models.kt`: أمران جديدان عند نهاية Commands — `STORAGE_OPEN = "storage_open"` (فتح ملف حسب مسار كامل) و `VAULT_OPEN = "vault_open"` (عنصر خزنة: kind+name → فك تشفير في الذاكرة ثم إرسال).
+## ① تفعيل أنبوب النقل القطعي الميت (المشكلة الهيكلية الأعمق)
+- **الاكتشاف**: قناة نقل الملفات المقطعية كانت مبنية بنيتها منذ البداية في الطرفين لكنها **ميتة عملياً**: المضيف يملك `FILE_OPEN → sendFileToController → sendBinaryChunk` (قطع 16KB عبر DataChannel)، والويب يملك `handleBinaryChunk` يراكم القطع في `activeFileDownloads` — لكن المتحكم **لم يرسل أمر فتح ملف قط**، ولا وجود لمنطق إتمام التجميع إلى Blob (لا رأس حجم ولا رسالة ختم). النتيجة: الصور/الفيديو/الصوت مجرد مصغّرات، والخزنة نص مشفّر غير قابل للتشغيل.
+- **المضيف (Kotlin)**:
+  - `Models.kt`: أمران جديدان `STORAGE_OPEN = "storage_open"` (فتح ملف بمسار كامل) و `VAULT_OPEN = "vault_open"` (عنصر خزنة مشفّر: kind + name → فك التشفير ثم الإرسال).
   - `HostForegroundService.kt`:
-    - فرعان مبكران في `handleRequest` (قبيل `processRequest`): يستقبلان `{path}` أو `{kind,name}` ويوجحان الإرسال مباشرة.
-    - مساعد `sendPathToController`: رد `started {name,size}` ثم قطع 16KB ثم `completed {size}` — سقف 48MB.
-    - مساعد `sendVaultToController`: فك التشفير عبر `HostVaultCrypto.decrypt(getOrCreateKey(ctx), bytes)` بعد قياس السقف، ثم إرسال مفكوكاً (تسميات متسامحة: يجرّب `${kind}__${clean}.rbenc` ثم `${kind}__${name}` ثم `${kind}__${name}.rbenc` — الأصل أن اسم الخادم قد يحمل بادئة النوع ولاحقة .rbenc).
-    - ثابت جديد `MAX_CHUNK_FILE_BYTES = 48MB` قرب حقول الحالة.
-    - تصحيح خطأ تجميع حقيقي: الاستقراء `"$kind__$x"` يُفسَّر `kind__` معرفاً غير معرّف — الحل التوثيق بأقواس: `"${kind}__${clean}"` (3 مواضع).
-- **B8 من جانب المتحكم (web):**
-  - خطاف `handleRPCResponse` (W1): يستثمر رأس `started/completed {name,size}` إلى `window.__rbContentHeaders[resp.id]` ما سمح بإغلاق التراكم بالحجم المتوقع بدل اعتماد رسالة الختم.
-  - `pullHostContent(o)` (W2): بروتوكول عميل كامل — يفتح رقماً مستقلاً (نطاق 100000+ عالي حد لتفادي تصادم عناصر `sendRPCCommand`)، يرسل `{id, cmd, params}` عبر DataChannel، يحتكر يميّز التراكم حتى `got >= header.size` ثم يفرغ `activeFileDownloads[id]` ويعيد `{Blob، size، name}`؛ سقف زمني 180 ثانية مع مؤشر تقدم معياري % الفعلي في `#mp-status`.
+    - فرعان مبكران في `handleRequest` (قبيل `processRequest`) يستقبلان `{path}` أو `{kind,name}` ويوجّهان الإرسال مباشرة.
+    - مساعد `sendPathToController`: رد `started {name, size}` ثم قطع 16KB ثم `completed {size}` — بسقف `MAX_CHUNK_FILE_BYTES` = 48MB.
+    - مساعد `sendVaultToController`: فك التشفير في الذاكرة عبر `HostVaultCrypto.decrypt(getOrCreateKey(ctx), bytes)` ثم بثه مفكوكاً — مع تسميات متسامحة (يجرّب `${kind}__${clean}.rbenc` ثم `${kind}__${clean}` ثم `${kind}__${name}` لأن اسم الخادم قد يحمل بادئة النوع ولاحقة `.rbenc`).
+    - **تصحيح خطأ تجميع حقيقي**: الاستقراء غير المقيد `"$kind__$x"` في قوالب Kotlin يُفسَّر كـ `kind__` معرّفاً غير موجود (3 مواضع — أخطاء Unresolved reference) — الحل تقييد الاستقراء بالأقواس `"${kind}__${x}"`.
+- **المتحكم (web)**:
+  - خُطاف W1 في `handleRPCResponse`: رؤوس `started {name,size}` / `completed {size}` تُسجَّل في `window.__rbContentHeaders[id]` — إغلاق التراكم بالحجم المتوقع دون اعتماد رسالة ختامية إلزامية.
+  - `pullHostContent(opts)` (W2): وعد قطعي كامل — يفتح طلباً في نطاق id مستقل (100000+) بلا تصادم مع `sendRPCCommand`، يرسل `{id, cmd, params}` عبر DataChannel، يستطلع كل 300ms الرأس + المجموع المتراكم حتى سقف الحجم، مهلة 180 ثانية، يعيد Blob مطابقاً، وينظّف عند الفشل. مؤشر تقدم معياري في `#mp-status`.
+  - **شرط صريح**: نقل الملفات/الخزنة يحتاج **الربط الحي (DataChannel) مفتوحاً** — يعمل عبر P2P.
 
-### ② المشغّل الاحترافي (overlay) وواجهته
-- هيكل كامل `#mp-overlay`: شريط عناوين (اسم الملف LTR) + أزرار ⛶ ملء الشاشة و✕ إغلاق + منبر عرض (video/img/audio مخفيان تبعاً للنوع + شريط الموجة `#mp-wave` والاختيار الجارٍ `#mp-needle`) + شريط تحضت أسفل فيه: ▶/⏸ تشغيل، الوقت `ts-en`، شريط القفز `range`، 🔊/🔇 كتم، مروى صوت، 📸 لقطة، ⬇️ تنزيل، ▲ Drive.
-- نكوه الكتابة الرسمية: `openMediaPlayer(o)` يدعم ثلاثة مصادر موحدة: `{fileId,bucket}` (معرض MediaStore عبر file_open)، `{path}` (متصفح/مستكشف عبر storage_open)، `{vaultKind,vaultName}` (سجل/لقطات/تسجيل خزنة مفكوك).
-- حل يدرك الامدادات: `mpFromFb(fi)` (متصل بصفوف/بطاقات fbPreviewVictim عبر `window.__fbItems`)، `mpFromStudio(fi)` (صفوف الاستوديو عبر `window.__stFiltered`)، `mpFromVault(kind,name)` (صفوف الخزنة)، `mpFromRec(idx) + mpDriveUploadRec(idx)` (شبكة تسجيلات عبر `mpRecItemAt` وربط خزنة النوع `screenshot→screenshots`).
+## ② المشغّل الاحترافي `openMediaPlayer(o)` + `ensureMediaPlayerShell()`
+- تراكب `#mp-overlay` (z-80): شريط عناوين (اسم الملف LTR) + ⛶ ملء الشاشة + ✕ إغلاق + مسرح عرض (video/img + موجة الصوت) + شريط تحكم: ▶/⏸ تشغيل، شريط تمرير زمني متصل بالوقت الحقيقي، 🔊/🔇 كتم + شريط صوت، 📸 لقطة الإطار الحالي، ⬇️ تنزيل النسخة المفكوكة، ▲ رفعها إلى Drive.
+- ثلاثة مصادر موحّدة: `{fileId, bucket}` (معرض MediaStore عبر `file_open`)، `{path}` (متصفح المجلدات عبر `storage_open`)، `{vaultKind, vaultName}` (عنصر خزنة عبر `vault_open`).
+- مداخل القوائم (W3): صفوف وبطاقات الاستوديو (`mpFromStudio`)، متصفح المجلدات (`mpFromFb` عبر `window.__fbItems`)، صفوف الخزنة على الخادم (`mpFromVault` + شارة ▶️/▲)، شبكة التسجيلات (`mpFromRec` + `mpDriveUploadRec` — مطابقة `recKind → vaultKind`).
 
-### ③ موجة الصوت (مكان الصامت/المعمول)
-- `mpBuildWaveform(blob)` — AudioContext `decodeAudioData` على المصدر بعد سحبه، ثم حساب قمم + RMS بـ **260 مستطيلاً**، أسماء ألوان دلالية: RMS < 0.02 = فاصل **صامت رمادي** داكن، ما فوقه **تروقازي** دلالياً (المورد الكامل لمادة حربونية) وعرض حقيقي في canvas مضاعف الدقة.
-- تفاعل مباشر: النقر على الشريط جُهُف قفزة إلى الموضع (x/width × duration)، وإبرة القراءة `#mp-needle` تنزلق مع currentTime من `ontimeupdate` (مع تلوين الجزء المشغّول بلون أدكن) بلا إطاثة الرسم إلا عند كل نبضة.
+## ③ موجة الصوت + لقطات + مقياس الميكروفون الحي
+- موجة الصوت `mpBuildWaveform/mpDrawWaveform/mpDrawWaveNeedle`: `decodeAudioData` → 260 خزانة قمم + RMS → فواصل **صامتة رمادية (rms < 0.02)** و**مُصوّتة تركوازية**؛ النقر على الموجة = قفزة زمنية، وإبرة كهرمانية `#mp-needle` تتبع التشغيل من `ontimeupdate`.
+- لقطات: `mpScreenshot()` من الفيديو المشغّل، و`openLiveScreenshot()` 📸 من إطار البث الحي `#remote-video` بلا RPC — كلاهما يمر بـ `ensureCaptureShell` (نافذة معاينة موحّدة: حفظ ⬇️ + رفع ▲ Drive + رفع تلقائي اختياري).
+- مقياس الصوت الحي `attachLiveAudioMeter()`: خُطاف ontrack — `AnalyserNode` (fftSize=512) على الدفق الوارد **بلا وصل وجهة** (بلا صدى) — شريط ثابت أسفل-يسار يرسّخ 62 عموداً بترميز لوني (رمادي صامت/تركوازي مُصوّت) مع زر ✕ يقطع الحلقة نظيفاً.
 
-### ④ لقطات من المشغل ومن معاينة البث الحي
-- `mpScreenshot()`: مشي صفحة من `video.videoWidth/Height` → canvas → PNG dataURL → `ensureCaptureShell` (نافذة بطاقة به مط وحفظ ⬇️ وررف Drive ▲).
-- `openLiveScreenshot()`: تنزيل ذكي من `#remote-video` مباشرة (بلا أمر RPC، يصطلح حتى عند كتم خادم معين لأن المصدر أساسي)، زر مستقل في شريط الأدوات الثاني بعنوان «لقطة معاينة» مع علم وطبingerزي ملون.
-- `ensureCaptureShell(dataUrl, name)`: تنفيذ موحد capture للتشغيل والبث معاً، وبند خفي الرفع التلقائي عند تفعخ التحملكة (`autoUploadCaptures`).
+## ④ Google Drive — ربط كامل بِApps Script Web App
+- **الطريقة**: نشر Apps Script Web App + POST JSON بـ base64 (بلا OAuth ولا CORS مُسبق — طلب نصي بسيط): `doPost` يقرأ `{name, mime, folder, data: base64}` → `Utilities.base64Decode` → `DriveApp.createFile` في مجلد «RemoteBridge»، و`doGet` يرد ping `{ok:true}` لاختبار الرابط.
+- **الرفع اليدوي**: زر ▲ لكل صف (خزنة/تسجيلات) + «▲ رفع الجديد إلى Drive» في ترويسة الخزنة (`rbVaultBulkUploadAll` حتى 30 عنصراً) + ▲ داخل المشغّل ونافذة اللقطات.
+- **الإعدادات (W4)**: بطاقة كاملة في الإعدادات: رابط السكربت + مجلد الوجهة + فاصل المزامنة (دقائق) + تفعيل المزامنة التلقائية وأنواعها + «⏩ مزامنة الآن» + سجل آخر العمليات + 📖 دليل إعداد inline (خطوات + كود السكربت جاهز مع زر نسخ — `openDriveGuide`).
+- **المزامنة التلقائية**: `rbDriveSyncTick` يرصد `/api/blob/list` للأنواع المفعّلة، يستبعد المرفوع سابقاً، يسحب كل عنصر **مفكوك التشفير** عبر `vault_open` (يتطلب الربط الحي) ويرفعه، ثم يسجّل العلامة. المؤقت يُعاد جدولته عند التغيير `rbDriveRestartSync()`.
+- **مفاتيح التخزين**: `rb_drive_cfg_v1` / `rb_drive_log_v1` / `rb_drive_seen_v1`.
 
-### ⑤ مقياس مستوى الصوت الحي (الميكروفون)
-- `attachLiveAudioMeter()` في فرع audio بدل ontrack — `AnalyserNode.fftSize=512` على `remoteMediaStream` **بلا وصل وجهة** (بلا صدى)، لوحة ثابتة أسفل الطراق 196px ترسم 62 مستطيلاً بألوان الرمال (رمادي صامت / تروقازي مُصوات) مع زر ✕ يقطع الحلقة (rAF) ويغلو AudioContext.
-- فإذا استياب أقطاب، لا مسعايات إحالة أو نصوص زائدة.
-
-### ⑥ Google Drive — رفع يدوي مفرد/متعدد + مزامنة تلقائية
-- الطريقة المختارة: **Apps Script Web App** (بلا OAuth ولا مفاتيح داخل كود) — POST JSON `{name,mime,folder,data:base64}` مع نص `/relative` بسيط بلا preflight، وربط اختبار ping `doGet`، مجلد تنقبض (`RemoteBridge` افتراضياً) تنشأ تلقائياً في Drive باستخدام `DriveApp`.
-- المفاريد المحفوظة: `rb_drive_cfg_v1` (الإعداد) • `rb_drive_log_v1` (أحدث 40 عملية) • `rb_drive_seen_v1` (مُظة 2000) • `rb_drive_lastsync_v1` (الوقت الوحي).
-- نقل JSON→btoa بمسمار 32768 بتعبئة chunk مع بناء رؤساء إصلاح (ببعض `(4MB+)*400 upload slice`).
-- تفسير ايجابي: ربط السكربت مفتاح مرة (ادخل الرابط → اختبار) وبطاقة HTML كاملة في الإعدادات: مجلد الوجهة، فاصل المزامنة (دقائق)، خيارات **kind** مفعلة افتراضياً (تسجيلات مكالمات/شاشة/لقطات/مواقع JSON)، مع تحقق زر ✅ وسجلت آخر 4 عمليات.
-- تنفيز الخلف: `rbDriveSyncTick(manual)` يسأل `/api/blob/list` لكل kind **أو `/api/blob/shots+location`** الجدد التي لم تُرفع، يعرجها س([[pullHostContent]]) ثم يربعها بعد كل انجاز، بينما `rbVaultBulkUploadAll` علم الكذب الد soluciones.
-- `openDriveGuide()` نافذة توثيق (mountWindowOverlay) تعرض كود Apps Script كامل ونُسخها مباشرة 📋 ثم خطا التثبيت (Deploy → Web app → Execute as: Me → Access: Anyone).
-
-### ⑦ نقاط التدخل الأزرار (كل قائمة الحفظ والنداء المطلوبة)
-| الموضع | ما مضاف | التنفيذ |
+## ⑤ مواضع الأزرار المضافة في B8
+| الموضع | المضاف | التنفيذ |
 |---|---|---|
-| صفوف الاستوديو (`fb-row` × openStudioPreview) | زر ▶ | `mpFromStudio(fi)` مع stopPropagation |
-| بطاقة استوديو (`studio-card`) | زر ▶ داخل متر (relative) | `mpFromStudio(fi)` |
-| صفوف متصفح مجلدات (`fb-row` × fbPreview) | زر ▶ | `mpFromFb(fi)` |
-| بطاقة مجلدات (`fb-card`) | زر ▶ | `mpFromFb(fi)` |
-| صفوف الخزنة Render | زر ▶️ + زر ▲ Drive | `mpFromVault` / `driveUploadVaultBlob` |
-| ترويسة لوحة الخزنة | زر **▲ رفع الجديد إلى Drive** | `rbVaultBulkUploadAll` (مقيد 30 عنصر) |
-| بطاقات شبكة تسجيلات | زر ▶️ تشغيل + ▲ Drive | `mpFromRec` / `mpDriveUploadRec` |
-| شريط كاميرا الثانوي | زر 📸 لقطة معاينة | `openLiveScreenshot` (بصورة من مسار `remote-video`) |
-| إعدادات (قبل زر الحفظ) | بطاقة Drive الكاملة | `rbDriveSettingsCardHtml` (اختيار/مزامنة/فاصل/مجلد/سجل/دليل) |
+| صفوف وبطاقات الاستوديو | ▶️ | `mpFromStudio(fi)` |
+| صفوف وبطاقات متصفح المجلدات | ▶️ | `mpFromFb(fi)` |
+| صفوف الخزنة على Render | ▶️ + ▲ Drive | `mpFromVault` / `driveUploadVaultBlob` |
+| ترويسة لوحة الخزنة | ▲ رفع الجديد إلى Drive | `rbVaultBulkUploadAll` (حد 30) |
+| بطاقات شبكة التسجيلات | ▶️ تشغيل + ▲ Drive | `mpFromRec` / `mpDriveUploadRec` |
+| شريط الكاميرا الثانوي | 📸 لقطة معاينة | `openLiveScreenshot` |
+| الإعدادات (قبل زر الحفظ) | بطاقة Drive الكاملة | `rbDriveSettingsCardHtml` |
 
-### ⑧ التحقق باتش B8
-| خطوة | نتيجة |
-|---|---|
-| أكبر `<script>` + `node --check` | **PASS** (كتلة ≈ 395,262 B) |
-| `go build ./...` | **GO_EXIT=0** |
-| `gradlew.bat :app:assembleDebug` | **GRADLE_EXIT=0** بعد إصلاح `kind__` (سجل gradle_b8.log — 2 محاولات) |
-| اختبار تفاعل متصفح حقيقي (localhost 8899) | **PASS**: بطاقة Drive تُرسم (`drv-url`/`drv-interval`/زر الاختبار) • `ensureMediaPlayerShell` (`mp-overlay`/`mp-controls` + نص Drive) • `openDriveGuide` (كود Apps Script مرئي) • بلا استثناءات غير مُتوقَّعة (التعنصر الوحيد خطا 404 أيقونة + RPC بلا خادم — أراك تُرى (سابقة)) |
-| فحص تكرار الأسماء | 22 دالة/مصطلح B8 كلها يخصّا مفرداً (لا تصادم) |
-
-### 📁 الملفات المعدّلة في B8
+## 📁 الملفات المعدّلة في B8
 | ملف | التغيير |
 |---|---|
-| `web-dashboard/index.html` | خطاف بدء/ختم + وحدة نقل قطعي + مشغل كامل + موجة + لقطات + متر + نواة Drive + بطاقة إعدادات + دليل + أزرار 9 مواضع |
 | `app/.../core/model/Models.kt` | `STORAGE_OPEN` + `VAULT_OPEN` |
-| `app/.../host/service/HostForegroundService.kt` | فرعان مبكران + `sendPathToController` + `sendVaultToController` + `MAX_CHUNK_FILE_BYTES` + إصلاح استقراء `kind__` |
-| `docs/webrtc-analysis-b8-ar.md` | وثيقة التحليل الجديدة (الأصل الرئيسي للمساس ولماذا مات البث) |
+| `app/.../host/service/HostForegroundService.kt` | فرعان مبكران + `sendPathToController` + `sendVaultToController` + `MAX_CHUNK_FILE_BYTES` + إصلاح القوالب `${kind}__${x}` |
+| `web-dashboard/index.html` | خُطاف الرؤوس + بروتوكول النقل + المشغّل + الموجة + اللقطات + مقياس الحي + Drive كامل + بطاقة الإعدادات + دليل + أزرار 9 مواضع |
+| `docs/phase-two-progress-ar.md` | هذا المقطع |
+| `docs/webrtc-analysis-b8-ar.md` | وثيقة التحليل الجديدة |
 
+## 🔬 سلسلة التحقق B8
+| الفحص | النتيجة |
+|---|---|
+| `gradlew.bat :app:assembleDebug` | **GRADLE_EXIT=0** (بعد إصلاح القوالب — سجل gradle_b8.log) |
+| أكبر `<script>` + `node --check` | **PASS** (كتلة 395,262 B — كانت 340,858 في B7) |
+| `go build ./...` | **GO_EXIT=0** |
+| فحص تفاعلي بالمتصفح (localhost:8899) | **ناجح بلا استثناءات**: بطاقة Drive تُرسم (drv-url/drv-interval/زر اختبار)، المشغّل يُبنى (`mp-overlay` + شريط تحكم يحوي Drive)، دليل الإعداد يعرض كود السكربت؛ الكونسول يحوي فقط أخطاء ما قبل B8 (بلا اتصال مضيف + 404 أيقونة) |
+| فحص تكرار المعرّفات | كل دوال B8 مفردة (لا تصادم) |
+| APK | تغيّر فعلياً (أوامر Kotlin الجديدة) — جاهز للتسليم |
+
+---
+
+## الدفعة B9 — الوصمة RB-2026-10-26-B9 (2026-10-26)
+**المشروع**: تنقّل جانبي في كل نوافذ الدردشة (أول/سابق/تالي/آخر) + طيّ الرسائل الطويلة (10 أسطر + «إظهار الكل») + إعادة تصميم واجهة البث الحي الاحترافية + إخراج APK بعد التأكد من السلامة.
+
+## ① شريط تنقّل جانبي موحّد لكل نوافذ الدردشة
+- الحقن في **`mountWindowOverlay`** — القشرة المشتركة لكل النوافذ (دردشة SMS، دردشة الإشعارات، الخزنة، دليل Drive) — فيغطّي كل النوافذ بتعديل واحد بلا تكرار ولا تعارض مع أي نافذة خاصة.
+- 4 أزرار بأسلوب تطبيقات الدردشة (chatbox): ⏮️ بداية الدردشة، ⬆️ انتقال للأعلى (صفحة ≈ 80% من الارتفاع)، ⬇️ انتقال للأسفل، ⏭️ نهاية الدردشة؛ شريط عائم (right: 3px) زجاجي (backdrop-blur) بحدود وظلال خفيفة + تكبير عند التحوم.
+- `rbChatRailScroll(dir)`: أهداف `scrollTo/scrollBy` سلسة (smooth) على `.chat-body` للنافذة الحية عبر `window.__rbChatRailTarget`؛ المتغيّر ينظّف عند الإغلاق في `closeWindowOverlay`.
+- النافذة تفتح مع `scrollTop = 0` من الحقن، ومعظم المستدعيات (مثل فتح دردشة SMS) تجري لاحقاً بمواضعها الخاصة (أسفل الدردشة لأحدث رسالة) وتغلب — السلوك المقصود.
+
+## ② طيّ الرسائل الطويلة: 10 أسطر + «إظهار الكل»
+- `rbChatRailClampLongMessages(body)`: تستهدف كل `.bubble` — تلف عُقد النص الخالصة في `<span>` مستقلة (قبل `div.bubble-time`) ثم تقيس الارتفاع الطبيعي. **ملاحظة تقنية**: عناصر السطر تعيد `scrollHeight = 0` في Chrome — القياس الفعلي من `getBoundingClientRect().height` (مستطيل اتحاد كل الأسطر)؛ العتبة = line-height × 10 + 10.
+- عند التجاوز: تصنيف `rb-msg-clamped` (`-webkit-line-clamp: 10` + قناع تلاشٍ سفلية) + زر «إظهار الكل ▾» أسفل السطور؛ `rbMsgToggle` يتبدل بين الإظهار («طَيّ ▴») والإخفاء.
+- فحص حي: فقاعة 14 سطراً → مقصوصة 214px (≈ 10 أسطر، عتبة 225px) ↔ مفتوحة 299px، والفقاعات القصيرة لا تتأثر ✓
+
+## ③ إعادة تصميم واجهة البث الحي — احترافية بلا تكرار أو تعارض
+- **الرأس**: عنوان مكثّف + شارة حالة نابضة (بث الشاشة/الكاميرا/الصوت نشط 🖥️/🎥/🎙️ أو متوقف 🛑).
+- **منصة العرض `.rb-stream-stage`**: الإطار يحيط بتوهج أخضر نابض عند النشاط (`rb-live-glow`)، وشريحة حالة **حقيقية** `rb-state-chip` تعرض `pc.connectionState` + حالة `dataChannel` (مزيفة FPS/دقة السابقة: حُذفت — كانت تُعرض «FPS: 30 • 1080p» دوماً).
+- زر 📸 عائم في المنصة عند وجود إطار حي (لقطة محلية `openLiveScreenshot`).
+- **بطاقات المصادر الثلاث** (`.rb-stream-card` أيقونة + عنوان + سطر وصف): 🖥️ بث الشاشة (يتطلب موافقة MediaProjection)، 📷/🤳 بث الكاميرا (العدسة الحالية)، 🎙️ ميكروفون فقط (مقياس حي B8) — النقر على بطاقة غير نشطة يبدأ البث، وعلى نشطة يوقفه؛ حالة «نشطة» بإطار أخضر متوهج.
+- **صف الخيارات والإيقاف**: زر العدسة (نفس دالة B5 `switchLiveCameraLens`) + زر مكبر الصوت (نفس أصناف B5 `speaker-btn-on/off` وSVG الأصلي بلا تغيير) + زر 🛑 إيقاف موحّد عند النشاط أو تلميح إرشادي عند السبات.
+- **الشريط الإضافي `renderStreamExtraToolbar`**: أُزيل زر بث الشاشة المكرر (انتقل إلى بطاقة المصادر — منع التكرار)، وبقي: 📷 لقطة شاشة (RPC فوري)، 📸 لقطة معاينة (محلية)، ⏺ التسجيلات الثلاثة، ⚙️ الجدولة، 📂 مجلدات الأرشيف، 🗺️ خريطة المواقع.
+- **نتيجة التحليل الكامل (مضيف + متحكم + ربط)**: كل دوال B5/B8 الأصلية سليمة وتُستدعى من مراسيها نفسها، واللا تكرار في أزرار العمليات المتطابقة، ولا مؤشرات بيانات مزيفة.
+
+## 🔬 التحقق B9
+| الفحص | النتيجة |
+|---|---|
+| أكبر `<script>` + `node --check` | **PASS** (كتلة 400,028 B — كانت 395,262 في B8) |
+| فحص تفاعلي بالمتصفح (localhost:8899) | **ناجح بلا استثناءات من B9**: الشريط 4 أزرار في كل نافذة ✓ الطي 214px ↔ 299px مع تبديل التسمية ✓ بلا طي للفقاعة القصيرة ✓ البطاقات 3 ✓ زر الشاشة مرة واحدة ✓ شريحة الحالة «P2P: غير مُنشأ • DC مغلق» ✓ حذف FPS المزيفة ✓ الجدولة/المجلدات/الخريطة موجودة ✓ |
+| الكونسول | لا أخطاء جديدة (فقط: بلا مضيف متصل + favicon 404 — ما قبل B9) |
+| Kotlin | بلا تعديل في B9 → إعادة إخراج APK النهائي بعد توثيق كل شيء |
+
+## 📁 الملفات المعدّلة في B9
+| ملف | التغيير |
+|---|---|
+| `web-dashboard/index.html` | CSS (شريط/طي/بطاقات/منصة) + دوال التنقّل والطي + حقن القشرة المشتركة + إعادة تصميم البث + إزالة الزر المكرر |
