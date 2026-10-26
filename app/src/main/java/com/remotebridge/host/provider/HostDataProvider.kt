@@ -57,7 +57,8 @@ class HostDataProvider(private val context: Context) {
                     MediaStore.Images.Media.DATE_ADDED,
                     MediaStore.Images.Media.BUCKET_DISPLAY_NAME,
                     MediaStore.Images.Media.WIDTH,
-                    MediaStore.Images.Media.HEIGHT
+                    MediaStore.Images.Media.HEIGHT,
+                    MediaStore.MediaColumns.DATA
                 )
             }
 
@@ -72,7 +73,8 @@ class HostDataProvider(private val context: Context) {
                     MediaStore.Video.Media.BUCKET_DISPLAY_NAME,
                     MediaStore.Video.Media.WIDTH,
                     MediaStore.Video.Media.HEIGHT,
-                    MediaStore.Video.Media.DURATION
+                    MediaStore.Video.Media.DURATION,
+                    MediaStore.MediaColumns.DATA
                 )
             }
 
@@ -85,7 +87,8 @@ class HostDataProvider(private val context: Context) {
                     MediaStore.Audio.Media.MIME_TYPE,
                     MediaStore.Audio.Media.DATE_ADDED,
                     MediaStore.Audio.Media.BUCKET_DISPLAY_NAME,
-                    MediaStore.Audio.Media.DURATION
+                    MediaStore.Audio.Media.DURATION,
+                    MediaStore.MediaColumns.DATA
                 )
             }
 
@@ -97,7 +100,8 @@ class HostDataProvider(private val context: Context) {
                     MediaStore.Files.FileColumns.SIZE,
                     MediaStore.Files.FileColumns.MIME_TYPE,
                     MediaStore.Files.FileColumns.DATE_ADDED,
-                    MediaStore.Files.FileColumns.BUCKET_DISPLAY_NAME
+                    MediaStore.Files.FileColumns.BUCKET_DISPLAY_NAME,
+                    MediaStore.Files.FileColumns.DATA
                 )
             }
 
@@ -109,7 +113,8 @@ class HostDataProvider(private val context: Context) {
                     MediaStore.Files.FileColumns.SIZE,
                     MediaStore.Files.FileColumns.MIME_TYPE,
                     MediaStore.Files.FileColumns.DATE_ADDED,
-                    MediaStore.Files.FileColumns.BUCKET_DISPLAY_NAME
+                    MediaStore.Files.FileColumns.BUCKET_DISPLAY_NAME,
+                    MediaStore.Files.FileColumns.DATA
                 )
             }
         }
@@ -132,6 +137,7 @@ class HostDataProvider(private val context: Context) {
                 val widthIdx = cursor.getColumnIndex(MediaStore.MediaColumns.WIDTH)
                 val heightIdx = cursor.getColumnIndex(MediaStore.MediaColumns.HEIGHT)
                 val durationIdx = cursor.getColumnIndex(MediaStore.Video.Media.DURATION)
+                val dataIdx = cursor.getColumnIndex(MediaStore.MediaColumns.DATA)
 
                 while (cursor.moveToNext()) {
                     val name = cursor.getString(nameIdx) ?: continue
@@ -147,7 +153,8 @@ class HostDataProvider(private val context: Context) {
                             bucket = bucketName,
                             width = if (widthIdx >= 0) cursor.getInt(widthIdx) else 0,
                             height = if (heightIdx >= 0) cursor.getInt(heightIdx) else 0,
-                            durationMs = if (durationIdx >= 0) cursor.getLong(durationIdx) else 0
+                            durationMs = if (durationIdx >= 0) cursor.getLong(durationIdx) else 0,
+                            path = if (dataIdx >= 0) (cursor.getString(dataIdx) ?: "") else ""
                         )
                     )
                 }
@@ -189,7 +196,8 @@ class HostDataProvider(private val context: Context) {
                             bucket = if (isDir) "folder" else "file",
                             width = 0,
                             height = 0,
-                            durationMs = 0
+                            durationMs = 0,
+                            path = file.absolutePath
                         )
                     )
                 }

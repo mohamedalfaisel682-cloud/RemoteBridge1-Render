@@ -32,6 +32,13 @@ class SettingsViewModel(
     val autoStartHost: StateFlow<Boolean> = repository.autoStartHost
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
+    // B11 — حالة تفعيل واجهة الويب + عنوان لوحة الويب المشتق
+    val webUiEnabled: StateFlow<Boolean> = repository.webUiEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val dashboardUrl: StateFlow<String> = repository.dashboardUrl
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
+
     /**
      * يحفظ الإعدادات تلقائياً في الخلفية.
      */
@@ -65,6 +72,15 @@ class SettingsViewModel(
     fun setAutoStartHost(autoStart: Boolean) {
         viewModelScope.launch {
             repository.setAutoStartHost(autoStart)
+        }
+    }
+
+    /**
+     * B11 — يبدّل حالة تفعيل واجهة الويب.
+     */
+    fun setWebUiEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            repository.setWebUiEnabled(enabled)
         }
     }
 

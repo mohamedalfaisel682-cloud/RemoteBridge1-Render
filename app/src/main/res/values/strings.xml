@@ -18,6 +18,18 @@
     <string name="device_name">اسم هذا الجهاز</string>
     <string name="device_name_hint">مثال: هاتف قديم</string>
     <string name="auto_start_host">تشغيل المضيف تلقائياً بعد الإقلاع</string>
+    <!-- B11 — واجهة الويب -->
+    <string name="back">رجوع</string>
+    <string name="web_dashboard_missing_url">تعذر اشتقاق عنوان لوحة الويب — تأكد من حفظ عنوان خادم الإشارات من الإعدادات</string>
+    <string name="webui_toggle_title">تفعيل واجهة الويب</string>
+    <string name="webui_toggle_desc">عند التفعيل تظهر أيقونتا فتح واجهة المتحكم (ضمن التطبيق ومتصفح) في الشاشة الرئيسية</string>
+    <string name="webui_embedded_title">واجهة المتحكم ضمن التطبيق</string>
+    <string name="webui_embedded_desc">فتح لوحة الويب المدمجة بكامل مساحة التطبيق</string>
+    <string name="webui_browser_title">واجهة المتحكم بواسطة متصفح</string>
+    <string name="webui_browser_desc">فتح لوحة الويب في متصفح الهاتف الذي تختاره</string>
+    <string name="webui_no_dashboard_url">تعذر تحديد عنوان لوحة الويب — احفظ عنوان خادم الإشارات أولاً</string>
+    <string name="webui_no_browser">لا يوجد متصفح مثبّت على هذا الهاتف</string>
+    <string name="webui_card_badge">واجهة الويب مفعّلة</string>
     <string name="save">حفظ</string>
     <string name="next">التالي</string>
     <string name="continue_button">متابعة</string>

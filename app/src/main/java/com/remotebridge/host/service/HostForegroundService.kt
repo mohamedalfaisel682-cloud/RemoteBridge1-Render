@@ -748,9 +748,14 @@ class HostForegroundService : LifecycleService() {
 
             Commands.STORAGE_EXPLORE -> {
                 val path = request.params?.get("path")?.jsonPrimitive?.contentOrNull
+                // B11 — Android 11+: بدون إذن «كل الملفات» تعود قوائم المجلدات فارغة؛
+                // يُعلَم المتحكم ليوجّه المستخدم لمنح الإذن بدلاً من فراغ غامض
+                val allFilesMissing = android.os.Build.VERSION.SDK_INT >= 30 &&
+                    !android.os.Environment.isExternalStorageManager()
                 buildJsonObject {
                     put("cmd", Commands.STORAGE_EXPLORE)
                     put("currentPath", path ?: "/")
+                    if (allFilesMissing) put("needsAllFilesAccess", true)
                     put(
                         "items",
                         json.encodeToJsonElement(

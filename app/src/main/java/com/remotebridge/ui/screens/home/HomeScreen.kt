@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Smartphone
+import androidx.compose.material.icons.filled.Web
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -70,7 +71,10 @@ import androidx.compose.ui.platform.LocalContext
 fun HomeScreen(
     onSettingsClick: () -> Unit,
     onHostClick: () -> Unit,
-    onControllerClick: () -> Unit
+    // 🔧 B11 — التحكم الأصلي أُزيل؛ مكان التجوّل لأيقونتَي واجهة الويب المشروطة
+    webUiEnabled: Boolean = false,
+    onWebUiEmbeddedClick: () -> Unit = {},
+    onWebUiBrowserClick: () -> Unit = {}
 ) {
     // B4 — تتبع الوضع النشط (المفتوح) لتأثير التوهج على البطاقة النشطة
     val context = LocalContext.current
@@ -216,22 +220,92 @@ fun HomeScreen(
                 }
             )
 
-            // بطاقة جهاز التحكم الأصلي (Native Controller)
-            ModernRoleCard(
-                icon = Icons.Default.Computer,
-                badgeText = "التحكم المباشر",
-                title = stringResource(R.string.mode_controller),
-                description = stringResource(R.string.mode_controller_desc),
-                accentColor = MaterialTheme.colorScheme.secondary,
-                containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.35f),
-                isActive = activeMode == AppModePrefs.MODE_CONTROLLER,
-                onClick = {
-                    AppModePrefs.set(context, AppModePrefs.MODE_CONTROLLER)
-                    onControllerClick()
+            // B11 — أيقونتا واجهة المتحكم الويب: تظهران فقط بعد تفعيل «تفعيل واجهة الويب» من الإعدادات
+            if (webUiEnabled) {
+                Text(
+                    text = "⚙️ " + stringResource(R.string.webui_card_badge),
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    WebUiQuickCard(
+                        icon = Icons.Default.Web,
+                        title = stringResource(R.string.webui_embedded_title),
+                        desc = stringResource(R.string.webui_embedded_desc),
+                        accentColor = MaterialTheme.colorScheme.primary,
+                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+                        onClick = onWebUiEmbeddedClick,
+                        modifier = Modifier.weight(1f)
+                    )
+                    WebUiQuickCard(
+                        icon = Icons.Default.Language,
+                        title = stringResource(R.string.webui_browser_title),
+                        desc = stringResource(R.string.webui_browser_desc),
+                        accentColor = MaterialTheme.colorScheme.secondary,
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.35f),
+                        onClick = onWebUiBrowserClick,
+                        modifier = Modifier.weight(1f)
+                    )
                 }
-            )
+            }
 
             Spacer(modifier = Modifier.height(8.dp))
+        }
+    }
+}
+
+/**
+ * B11 — بطاقة أيقونة سريعة لفتح واجهة المتحكم (مدمجة أو متصفح).
+ */
+@Composable
+private fun WebUiQuickCard(
+    icon: ImageVector,
+    title: String,
+    desc: String,
+    accentColor: Color,
+    containerColor: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = containerColor),
+        modifier = modifier.clickable { onClick() }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+            horizontalAlignment = Alignment.Start
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = title,
+                tint = accentColor,
+                modifier = Modifier.size(28.dp)
+            )
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp
+                ),
+                maxLines = 2
+            )
+            Text(
+                text = desc,
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                maxLines = 3
+            )
         }
     }
 }

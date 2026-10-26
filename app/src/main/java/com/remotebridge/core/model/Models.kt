@@ -25,7 +25,9 @@ data class FileItem(
     val bucket: String,
     val width: Int = 0,
     val height: Int = 0,
-    val durationMs: Long = 0
+    val durationMs: Long = 0,
+    // 🔧 B11 — المسار المطلق للملف/المجلد (يسهّل سحب المحتوى عبر storage_open من المتحكم)
+    val path: String = ""
 )
 
 @Serializable

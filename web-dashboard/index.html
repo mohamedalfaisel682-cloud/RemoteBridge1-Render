@@ -3057,6 +3057,12 @@
 
             // 2) Items array responses (Contacts, SMS, Calls, Notifications, Files)
             if (data.items !== undefined && Array.isArray(data.items)) {
+                // B11 — أثناء تجميع أرشيف ZIP أو تنزيل المحدد كما هو (تجول خلفي)
+                // نمنع ردود الاستكشاف من استبدال عرض مستكشف الملفات المفتوح
+                if ((cmd === 'storage_explore' || cmd === 'file_list') && window.__rbExplorerWalk === true) {
+                    if (data.needsAllFilesAccess === true) window.__rbNeedsAllFiles = true;
+                    return;
+                }
                 // الاستوديو: مجلدات الوسائط / عناصر الوسائط من الجهاز المضيف
                 if (cmd === 'media_folders') {
                     // B5 — تُخزَّن قائمة المجلدات دائماً لمتصفح المجلدات حتى خارج تبويب الاستوديو
@@ -3127,6 +3133,11 @@
                 if (targetType === 'files') {
                     filesData = data.items;
                     if (data.currentPath) currentExplorerPath = data.currentPath;
+                    // B11 — إنذار صريح عند غياب إذن «كل الملفات» على المضيف (Android 11+)
+                    if (data.needsAllFilesAccess === true) {
+                        window.__rbNeedsAllFiles = true;
+                        showToast('⚠️ لم يُمنح تطبيق الهاتف المضيف إذن «كل الملفات» (All Files Access) — منحه من إعدادات الهاتف كي تفتح المجلدات وتُقرأ محتوياتها', 'warning');
+                    }
                 } else if (targetType === 'contacts') {
                     contactsData = data.items;
                 } else if (targetType === 'sms') {
@@ -4556,6 +4567,7 @@
         function enterFileFolder(idx) {
             const f = (window.__filesViewItems || [])[idx];
             if (!f) return;
+            showToast('📂 فتح مجلد: ' + (f.name || ''), 'info');
             navigateExplorerPath(currentExplorerPath + f.name + '/');
         }
 
@@ -4633,6 +4645,9 @@
                     <div class="flex items-center gap-2">
                         <button onclick="downloadSelectedFilesZip()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-3 py-1 rounded-lg font-bold transition flex items-center gap-1">
                             <span>📦 تنزيل المحدّد (ZIP)</span>
+                        </button>
+                        <button onclick="downloadSelectedAsIs()" class="bg-emerald-900/40 hover:bg-emerald-800/60 text-emerald-200 border border-emerald-600/50 text-xs px-3 py-1 rounded-lg font-bold transition flex items-center gap-1">
+                            <span>⬇️ تنزيل المحدّد (كما هو)</span>
                         </button>
                         <button onclick="clearFilesSelection()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs px-2.5 py-1 rounded-lg font-medium transition">
                             إلغاء التحديد
@@ -4716,12 +4731,310 @@
             applyFilesFilterAndSort();
         }
 
-        function downloadSelectedFilesZip() {
+        // ============================================================
+        //   Phase 2 — محرك التنزيل الحقيقي (B11):
+        //   ① أرشيف ZIP كامل للمحدد (ملفات + مجلدات ببنيتها)
+        //   ② تنزيل المحدد بالصيغة الحالية (كما هو): ملفات بأسمائها الأصلية،
+        //      ومجلدات تحفظ بنيتها بدون إعادة ضغط (STORE) في أرشيف باسمها
+        //   ③ في واجهة المتحكم المدمجة داخل تطبيق الهاتف: الحفظ عبر جسر
+        //      window.RBAndroid إلى مجلد التطبيق/التنزيلات، وإلا فمجلد المتصفح
+        // ============================================================
+        const rbWalkLimits = { maxDepth: 4, maxFiles: 300, maxBytes: 300 * 1048576 };
+        const rbWalkState = { active: false };
+        let rbSaveSeq = 0;
+        window.__rbSaves = {};
+
+        function rbDateStamp() {
+            const d = new Date();
+            const p = n => String(n).padStart(2, '0');
+            return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+        }
+
+        function rbBlobToBase64(blob) {
+            return new Promise((resolve, reject) => {
+                try {
+                    const r = new FileReader();
+                    r.onload = () => resolve(String(r.result).split(',')[1] || '');
+                    r.onerror = () => reject(new Error('فشل قراءة بيانات الملف'));
+                    r.readAsDataURL(blob);
+                } catch (e) { reject(e); }
+            });
+        }
+
+        function rbBlobBytes(blob) {
+            return blob.arrayBuffer().then(ab => new Uint8Array(ab));
+        }
+
+        // حفظ موحّد: جسر التطبيق المدمج أولاً ثم مجلد تنزيلات المتصفح
+        function saveBlobAs(blob, name, mime) {
+            try {
+                if (window.RBAndroid && typeof window.RBAndroid.saveFile === 'function') {
+                    return rbBlobToBase64(blob).then(b64 => new Promise((resolve, reject) => {
+                        const id = 's' + (++rbSaveSeq);
+                        const timer = setTimeout(() => { delete window.__rbSaves[id]; reject(new Error('انتهت مهلة الحفظ في مجلد التطبيق')); }, 120000);
+                        window.__rbSaves[id] = res => {
+                            clearTimeout(timer);
+                            delete window.__rbSaves[id];
+                            if (res && String(res).indexOf('err:') === 0) reject(new Error(String(res).substring(4)));
+                            else { showToast('💾 تم حفظ «' + name + '» في مجلد الهاتف: ' + (res || 'Download/RBstudioPRO'), 'success'); resolve(res); }
+                        };
+                        try { window.RBAndroid.saveFile(id, name, b64, mime || 'application/octet-stream'); }
+                        catch (e) { clearTimeout(timer); delete window.__rbSaves[id]; reject(e); }
+                    }));
+                }
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = name;
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(() => { try { URL.revokeObjectURL(a.href); a.remove(); } catch (_) {} }, 1500);
+                showToast('⬇️ بدأ تنزيل «' + name + '» إلى مجلد تنزيلات المتصفح', 'success');
+                return Promise.resolve();
+            } catch (e) {
+                return Promise.reject(e);
+            }
+        }
+
+        // CRC32 + كاتب أرشيف ZIP خالص (طريقة STORE بلا ضغط — ملفات كما هي حرفياً)
+        const rbCrcTable = (() => {
+            const t = new Uint32Array(256);
+            for (let i = 0; i < 256; i++) {
+                let c = i;
+                for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+                t[i] = c >>> 0;
+            }
+            return t;
+        })();
+
+        function rbCrc32(bytes) {
+            let c = 0xFFFFFFFF;
+            for (let i = 0; i < bytes.length; i++) c = rbCrcTable[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+            return (c ^ 0xFFFFFFFF) >>> 0;
+        }
+
+        function rbZipStore(entries) {
+            const enc = new TextEncoder();
+            const now = new Date();
+            const dosTime = ((now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1)) & 0xFFFF;
+            const dosDate = (((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate()) & 0xFFFF;
+            const u16 = v => [v & 255, (v >>> 8) & 255];
+            const u32 = v => [v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255];
+            const chunks = [];
+            const central = [];
+            let offset = 0;
+            for (const en of entries) {
+                const nameBytes = enc.encode(en.name);
+                const data = en.bytes || new Uint8Array(0);
+                const crc = rbCrc32(data);
+                const size = data.length;
+                const local = new Uint8Array([
+                    ...u32(0x04034b50), ...u16(20), ...u16(0x0800), ...u16(0),
+                    ...u16(dosTime), ...u16(dosDate),
+                    ...u32(crc), ...u32(size), ...u32(size),
+                    ...u16(nameBytes.length), ...u16(0)
+                ]);
+                chunks.push(local, nameBytes, data);
+                central.push({ nameBytes, crc, size, offset });
+                offset += local.length + nameBytes.length + size;
+            }
+            let cdirSize = 0;
+            const cchunks = [];
+            for (const c of central) {
+                const rec = new Uint8Array([
+                    ...u32(0x02014b50), ...u16(20), ...u16(20), ...u16(0x0800), ...u16(0),
+                    ...u16(dosTime), ...u16(dosDate),
+                    ...u32(c.crc), ...u32(c.size), ...u32(c.size),
+                    ...u16(c.nameBytes.length), ...u16(0), ...u16(0), ...u16(0), ...u16(0),
+                    ...u32(0), ...u32(c.offset)
+                ]);
+                cchunks.push(rec, c.nameBytes);
+                cdirSize += rec.length + c.nameBytes.length;
+            }
+            const eocd = new Uint8Array([
+                ...u32(0x06054b50), ...u16(0), ...u16(0),
+                ...u16(central.length), ...u16(central.length),
+                ...u32(cdirSize), ...u32(offset), ...u16(0)
+            ]);
+            return new Blob(chunks.concat(cchunks, [eocd]), { type: 'application/zip' });
+        }
+
+        // هدف التنزيل لعنصر ما: مسار مطلق (B11) أو معرف MediaStore للدلاء
+        function rbDownloadTarget(f) {
+            if (isDirectory(f)) return { kind: 'path', path: rbJoinPath(currentExplorerPath, f.name) };
+            if (f.path) return { kind: 'path', path: f.path };
+            if (f.bucket && f.bucket !== 'folder' && f.bucket !== 'file' && f.id !== undefined) {
+                return { kind: 'fileId', fileId: f.id, bucket: f.bucket, mime: f.mimeType };
+            }
+            return { kind: 'path', path: rbJoinPath(currentExplorerPath, f.name) };
+        }
+
+        function rbJoinPath(base, name) {
+            const b = (base || '/').endsWith('/') ? (base || '/') : (base || '/') + '/';
+            return b + (name || '');
+        }
+
+        async function rbPullTarget(target) {
+            if (target.kind === 'fileId') {
+                const res = await pullHostContent({ fileId: target.fileId, bucket: target.bucket || 'file', mime: target.mime });
+                return res;
+            }
+            const res = await pullHostContent({ path: target.path });
+            return res;
+        }
+
+        // تجميع محتوى مجلد كامل من الهاتف (استكشاف تكراري محدود عمقاً وعدداً وحجماً)
+        async function rbCollectFolder(absPath, relPrefix, budget) {
+            const out = [];
+            if (budget.depth >= rbWalkLimits.maxDepth) return out;
+            budget.depth++;
+            try {
+                const res = await sendRPCCommand('storage_explore', { path: absPath }, { timeout: 15000, retries: 1 });
+                const items = (res && res.items) || [];
+                for (const it of items) {
+                    if (budget.files >= rbWalkLimits.maxFiles || budget.bytes >= rbWalkLimits.maxBytes) break;
+                    try {
+                        if (isDirectory(it)) {
+                            const sub = await rbCollectFolder(rbJoinPath(absPath, it.name), relPrefix + it.name + '/', budget);
+                            sub.forEach(en => out.push(en));
+                        } else {
+                            const blob = await rbPullTarget(rbDownloadTarget(it));
+                            const sz = blob.size || 0;
+                            out.push({ name: relPrefix + it.name, blob: blob, size: sz });
+                            budget.files++;
+                            budget.bytes += sz;
+                        }
+                    } catch (e2) { console.warn('rbCollectFolder skip', it.name, e2); }
+                }
+            } catch (e) {
+                showToast('تعذر قراءة مجلد «' + (relPrefix || 'الجذر') + '» من الهاتف', 'warning');
+            } finally { budget.depth--; }
+            return out;
+        }
+
+        function rbSelectedItemsInView() {
+            const view = window.__filesViewItems || [];
+            return view.filter(f => selectedFileIds.has(f.id));
+        }
+
+        function rbUniqueName(name, usedSet) {
+            if (!usedSet.has(name)) { usedSet.add(name); return name; }
+            const dot = name.lastIndexOf('.');
+            const base = dot > 0 ? name.substring(0, dot) : name;
+            const ext = dot > 0 ? name.substring(dot) : '';
+            let n = 1;
+            while (usedSet.has(base + ' (' + n + ')' + ext)) n++;
+            const final = base + ' (' + n + ')' + ext;
+            usedSet.add(final);
+            return final;
+        }
+
+        async function downloadSelectedFilesZip() {
+            if (rbWalkState.active) { showToast('انتظر انتهاء عملية التنزيل الجارية أولاً...', 'info'); return; }
             if (selectedFileIds.size === 0) {
-                showToast("يرجى تحديد ملف أو عدة ملفات أولاً لتنزيل أرشيف ZIP", "warning");
+                showToast("يرجى تحديد ملف أو مجلد أو عدة عناصر أولاً لتنزيل أرشيف ZIP", "warning");
                 return;
             }
-            showToast(`جارٍ تجميع وتنسيق الأرشيف المضغوط (ZIP) لـ ${selectedFileIds.size} ملف...`, "success");
+            const picked = rbSelectedItemsInView();
+            if (picked.length === 0) {
+                showToast("العناصر المحددة ليست في العرض الحالي — أعد تحديدها من هذا المجلد", "warning");
+                return;
+            }
+            rbWalkState.active = true;
+            window.__rbExplorerWalk = true;
+            try {
+                showToast(`📦 جارٍ تجميع ${picked.length} عنصر من الهاتف لبناء الأرشيف...`, "success");
+                const entries = [];
+                for (const f of picked) {
+                    if (isDirectory(f)) {
+                        showToast(`📂 جارٍ قراءة مجلد «${f.name}»...`, "info");
+                        const budget = { depth: 0, files: 0, bytes: 0 };
+                        const filesOut = await rbCollectFolder(rbJoinPath(currentExplorerPath, f.name), '', budget);
+                        for (const en of filesOut) entries.push({ name: f.name + '/' + en.name, bytes: await rbBlobBytes(en.blob) });
+                        if (budget.files >= rbWalkLimits.maxFiles) showToast(`تم الوصول لحد ${rbWalkLimits.maxFiles} ملف لكل مجلد — أُدرج الجزء الملتقط فقط`, "warning");
+                    } else {
+                        const res = await rbPullTarget(rbDownloadTarget(f));
+                        entries.push({ name: f.name, bytes: await rbBlobBytes(res.blob) });
+                    }
+                }
+                if (entries.length === 0) {
+                    showToast('لم يُسحب أي ملف — تأكد من فتح الربط الحي ومنح المضيف إذن كل الملفات', "warning");
+                    return;
+                }
+                const zip = rbZipStore(entries);
+                await saveBlobAs(zip, 'RBstudioPRO_' + rbDateStamp() + '.zip', 'application/zip');
+                showToast(`📦 اكتمل الأرشيف: ${entries.length} ملف مبني داخل «${picked.length}» عنصر محدد`, "success");
+            } catch (e) {
+                showToast('فشل بناء أو تنزيل الأرشيف: ' + (e && e.message ? e.message : 'خطأ غير معروف'), "error");
+            } finally {
+                rbWalkState.active = false;
+                window.__rbExplorerWalk = false;
+            }
+        }
+
+        async function downloadSelectedAsIs() {
+            if (rbWalkState.active) { showToast('انتظر انتهاء عملية التنزيل الجارية أولاً...', 'info'); return; }
+            if (selectedFileIds.size === 0) {
+                showToast("يرجى تحديد ملف أو مجلد أو عدة عناصر أولاً للتنزيل بالصيغة الحالية", "warning");
+                return;
+            }
+            const picked = rbSelectedItemsInView();
+            if (picked.length === 0) {
+                showToast("العناصر المحددة ليست في العرض الحالي — أعد تحديدها من هذا المجلد", "warning");
+                return;
+            }
+            rbWalkState.active = true;
+            window.__rbExplorerWalk = true;
+            try {
+                showToast(`⬇️ جارٍ التنزيل بالصيغة الحالية لـ ${picked.length} عنصر...`, "success");
+                const used = new Set();
+                let okFiles = 0, okFolders = 0, fails = 0;
+                for (const f of picked) {
+                    try {
+                        if (isDirectory(f)) {
+                            showToast(`📂 جارٍ تجهيز مجلد «${f.name}» كما هو...`, "info");
+                            const budget = { depth: 0, files: 0, bytes: 0 };
+                            const filesOut = await rbCollectFolder(rbJoinPath(currentExplorerPath, f.name), '', budget);
+                            if (filesOut.length === 0) { fails++; showToast('مجلد «' + f.name + '» فارغ أو لا يُقرأ', "warning"); continue; }
+                            const entries = [];
+                            for (const en of filesOut) entries.push({ name: en.name, bytes: await rbBlobBytes(en.blob) });
+                            const zip = rbZipStore(entries);
+                            await saveBlobAs(zip, rbUniqueName(f.name + '.zip', used), 'application/zip');
+                            okFolders++;
+                            if (budget.files >= rbWalkLimits.maxFiles) showToast(`مجلد «${f.name}» كبير — أُدرج أول ${rbWalkLimits.maxFiles} ملف فقط`, "warning");
+                        } else {
+                            const target = rbDownloadTarget(f);
+                            const mime = (f.mimeType && f.mimeType !== 'inode/directory') ? f.mimeType : 'application/octet-stream';
+                            const goodName = rbUniqueName(f.name, used);
+                            if (target.kind === 'path' && !target.path || target.path === '/') throw new Error('المسار غير محدد');
+                            const res = await rbPullTarget(target);
+                            await saveBlobAs(res.blob, goodName, mime);
+                            okFiles++;
+                        }
+                    } catch (e2) {
+                        fails++;
+                        console.warn('as-is item failed', f && f.name, e2);
+                    }
+                }
+                showToast(`⬇️ انتهى التنزيل كما هو: ${okFiles} ملف + ${okFolders} مجلد (كأرشيف باسمه)${fails ? ' — تعذر ' + fails : ''}`, "success");
+            } finally {
+                rbWalkState.active = false;
+                window.__rbExplorerWalk = false;
+            }
+        }
+
+        // تنزيل ملف واحد كما هو من صف القائمة (يستبدل الإشعار الوهمي السابق)
+        async function downloadFileAsIs(idx) {
+            const f = (window.__filesViewItems || [])[idx];
+            if (!f) return;
+            if (isDirectory(f)) { enterFileFolder(idx); return; }
+            try {
+                showToast('جارٍ سحب «' + f.name + '» من الهاتف...', 'info');
+                const res = await rbPullTarget(rbDownloadTarget(f));
+                const mime = (f.mimeType && f.mimeType !== '*/*') ? f.mimeType : 'application/octet-stream';
+                await saveBlobAs(res.blob, f.name, mime);
+            } catch (e) {
+                showToast('فشل سحب «' + f.name + '»: ' + (e && e.message ? e.message : 'خطأ'), 'warning');
+            }
         }
 
         function applyFilesFilterAndSort() {
@@ -4747,7 +5060,7 @@
                     <div class="p-8 text-center text-xs text-slate-500 bg-slate-900/40 rounded-xl border border-slate-800">
                         <div class="text-3xl mb-2">📁</div>
                         <p class="font-bold text-slate-300 text-sm">المجلد فارغ أو لا يمكن قراءته</p>
-                        <p class="text-slate-500 mt-1">تأكد من منح إذن الملفات للهاتف المضيف واضغط "جلب البيانات 🔄"</p>
+                        <p class="text-slate-500 mt-1">تأكد من منح تطبيق الهاتف المضيف إذن «كل الملفات» (All Files Access) من إعدادات الهاتف ثم اضغط "جلب البيانات 🔄"</p>
                     </div>
                 `;
                 return;
@@ -4857,7 +5170,7 @@
                                 <button onclick="openFileListItem(${idx})" class="bg-slate-800 text-slate-200 border border-slate-700 px-2 py-1 rounded-lg text-[10px] font-bold">
                                     معاينة 🔍
                                 </button>
-                                <button onclick="showToast('جارٍ تحميل ' + __filesViewItems[${idx}].name + '...', 'info')" class="bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 border border-emerald-500/30 px-2.5 py-1 rounded-lg text-[11px] font-bold transition">
+                                <button onclick="downloadFileAsIs(${idx})" class="bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 border border-emerald-500/30 px-2.5 py-1 rounded-lg text-[11px] font-bold transition">
                                     تنزيل ⬇️
                                 </button>
                             ` : `

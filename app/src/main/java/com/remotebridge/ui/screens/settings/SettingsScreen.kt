@@ -410,6 +410,38 @@ fun SettingsScreen(
                 }
             }
 
+            // 🔧 B11 — قسم تفعيل واجهة الويب: يظهر بموجبها أيقونتا واجهة المتحكم في الرئيسية
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.webui_toggle_title),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = stringResource(R.string.webui_toggle_desc),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = viewModel.webUiEnabled.collectAsState().value,
+                        onCheckedChange = { viewModel.setWebUiEnabled(it) }
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(8.dp))
 
             // 🎨 B4 — قسم العرض والواجهة: نمط العرض داكن/فاتح/النظام

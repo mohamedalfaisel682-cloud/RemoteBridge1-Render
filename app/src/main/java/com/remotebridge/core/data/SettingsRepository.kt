@@ -28,6 +28,8 @@ class SettingsRepository(private val context: Context) {
         val DEVICE_NAME = stringPreferencesKey("device_name")
         val ROLE = stringPreferencesKey("role")
         val AUTO_START = booleanPreferencesKey("auto_start_host")
+        // B11 — تفعيل واجهة الويب في شاشة المضيف
+        val WEB_UI_ENABLED = booleanPreferencesKey("web_ui_enabled")
     }
 
     companion object {
@@ -56,6 +58,10 @@ class SettingsRepository(private val context: Context) {
     val autoStartHost: Flow<Boolean> = context.settingsDataStore.data.map {
         it[Keys.AUTO_START] ?: false
     }
+    // B11 — حالة تفعيل واجهة الويب (تظهر بموجبها أيقونتا واجهة المتحكم في الرئيسية)
+    val webUiEnabled: Flow<Boolean> = context.settingsDataStore.data.map {
+        it[Keys.WEB_UI_ENABLED] ?: false
+    }
 
     suspend fun setServerUrl(url: String) {
         context.settingsDataStore.edit { it[Keys.SERVER_URL] = url }
@@ -80,4 +86,37 @@ class SettingsRepository(private val context: Context) {
     suspend fun setAutoStartHost(autoStart: Boolean) {
         context.settingsDataStore.edit { it[Keys.AUTO_START] = autoStart }
     }
+
+    suspend fun setWebUiEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { it[Keys.WEB_UI_ENABLED] = enabled }
+    }
+
+    /**
+     * B11 — مشتق عنوان لوحة الويب (واجهة المتحكم) من عنوان خادم الإشارة:
+     * wss://host/ws → https://host/ ، ws://host:port/ws → http://host:port/
+     * يعيد "" إن تعذر الاشتقاق.
+     */
+    fun deriveDashboardUrl(serverUrl: String?): String {
+        val raw = (serverUrl ?: "").trim()
+        if (raw.isBlank()) return ""
+        return try {
+            val replaced = when {
+                raw.startsWith("wss://", ignoreCase = true) -> "https://" + raw.substring(6)
+                raw.startsWith("ws://", ignoreCase = true) -> "http://" + raw.substring(5)
+                else -> raw
+            }
+            val uri = java.net.URI(replaced)
+            val scheme = uri.scheme?.lowercase() ?: return ""
+            if (scheme != "http" && scheme != "https") return ""
+            val host = uri.host ?: return ""
+            val port = if (uri.port > 0) uri.port else -1
+            val base = if (port > 0) "$scheme://$host:$port" else "$scheme://$host"
+            base.trimEnd('/') + "/"
+        } catch (t: Throwable) {
+            ""
+        }
+    }
+
+    /** Flow جاهز لعنوان لوحة الويب المشتق (فارغ عند فشل الاشتقاق). */
+    val dashboardUrl: Flow<String> = serverUrl.map { deriveDashboardUrl(it) }
 }
