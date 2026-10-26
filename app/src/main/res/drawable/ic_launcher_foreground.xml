@@ -4,39 +4,39 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- هاتفان متوازيان -->
+    <!-- أيقونة RBstudioPRO: 4 أعمدة إشارة صاعدة (قوة شبكة كاملة) + قوسا واي فاي ونقطة (جودة اتصال) -->
+    <!-- منطقة الأمان المركزية للتكيف: 21..87 — كل الرسم داخلها -->
+
+    <!-- أعمدة الإشارة: صاعدة يداً بيد، السفلية ثلاث زمردي، السدية الأعلى مضيء -->
+    <path
+        android:fillColor="#34D399"
+        android:pathData="M35,80 L35,70 A4,4 0 0 1 39,66 A4,4 0 0 1 43,70 L43,80 Z" />
+    <path
+        android:fillColor="#34D399"
+        android:pathData="M45,80 L45,60 A4,4 0 0 1 49,56 A4,4 0 0 1 53,60 L53,80 Z" />
+    <path
+        android:fillColor="#34D399"
+        android:pathData="M55,80 L55,50 A4,4 0 0 1 59,46 A4,4 0 0 1 63,50 L63,80 Z" />
+    <path
+        android:fillColor="#6EE7B7"
+        android:pathData="M65,80 L65,40 A4,4 0 0 1 69,36 A4,4 0 0 1 73,40 L73,80 Z" />
+
+    <!-- قوسا الواي فاي (جودة اتصال) أعلى الأعمدة دون تقاطع -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#6EE7B7"
+        android:strokeWidth="3.2"
+        android:strokeLineCap="round"
+        android:pathData="M44,32 A10,10 0 0 1 64,32" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#A7F3D0"
+        android:strokeWidth="3.2"
+        android:strokeLineCap="round"
+        android:pathData="M48.5,32 A5.5,5.5 0 0 1 59.5,32" />
+
+    <!-- نقطة الاتصال: صلابة الربط -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M34,30
-            m0,0
-            h18
-            a4,4 0 0 1 4,4
-            v40
-            a4,4 0 0 1 -4,4
-            h-18
-            a4,4 0 0 1 -4,-4
-            v-40
-            a4,4 0 0 1 4,-4
-            z" />
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M62,30
-            m0,0
-            h12
-            a4,4 0 0 1 4,4
-            v40
-            a4,4 0 0 1 -4,4
-            h-12
-            a4,4 0 0 1 -4,-4
-            v-40
-            a4,4 0 0 1 4,-4
-            z" />
-    <!-- قنطرة بينهما -->
-    <path
-        android:fillColor="#8FD8C8"
-        android:pathData="M40,50
-            h28
-            v6
-            h-28
-            z" />
+        android:pathData="M54,28.8 A2.2,2.2 0 0 1 54,33.2 A2.2,2.2 0 0 1 54,28.8 Z" />
 </vector>
