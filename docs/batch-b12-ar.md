@@ -94,7 +94,8 @@
 - ✅ `go build` على main.go → نجح.
 - ✅ `gradlew :app:assembleDebug` → **BUILD SUCCESSFUL in 4m 44s** (39 مهماً: 13 منفذاً / 26 محفوظاً) — تحذيرات إهلاك فقط، لا أخطاء (سجل كامل: `docs/gradle_b12.log`).
 - ✅ `aapt2 dump badging` → `versionCode='4' versionName='1.3.0'` — APK واحد فقط: `RBstudioPRO_v1.3.0.apk` (حُذفت v1.2.0).
-- ✅ مزامنة المرايا M1/M2 → `TRACKED_FILES=N · NORMALIZED_DIFFS=0`.
+- ✅ الالتزام والدفع من الاستنساخ: دمج تلقائي مع دفعة بعيدة خارجية (`eb04b44` تحميل سطر-نهايات فقط عبر `rebase -X ignore-cr-at-eol`) ثم `eb04b44..4a19706 main -> main` — SHA الالتزام: **4a19706** (11 ملفاً: +1713 / −240).
+- ✅ مزامنة المرايا M1/M2 → `TRACKED_FILES=110 · COPIED=110 · NORMALIZED_DIFFS=0`.
 - ✅ لقطة التسليم (toastsafe) حُدثت بنفس الـAPK وسجل البناء.
 
 ## 6) بعْض الحدود والتحديات المعنوية
