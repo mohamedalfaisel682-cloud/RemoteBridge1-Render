@@ -154,6 +154,7 @@ func cacheSnapshot(deviceID, cmd string, data json.RawMessage) {
 	}
 	cacheData[deviceID][cmd] = &cacheEntry{Ts: time.Now().UnixMilli(), Data: data}
 	cacheDirty = true
+	scheduleCloudSync()
 }
 
 // 💾 تفريغ الكاش إلى القرص كل 5 دقائق إذا تحّر، وتحميله عند الإقلاع
@@ -194,6 +195,7 @@ func periodicCacheDump() {
 			cacheDirty = false
 			cacheMu.Unlock()
 			log.Printf("تم تفريغ كاش القوائم إلى القرص: %d مضيف", len(out))
+			syncCacheToCloud(false)
 		}
 	}
 }
@@ -212,6 +214,173 @@ func loadCacheFromDisk() {
 	cacheData = loaded
 	cacheMu.Unlock()
 	log.Printf("تم تحميل كاش القوائم من القرص: %d مضيف", len(loaded))
+}
+
+// ——— B12-r2: تخزين سحابي اختياري للكاش (Upstash Redis REST) ———
+// حدّ Render المجاني: القرص مؤقت والخدمة تسكون بعد 15 دقيقة خمولاً —
+// وعند الاستيقاظ/إعادة النشر تبدأ الحاوية بملف نظام ممسوح. الحل: عند تعريف
+// UPSTASH_REDIS_REST_URL وUPSTASH_REDIS_REST_TOKEN في لوحة Render
+// يُحفظ الكاش في Redis سحابي دائم (الخطة المجانية تكفي تطبيقاً واحداً)،
+// ويعاد دمجه عند كل إقلاع: المدخل الأحدث زمنياً هو الفائز. بدون المتغيرات
+// يعمل النظام كما كان (ذاكرة + قرص) دون أي أثر جانبي.
+const (
+	cacheCloudKey     = "rb_cache_v1"
+	cloudSyncDebounce = 15 * time.Second
+)
+
+var (
+	upstashRESTURL   = strings.TrimRight(strings.TrimSpace(os.Getenv("UPSTASH_REDIS_REST_URL")), "/")
+	upstashRESTToken = strings.TrimSpace(os.Getenv("UPSTASH_REDIS_REST_TOKEN"))
+	cloudSyncMu      sync.Mutex
+	cloudDirty       = true
+	cloudSyncTimer   *time.Timer
+)
+
+func upstashEnabled() bool {
+	return upstashRESTURL != "" && upstashRESTToken != ""
+}
+
+func upstashSet(key, value string) error {
+	req, err := http.NewRequest(http.MethodPost, upstashRESTURL+"/set/"+key, strings.NewReader(value))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+upstashRESTToken)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("status %d", resp.StatusCode)
+	}
+	return nil
+}
+
+func upstashGet(key string) (string, error) {
+	req, err := http.NewRequest(http.MethodGet, upstashRESTURL+"/get/"+key, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+upstashRESTToken)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	b, err := io.ReadAll(io.LimitReader(resp.Body, 64<<20))
+	if err != nil {
+		return "", err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("status %d", resp.StatusCode)
+	}
+	var parsed struct {
+		Result *string `json:"result"`
+	}
+	if err := json.Unmarshal(b, &parsed); err != nil {
+		return "", err
+	}
+	if parsed.Result == nil {
+		return "", nil
+	}
+	return *parsed.Result, nil
+}
+
+// scheduleCloudSync يجمع دفعة التغييرات المتتالية ويرفعها دفعة واحدة بعد 15 ثانية هدوء
+func scheduleCloudSync() {
+	if !upstashEnabled() {
+		return
+	}
+	cloudSyncMu.Lock()
+	cloudDirty = true
+	if cloudSyncTimer != nil {
+		cloudSyncTimer.Stop()
+	}
+	cloudSyncTimer = time.AfterFunc(cloudSyncDebounce, func() { syncCacheToCloud(false) })
+	cloudSyncMu.Unlock()
+}
+
+// syncCacheToCloud يرفع لقطة الكاش كاملة (نفس بنية ملف القرص) إلى Redis السحابي
+func syncCacheToCloud(force bool) {
+	if !upstashEnabled() {
+		return
+	}
+	cloudSyncMu.Lock()
+	if !cloudDirty && !force {
+		cloudSyncMu.Unlock()
+		return
+	}
+	cloudDirty = false
+	cloudSyncMu.Unlock()
+
+	cacheMu.RLock()
+	out := make(map[string]map[string]*cacheEntry, len(cacheData))
+	for d, cmds := range cacheData {
+		cp := make(map[string]*cacheEntry, len(cmds))
+		for c, e := range cmds {
+			cp[c] = &cacheEntry{Ts: e.Ts, Data: json.RawMessage(append([]byte(nil), e.Data...))}
+		}
+		out[d] = cp
+	}
+	cacheMu.RUnlock()
+
+	b, err := json.Marshal(out)
+	if err != nil {
+		return
+	}
+	if err := upstashSet(cacheCloudKey, string(b)); err != nil {
+		log.Printf("تعذّر رفع كاش القوائم إلى التخزين السحابي (يعاد في الدورة القادمة): %v", err)
+		cloudSyncMu.Lock()
+		cloudDirty = true
+		cloudSyncMu.Unlock()
+		return
+	}
+	log.Printf("رُفع كاش القوائم إلى التخزين السحابي: %d مضيف (%d بايت)", len(out), len(b))
+}
+
+// loadCacheFromCloud يدمج النسخة السحابية مع الموجودة في الذاكرة (الأحدث زمنياً فائز)
+func loadCacheFromCloud() {
+	if !upstashEnabled() {
+		log.Printf("التخزين السحابي للكاش غير مهيأ (متغيرا UPSTASH غير معرفين) — الاعتماد على الذاكرة والقرص")
+		return
+	}
+	raw, err := upstashGet(cacheCloudKey)
+	if err != nil {
+		log.Printf("تعذّرت قراءة الكاش السحابي: %v", err)
+		return
+	}
+	if raw == "" {
+		log.Printf("لا نسخة سحابية للكاش بعد")
+		return
+	}
+	var loaded map[string]map[string]*cacheEntry
+	if err := json.Unmarshal([]byte(raw), &loaded); err != nil || loaded == nil {
+		log.Printf("نسخة الكاش السحابية غير سليمة")
+		return
+	}
+	merged := 0
+	cacheMu.Lock()
+	for d, cmds := range loaded {
+		if cacheData[d] == nil && len(cacheData) >= cacheMaxDevices {
+			continue
+		}
+		if cacheData[d] == nil {
+			cacheData[d] = make(map[string]*cacheEntry)
+		}
+		for c, e := range cmds {
+			if !isCachedCommand(c) {
+				continue
+			}
+			if cur, ok := cacheData[d][c]; !ok || cur.Ts < e.Ts {
+				cacheData[d][c] = e
+				merged++
+			}
+		}
+	}
+	cacheMu.Unlock()
+	log.Printf("استُعيدت %d مدخلات كاش من التخزين السحابي", merged)
 }
 
 func handleCacheAPI(w http.ResponseWriter, r *http.Request) {
@@ -373,7 +542,9 @@ func main() {
 
 	// B12 — البيانات المخزنة على الخادم: كاش القوائم التلقائي (تحميل من القرص + تفريغ دوري)
 	loadCacheFromDisk()
+	loadCacheFromCloud()
 	go periodicCacheDump()
+	go syncCacheToCloud(false) // رفع أولي بعد استرجاع النسخ لضمان وجود نسخة سحابية حتى دون تحديثات
 
 	addr := "0.0.0.0:" + port
 	log.Printf("RemoteBridge Signaling Server starting on %s", addr)
