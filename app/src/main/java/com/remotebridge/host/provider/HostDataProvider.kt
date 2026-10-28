@@ -783,6 +783,8 @@ class HostDataProvider(private val context: Context) {
                         REL_COL
                     )
                     durationCol?.let { projection.add(it) }
+                    // B12 — أساس مسار التخزين الخارجي لبناء المسارات المطلقة
+                    val extBase = try { android.os.Environment.getExternalStorageDirectory().absolutePath } catch (_: Throwable) { "" }
                     context.contentResolver.query(
                         uri,
                         projection.toTypedArray(),
@@ -802,6 +804,10 @@ class HostDataProvider(private val context: Context) {
                                 val rel = cursor.getString(relIdx)?.trim('/') ?: ""
                                 if (wanted.none { w -> rel.equals(w, ignoreCase = true) }) continue
                             } else continue
+                            val rel = if (relIdx >= 0) (cursor.getString(relIdx)?.trim('/') ?: "") else ""
+                            if (relIdx < 0) continue
+                            if (wanted.none { w -> rel.equals(w, ignoreCase = true) }) continue
+                            val absPath = if (rel.isEmpty()) "" else extBase + "/" + rel
                             val item = kotlinx.serialization.json.buildJsonObject {
                                 put("id", cursor.getLong(idIdx))
                                 put("kind", kindName)
@@ -810,6 +816,8 @@ class HostDataProvider(private val context: Context) {
                                 put("size", cursor.getLong(sizeIdx))
                                 put("mime", cursor.getString(mimeIdx) ?: "")
                                 if (durIdx >= 0) put("durationMs", cursor.getLong(durIdx))
+                                // B12 — المسار المطلق: يُستخدم لقفزة مباشرة إلى مجلد الملف في مستكشف الملفات
+                                put("path", absPath)
                             }
                             out.add(item)
                         }

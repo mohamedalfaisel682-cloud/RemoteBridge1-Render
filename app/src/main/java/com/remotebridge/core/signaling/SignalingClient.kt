@@ -185,6 +185,8 @@ class SignalingClient(
 
     private fun scheduleReconnect() {
         if (!running) return
+        // B12 — إلغاء أي إعادة اتصال مجدولة سابقة (منع مهام مزدوجة)
+        try { connectJob?.cancel() } catch (_: Throwable) {}
         // تراجع أُسّي: 2s, 4s, 8s, ... بحد أقصى 30s
         val delayMs = (2000L shl attempt.coerceAtMost(4)).coerceAtMost(30_000L)
         attempt++
@@ -192,6 +194,17 @@ class SignalingClient(
             delay(delayMs)
             doConnect()
         }
+    }
+
+    /**
+     * B12 — إعادة اتصال فورية تستدعى مع عودة الشبكة (NetworkCallback.onAvailable)
+     * لضمان بقاء الهاتف المضيف متصلاً بالخادم دائماً بعد إغلاق الواجهة.
+     */
+    fun forceReconnect() {
+        if (!running || socket != null) return
+        try { connectJob?.cancel() } catch (_: Throwable) {}
+        attempt = 0
+        scheduleReconnect()
     }
 
     private fun startHeartbeat() {

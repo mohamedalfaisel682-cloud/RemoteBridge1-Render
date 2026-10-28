@@ -290,9 +290,63 @@
             background: #e2e8f0;
         }
         body.ui-light img, body.ui-light video, body.ui-light canvas,
-        body.ui-light #rb-loc-map, body.ui-light .leaflet-tile-pane {
+        body.ui-light #rb-loc-map, body.ui-light .leaflet-tile-pane,
+        body.ui-light .rb-lightwin {
             filter: invert(1) hue-rotate(180deg) saturate(1.08);
         }
+
+        /* ===== B12 — تمايز لوني للنوافذ حسب مهمتها + ملاءمة الهاتف/الكمبيوتر ===== */
+        #rb-rec-schedule-modal > div:first-child, #rb-recordings-modal > div:first-child,
+        #rb-screenshot-modal > div:first-child, #rb-location-modal > div:first-child,
+        #rb-host-snapshot-modal > div:first-child, #rb-server-cache-modal > div:first-child {
+            border-top: 3px solid var(--rb-accent, #22c55e);
+        }
+        #rb-recordings-modal { --rb-accent: #a855f7; }   /* تسجيلات — بنفسجي */
+        #rb-rec-schedule-modal { --rb-accent: #7c3aed; }  /* جدولة التسجيل */
+        #rb-screenshot-modal { --rb-accent: #0ea5e9; }    /* لقطات — سماوي */
+        #rb-location-modal { --rb-accent: #14b8a6; }      /* موقع — أخضر مزرق */
+        #rb-host-snapshot-modal { --rb-accent: #f59e0b; } /* حالة المضيف — كهرماني */
+        #rb-server-cache-modal { --rb-accent: #0284c7; }  /* بيانات الخادم — أزرق */
+        #live-chat-window rb-chat, .chat-window { --rb-accent: #10b981; }
+        @media (max-width: 640px) {
+            #rb-stream-modals > div > div:first-child {
+                max-width: 98vw !important;
+                max-height: 94dvh !important;
+                overflow-y: auto;
+            }
+            .chat-window { max-width: 98vw !important; max-height: 92dvh !important; }
+        }
+
+        /* ===== B12 — نوافذ فاتحة حقيقية (البيانات المخزنة على الخادم) ===== */
+        .rb-lightwin { background: #f8fafc !important; color: #0f172a !important; border-radius: 16px; }
+        .rb-lightwin * { color: #0f172a; }
+        .rb-lightwin .lwh {
+            padding: 10px 14px; font-weight: 800; font-size: 14px;
+            border-bottom: 1px solid #e2e8f0; display: flex; align-items: center; gap: 8px;
+            border-radius: 16px 16px 0 0;
+        }
+        .rb-lightwin .lw-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px; }
+        .rb-lightwin .lw-chip {
+            padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 700;
+            cursor: pointer; border: 1px solid #cbd5e1; background: #fff; color: #0f172a;
+        }
+        .rb-lightwin .lw-chip.active { background: #0284c7; color: #fff; border-color: #0284c7; }
+        .rb-lightwin .lw-body { overflow-y: auto; padding: 10px 14px 14px; }
+        .rb-lightwin .lw-row {
+            background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+            padding: 8px 10px; margin-bottom: 6px;
+        }
+        .rb-lightwin .lw-title { font-weight: 800; font-size: 13px; color: #0f172a; word-break: break-word; }
+        .rb-lightwin .lw-sub { font-size: 11px; color: #475569; direction: ltr; text-align: left; word-break: break-all; }
+        .rb-lightwin .lw-link { color: #0e7490; text-decoration: underline; cursor: pointer; }
+        .rb-lightwin .lw-meta { font-size: 11px; color: #64748b; }
+        .rb-lightwin[data-cat="contacts"] .lwh { background: #f3e8ff; }        /* أسماء — بنفسجي فاتح */
+        .rb-lightwin[data-cat="calls"] .lwh { background: #e0efff; }           /* اتصالات — أزرق فاتح */
+        .rb-lightwin[data-cat="sms"] .lwh { background: #e7f8ee; }             /* رسائل — أخضر فاتح */
+        .rb-lightwin[data-cat="notifications"] .lwh { background: #fff4e0; }   /* إشعارات — كهرماني فاتح */
+        .rb-lightwin[data-cat="recordings"] .lwh { background: #fde8f3; }      /* تسجيلات — وردي فاتح */
+        .rb-lightwin[data-cat="media"] .lwh { background: #e8f4fd; }           /* استوديو — سماوي فاتح */
+        .rb-lightwin[data-cat="locations"] .lwh { background: #e6f7f5; }       /* مواقع — تنّ فاتح */
     </style>
     <style id="bridge-host-studio-css">
         /* ===== الإطار الوامض للجهاز المضيف المختار والمتصل (أخضر فاتح ↔ أبيض) ===== */
@@ -1292,15 +1346,27 @@
                 } catch (_) {}
             };
             // الأسماء أولاً (تعتمد عليها الرسائل والمكالمات) ثم بقية القوائم بتباعد بسيط
+            // B12 — تحميل لحظي كامل: الأسماء/الرسائل/الاتصالات/التسجيلات/الإشعارات/المواقع/الاستوديو
             run("contacts_list", null, 9000);
             setTimeout(() => run("sms_list", null, 9000), 900);
             setTimeout(() => run("calls_list", null, 9000), 1800);
-            setTimeout(() => run("notifications_list", null, 9000), 2700);
-            setTimeout(() => run("storage_explore", { path: currentExplorerPath }, 12000), 3600);
+            setTimeout(() => run("recordings_list", null, 10000), 2400);
+            setTimeout(() => run("notifications_list", null, 9000), 3100);
+            setTimeout(() => { try { sendRPCCommand("locations_get", { limit: 200 }, { timeout: 10000, retries: 1 }).catch(() => {}); } catch (_) {} }, 4000);
+            setTimeout(() => {
+                try {
+                    if (studioFolders.length) {
+                        sendRPCCommand("media_items", { folders: studioFolders.map(f => f.path || f.label), limit: 300 }, { timeout: 18000, retries: 1 }).catch(() => {});
+                    } else {
+                        sendRPCCommand("media_folders", null, { timeout: 9000, retries: 1 }).catch(() => {});
+                    }
+                } catch (_) {}
+            }, 4900);
+            setTimeout(() => run("storage_explore", { path: currentExplorerPath }, 12000), 5800);
             setTimeout(() => {
                 autoFetchInFlight = false;
                 autoFetchToastSuppressed = false;
-            }, 6500);
+            }, 9500);
         }
 
         let autoScanGloballyEnabled = true; // الفحص التلقائي مفعّل افتراضياً
@@ -2173,6 +2239,8 @@
         function mpFromStudio(fi) {
             const it = (window.__stFiltered || [])[fi];
             if (!it) return;
+            // B12 — بوابة 3 ميجابايت: الأكبر من الحد → خصائص فقط + قفزة مسار
+            if (rbMediaPropertyGate(it)) return;
             openMediaPlayer({ fileId: it.id, bucket: rbMpBucketOf(it.kind), kind: it.kind, name: it.name, mime: it.mime || rbMimeFromName(it.name || '') });
         }
         function mpFromVault(kind, name) {
@@ -2187,6 +2255,8 @@
         function mpFromRec(idx) {
             const it = mpRecItemAt(idx);
             if (!it) { showToast('العنصر غير متاح', 'warning'); return; }
+            // B12 — بوابة 3 ميجابايت للتسجيلات أيضاً
+            if (rbMediaPropertyGate(Object.assign({}, it, { dateMs: it.dateMs || 0, kindLabel: it.kind === 'image' ? '📷 لقطة' : (it.kind === 'audio' ? '🎙️ تسجيل صوت' : '🎥 تسجيل فيديو') }))) return;
             const vk = it.recKind === 'screenshot' ? 'screenshots' : it.recKind;
             openMediaPlayer({ vaultKind: vk, vaultName: it.name, name: it.name, mime: rbMimeFromName(it.name || '') });
         }
@@ -2688,6 +2758,8 @@
             dataChannel.onopen = () => {
                 showToast("قناة البيانات المباشرة P2P مفتوحة ومستعدة للتبادل", "success");
                 updateWebRTCDiagnosticUI();
+                // B12 — الجلب الشامل اللحظي فور انفتاح قناة البيانات
+                try { setTimeout(() => { if (!autoFetchInFlight) autoFetchAllLists(); }, 400); } catch (_) {}
             };
             dataChannel.onclose = () => {
                 updateWebRTCDiagnosticUI();
@@ -3098,7 +3170,14 @@
                 if (cmd === 'locations_get') {
                     locationPointsCache = data.items || [];
                     locationTrackingInfo = data.tracking === true;
+                    try {
+                        locIntervalCache = Number(data.intervalSec) || 0;
+                        if (typeof renderLocIntervalChips === 'function' && document.getElementById('rb-loc-interval-row')) {
+                            renderLocIntervalChips(locIntervalCache);
+                        }
+                    } catch (_) {}
                     if (typeof renderLocationFolderView === 'function') renderLocationFolderView();
+                    try { if (typeof drawLocationMapData === 'function') drawLocationMapData(); } catch (_) {}
                     return;
                 }
                 let targetType = activeTab;
@@ -3308,7 +3387,13 @@
                             acc: payload.acc, speed: payload.speed, provider: payload.provider
                         };
                         if (typeof p.lat === 'number' && typeof p.lng === 'number') {
-                            locationPointsCache = [p].concat(locationPointsCache).slice(0, 400);
+                            locationPointsCache = [p].concat(locationPointsCache).slice(0, 600);
+                            try {
+                                if (document.getElementById('rb-location-modal') && !document.getElementById('rb-location-modal').classList.contains('hidden')) {
+                                    if (typeof drawLocationMapData === 'function') drawLocationMapData();
+                                    if (rbLocTab === 'log' && typeof renderLocLogPane === 'function') renderLocLogPane();
+                                }
+                            } catch (_) {}
                             if (recordingsFolderCurrent === 'location' && typeof renderLocationFolderView === 'function') {
                                 renderLocationFolderView();
                             }
@@ -3638,6 +3723,8 @@
                 sendRPCCommand('notifications_list');
             } else if (tab === 'studio') {
                 renderStudioView();
+                // B12 — جلب لحظي تلقائي عند فتح الاستوديو (إذا اختيرت مجلدات سابقاً)
+                if (studioFolders.length && !studioLoading) setTimeout(() => { try { fetchStudioMedia(true); } catch (_) {} }, 150);
             } else if (tab === 'settings') {
                 panel.innerHTML = renderSettingsView();
             }
@@ -3650,7 +3737,8 @@
         // ==========================================================
         const STUDIO_FOLDER_KEY = "remotebridge_studio_folders_v1";
         let studioItems = [];
-        let studioFilter = "all";
+        // B12 — الصور هي الفلتر الافتراضي للاستوديو
+        let studioFilter = "image";
         // B5 — حجم عرض شبكة الاستوديو: s صغير / m متوسط / l كبير / details تفاصيل (محفوظ)
         let studioViewSize = (function () { try { return localStorage.getItem('rb_studio_view_v1') || 'm'; } catch (_) { return 'm'; } })();
         let studioLoading = false;
@@ -3679,7 +3767,7 @@
                 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-3 mb-3 border-b border-slate-800 gap-2">
                     <div>
                         <h2 class="text-lg md:text-xl font-bold text-emerald-300">🎬 الاستوديو — الوسائط الحديثة</h2>
-                        <p class="text-xs text-slate-400 mt-0.5">عرض مصغّر للصور والفيديو والصوت من المجلدات المختارة — الأحدث أولاً — لا يُجلب تلقائياً إلا بنقرة «جلب»</p>
+                        <p class="text-xs text-slate-400 mt-0.5">عرض مصغّر للصور والفيديو والصوت من المجلدات المختارة — الأحدث أولاً — يُجلب لحظياً عند فتح التبويب، والصور هي العرض الافتراضي</p>
                     </div>
                     <div class="flex flex-wrap items-center gap-2">
                         <span class="studio-chip ${studioFilter === 'all' ? 'active' : ''}" onclick="applyStudioFilter('all')">الكل</span>
@@ -3786,9 +3874,9 @@
             return " • " + (s >= 60 ? Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0") : s + "ث");
         }
 
-        function fetchStudioMedia() {
+        function fetchStudioMedia(quietAuto) {
             if (!studioFolders || studioFolders.length === 0) {
-                openStudioFolderPicker();
+                if (!quietAuto) openStudioFolderPicker();
                 return;
             }
             studioLoading = true;
@@ -4267,7 +4355,9 @@
                         <button onclick="closeStudioPreview()" class="text-slate-400 hover:text-white px-2 text-sm">✕</button>
                     </div>
                     <div class="flex items-center justify-center bg-slate-950/60 rounded-xl overflow-hidden" style="min-height:200px">${body}</div>
-                    <p class="text-[10px] text-slate-400 mt-2 text-center"><span class="ts-en">${fmtEnTime(it.dateMs || Date.now())}</span> • ${kindTxt}</p>
+                    <div class="text-[10px] text-slate-400 mt-2 text-center"><span class="ts-en">${fmtEnTime(it.dateMs || Date.now())}</span> • ${kindTxt}${it.size ? ' • ' + rbFmtMB(Number(it.size)) : ''}${Number(it.durationMs || 0) > 0 ? ' • المدة: ' + Math.floor(Number(it.durationMs) / 60000) + ':' + String(Math.floor((Number(it.durationMs) % 60000) / 1000)).padStart(2, '0') : ''}</div>
+                    ${it.path ? `<div class="text-[10px] mt-1.5 text-center border-t border-slate-800 pt-1.5"><span class="text-sky-400 underline cursor-pointer" onclick="closeStudioPreview(); rbJumpToExplorerDir('${String(it.path).replace(/\\/g, '/').replace(/'/g, '')}')">📂 المسار: <span style="direction:ltr">${escHtml(String(it.path))}</span> — انقر للانتقال إلى مجلد الملف في مستكشف الملفات</span></div>` : ''}
+                    ${Number(it.size || 0) > rbMedia3MBLimit() ? '<div class="text-[9px] text-amber-400/90 mt-1 text-center">⚠️ الحجم أكبر من 3 ميجابايت — التشغيل والتنزيل من هنا معطّل، استخدم زر المسار أعلاه للمعاينة أو التحميل في مستكشف الملفات</div>' : ''}
                 </div>
             </div>`;
             if ((it.kind === "image" || it.kind === "video") && !it.thumb) {
@@ -4282,6 +4372,52 @@
         function closeStudioPreview() {
             const h = document.getElementById("studio-preview-host");
             if (h) h.remove();
+        }
+
+        // ——— B12: حد 3 ميجابايت — الملفات الأكبر تُعرض خصائصها فقط (مدة/وقت/حجم/مسار) ———
+        function rbMedia3MBLimit() {
+            return 3 * 1024 * 1024;
+        }
+
+        function rbMediaPropertyGate(it) {
+            try {
+                const n = Number((it || {}).size || 0);
+                if (!n || n <= rbMedia3MBLimit()) return false;
+                showMediaPropertiesWindow(Object.assign({}, it, {
+                    kindLabel: (it.kind || '') === 'video' ? '🎬 فيديو' : ((it.kind || '') === 'audio' ? '🎵 صوت' : (it.kind || '') === 'image' ? '🖼️ صورة' : '📄 ملف')
+                }));
+                return true;
+            } catch (_) { return false; }
+        }
+
+        function showMediaPropertiesWindow(it) {
+            try { const old = document.getElementById('rb-props-modal'); if (old) old.remove(); } catch (_) {}
+            const wrap = document.createElement('div');
+            wrap.id = 'rb-props-modal';
+            wrap.className = 'fixed inset-0 z-[86] flex items-center justify-center bg-black/80 p-4';
+            const size = Number(it.size || 0);
+            const dur = Number(it.durationMs || 0);
+            const pth = String(it.path || '');
+            const rows = [
+                ['النوع', it.kindLabel || '—'],
+                ['الاسم', String(it.name || '—')],
+                ['الحجم', rbFmtMB(size) + ' (' + size.toLocaleString('en-US') + ' بايت) — أكبر من حد 3MB للسحب المباشر'],
+                ['الوقت/التاريخ', recFmtDate(Number(it.dateMs || 0))],
+                ['المدة', dur > 0 ? Math.floor(dur / 60000) + ':' + String(Math.floor((dur % 60000) / 1000)).padStart(2, '0') + ' دقيقة' : 'غير متاحة'],
+                ['المسار', pth || '—']
+            ];
+            wrap.innerHTML = `<div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md p-4 shadow-2xl max-h-[88vh] overflow-y-auto">
+                <div class="flex items-center justify-between mb-3">
+                    <h3 class="text-sm font-bold text-amber-300">📄 خصائص الملف (أكبر من 3 ميجابايت)</h3>
+                    <button onclick="document.getElementById('rb-props-modal').remove()" class="text-slate-400 hover:text-white px-1">✕</button>
+                </div>
+                <div class="space-y-1.5 text-[12px] text-slate-300">
+                    ${rows.map(r => `<div class="flex gap-2"><span class="text-slate-500 w-[92px] shrink-0">${r[0]}:</span><span class="break-all" style="direction:${r[0] === 'المسار' ? 'ltr' : 'rtl'}">${escHtml(r[1])}</span></div>`).join('')}
+                </div>
+                ${pth ? `<button onclick="document.getElementById('rb-props-modal').remove(); rbJumpToExplorerDir('${pth.replace(/\\/g, '/').replace(/'/g, '')}')" class="w-full mt-3 bg-sky-700 hover:bg-sky-600 text-white text-xs font-bold py-2.5 rounded-xl transition">📂 فتح مجلد الملف في مستكشف الملفات</button>` : ''}
+            </div>`;
+            document.body.appendChild(wrap);
+            try { showToast('الملف أكبر من 3 ميجابايت — تُعرض الخصائص فقط، والمعاينة/التحميل عبر المستكشف', 'info'); } catch (_) {}
         }
 
         // تفعيل افتراضي عند تحميل الصفحة: الفحص التلقائي يعمل مرة واحدة عند البداية
@@ -4944,25 +5080,46 @@
             try {
                 showToast(`📦 جارٍ تجميع ${picked.length} عنصر من الهاتف لبناء الأرشيف...`, "success");
                 const entries = [];
+                let fails = 0;
                 for (const f of picked) {
-                    if (isDirectory(f)) {
-                        showToast(`📂 جارٍ قراءة مجلد «${f.name}»...`, "info");
-                        const budget = { depth: 0, files: 0, bytes: 0 };
-                        const filesOut = await rbCollectFolder(rbJoinPath(currentExplorerPath, f.name), '', budget);
-                        for (const en of filesOut) entries.push({ name: f.name + '/' + en.name, bytes: await rbBlobBytes(en.blob) });
-                        if (budget.files >= rbWalkLimits.maxFiles) showToast(`تم الوصول لحد ${rbWalkLimits.maxFiles} ملف لكل مجلد — أُدرج الجزء الملتقط فقط`, "warning");
-                    } else {
-                        const res = await rbPullTarget(rbDownloadTarget(f));
-                        entries.push({ name: f.name, bytes: await rbBlobBytes(res.blob) });
+                    try {
+                        if (isDirectory(f)) {
+                            showToast(`📂 جارٍ قراءة مجلد «${f.name}»...`, "info");
+                            const budget = { depth: 0, files: 0, bytes: 0 };
+                            const filesOut = await rbCollectFolder(rbJoinPath(currentExplorerPath, f.name), '', budget);
+                            for (const en of filesOut) {
+                                try { entries.push({ name: f.name + '/' + en.name, bytes: await rbBlobBytes(en.blob) }); }
+                                catch (ee) { fails++; console.warn('zip folder entry failed', en && en.name, ee); }
+                            }
+                            if (budget.files >= rbWalkLimits.maxFiles) showToast(`تم الوصول لحد ${rbWalkLimits.maxFiles} ملف لكل مجلد — أُدرج الجزء الملتقط فقط`, "warning");
+                        } else {
+                            try {
+                                const res = await rbPullTarget(rbDownloadTarget(f));
+                                entries.push({ name: f.name, bytes: await rbBlobBytes(res.blob) });
+                            } catch (e1) {
+                                // B12 — إعادة محاولة واحدة قبل تصنيف العنصر فاشلاً (لا يُلغى باقي الأرشيف)
+                                try {
+                                    await new Promise(r => setTimeout(r, 700));
+                                    const res2 = await rbPullTarget(rbDownloadTarget(f));
+                                    entries.push({ name: f.name, bytes: await rbBlobBytes(res2.blob) });
+                                } catch (e2) {
+                                    fails++;
+                                    console.warn('zip item failed', f && f.name, e2);
+                                }
+                            }
+                        }
+                    } catch (e0) {
+                        fails++;
+                        console.warn('zip pick failed', f && f.name, e0);
                     }
                 }
                 if (entries.length === 0) {
-                    showToast('لم يُسحب أي ملف — تأكد من فتح الربط الحي ومنح المضيف إذن كل الملفات', "warning");
+                    showToast('لم يُسحب أي ملف — تأكد من فتح الربط الحي ومنح المضيف إذن كل الملفات' + (fails ? ' (تعذر ' + fails + ' عنصر)' : ''), "warning");
                     return;
                 }
                 const zip = rbZipStore(entries);
                 await saveBlobAs(zip, 'RBstudioPRO_' + rbDateStamp() + '.zip', 'application/zip');
-                showToast(`📦 اكتمل الأرشيف: ${entries.length} ملف مبني داخل «${picked.length}» عنصر محدد`, "success");
+                showToast(`📦 اكتمل الأرشيف: ${entries.length} ملف مبني من «${picked.length}» عنصر` + (fails ? ' — تعذر ' + fails + ' (أُدرج الباقي)' : ''), "success");
             } catch (e) {
                 showToast('فشل بناء أو تنزيل الأرشيف: ' + (e && e.message ? e.message : 'خطأ غير معروف'), "error");
             } finally {
@@ -5005,8 +5162,16 @@
                             const target = rbDownloadTarget(f);
                             const mime = (f.mimeType && f.mimeType !== 'inode/directory') ? f.mimeType : 'application/octet-stream';
                             const goodName = rbUniqueName(f.name, used);
-                            if (target.kind === 'path' && !target.path || target.path === '/') throw new Error('المسار غير محدد');
-                            const res = await rbPullTarget(target);
+                            // B12 — إصلاح أسبقية (&&/||): كان الشرط يسمح بمرور مسار «/» ويمنع fileId
+                            if (target.kind === 'path' && (!target.path || target.path === '/')) throw new Error('المسار غير محدد');
+                            let res = null;
+                            try {
+                                res = await rbPullTarget(target);
+                            } catch (e1) {
+                                // B12 — إعادة محاولة واحدة قبل التسجيل فاشلاً
+                                await new Promise(r => setTimeout(r, 700));
+                                res = await rbPullTarget(target);
+                            }
                             await saveBlobAs(res.blob, goodName, mime);
                             okFiles++;
                         }
@@ -6909,7 +7074,8 @@
                 <div id="rb-recordings-modal" class="hidden fixed inset-0 z-[70] items-center justify-center bg-black/70 backdrop-blur-sm p-2 md:p-4"></div>
                 <div id="rb-screenshot-modal" class="hidden fixed inset-0 z-[85] items-center justify-center bg-black/80 p-4"></div>
                 <div id="rb-location-modal" class="hidden fixed inset-0 z-[80] items-center justify-center bg-black/80 p-2 md:p-4"></div>
-                <div id="rb-host-snapshot-modal" class="hidden fixed inset-0 z-[70] items-center justify-center bg-black/70 backdrop-blur-sm p-4"></div>`;
+                <div id="rb-host-snapshot-modal" class="hidden fixed inset-0 z-[70] items-center justify-center bg-black/70 backdrop-blur-sm p-4"></div>
+                <div id="rb-server-cache-modal" class="hidden fixed inset-0 z-[72] items-center justify-center bg-black/70 backdrop-blur-sm p-2 md:p-4"></div>`;
             document.body.appendChild(shell);
         }
 
@@ -7099,27 +7265,19 @@
             return locationPointsCache || [];
         }
 
-        // ——— B6: محرك بلاطات الخريطة الحقيقية (بمنظور خرائط جوجل) ———
-        // الأسبقية للمزيج الهجين (قمر صناعي + شوارع وطرق كما في خرائط جوجل)، وعند فشل التحميل
-        // يتعادل تلقائياً إلى مصدر مضمون (Esri للقمر الصناعي / OSM للشوارع) مع فلتر يدوي في النافذة.
+        // ——— B12: بلاطات خرائط جوجل الهجينة حصراً (قمر صناعي + شوارع) ———
+        // حُذفت بقية المصادر ومنطق التبديل التلقائي لأنه كان سبب "اختفاء" قمر جوجل:
+        // أخطاء بلاطات مؤقتة قليلة كانت تُسقط النافذة صامتة إلى Esri/OSM.
+        // بدلها: إعادة محاولة ذكية لكل بلاطة فاشلة (مرتين) + إصلاح مقاس عند الفتح.
         const LOC_TILE_STYLES = [
-            { id: 'hyb', label: 'قمر صناعي + شوارع (مزيج جوجل)', url: 'https://mt{s}.google.com/vt/lyrs=y&hl=ar&x={x}&y={y}&z={z}', sub: '0123', maxNative: 19, attribution: '© Google' },
-            { id: 'rds', label: 'طريق سير وشوارع', url: 'https://mt{s}.google.com/vt/lyrs=m&hl=ar&x={x}&y={y}&z={z}', sub: '0123', maxNative: 19, attribution: '© Google' },
-            { id: 'sat', label: 'قمر صناعي فقط (جوجل)', url: 'https://mt{s}.google.com/vt/lyrs=s&hl=ar&x={x}&y={y}&z={z}', sub: '0123', maxNative: 19, attribution: '© Google' },
-            { id: 'sat2', label: 'قمر صناعي بديل (Esri)', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', sub: 'a', maxNative: 19, attribution: '© Esri', refOverlay: true },
-            { id: 'osm', label: 'شوارع بديل (OSM)', url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', sub: 'abc', maxNative: 19, attribution: '© OpenStreetMap' }
+            { id: 'hyb', label: 'قمر صناعي + شوارع (مزيج جوجل)', url: 'https://mt{s}.google.com/vt/lyrs=y&hl=ar&x={x}&y={y}&z={z}', sub: '0123', maxNative: 19, attribution: '© Google' }
         ];
-        const LOC_FALLBACK_STYLE = { hyb: 'sat2', rds: 'osm', sat: 'sat2', sat2: 'osm', osm: 'rds' };
         let rbLocTiles = null;
 
-        function rbLocStyleId() {
-            try { const el = document.getElementById('rb-loc-style'); if (el && el.value) return el.value; } catch (_) {}
-            try { const saved = localStorage.getItem('rb_loc_style_v1'); if (saved && LOC_TILE_STYLES.some(s => s.id === saved)) return saved; } catch (_) {}
-            return 'hyb';
-        }
+        function rbLocStyleId() { return 'hyb'; }
 
         function rbLocCreateTiles(styleId) {
-            const st = LOC_TILE_STYLES.find(s => s.id === styleId) || LOC_TILE_STYLES[0];
+            const st = LOC_TILE_STYLES[0];
             const layer = window.L.tileLayer(st.url, {
                 maxZoom: 20,
                 maxNativeZoom: st.maxNative,
@@ -7127,61 +7285,58 @@
                 subdomains: st.sub
             });
             layer.__style = st.id;
-            // عند تجمّع أخطاء البلاطات (حجب/تعطل مصدر) → التبديل المرة الواحدة إلى مصدر بديل تلقائياً
-            let errs = 0;
-            layer.on('tileerror', () => {
-                errs++;
-                if (errs === 5 && rbLocTiles === layer) {
-                    try { layer.off('tileerror'); } catch (_) {}
-                    const fb = LOC_FALLBACK_STYLE[st.id] || 'osm';
-                    if (fb !== st.id) {
-                        try { const sel = document.getElementById('rb-loc-style'); if (sel) sel.value = fb; } catch (_) {}
-                        applyLocTileStyle(fb);
-                        showToast('تعذر تحميل بلاطات الخريطة الأصلية — تم التبديل تلقائياً إلى: ' + ((LOC_TILE_STYLES.find(s => s.id === fb) || {}).label || 'بديل'), 'info');
-                    }
-                }
+            layer.on('tileerror', (e) => {
+                try {
+                    const tile = e && e.tile;
+                    if (!tile || !tile.src) return;
+                    tile.__rbRetry = (tile.__rbRetry || 0) + 1;
+                    if (tile.__rbRetry > 2) return;
+                    setTimeout(() => {
+                        try {
+                            tile.src = tile.src.replace(/&?rbRetry=\d+/g, '') + '&rbRetry=' + Date.now();
+                        } catch (_) {}
+                    }, 1200 * tile.__rbRetry);
+                } catch (_) {}
             });
-            if (st.refOverlay) {
-                // طبقة أسماء/حدود فوق صور القمر الصناعي (للمصدر البديل Esri)
-                layer.__ref = window.L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
-                    maxZoom: 20, maxNativeZoom: st.maxNative, attribution: ''
-                });
-            }
             return layer;
         }
 
-        function applyLocTileStyle(styleId) {
+        function applyLocTileStyle() {
             if (!rbLocMap) return;
-            try { localStorage.setItem('rb_loc_style_v1', styleId); } catch (_) {}
             try {
-                if (rbLocTiles) {
-                    if (rbLocTiles.__ref) { try { rbLocMap.removeLayer(rbLocTiles.__ref); } catch (_) {} }
-                    rbLocMap.removeLayer(rbLocTiles);
-                }
+                if (rbLocTiles) rbLocMap.removeLayer(rbLocTiles);
             } catch (_) {}
-            rbLocTiles = rbLocCreateTiles(styleId);
+            rbLocTiles = rbLocCreateTiles('hyb');
             rbLocTiles.addTo(rbLocMap);
-            if (rbLocTiles.__ref) rbLocTiles.__ref.addTo(rbLocMap);
         }
 
         function syncLocTiles() {
-            const style = rbLocStyleId();
-            if (rbLocTiles && rbLocTiles.__style === style) return;
-            applyLocTileStyle(style);
+            if (!rbLocMap) return;
+            if (rbLocTiles && rbLocTiles.__style === 'hyb' && rbLocTiles._map === rbLocMap) return;
+            applyLocTileStyle();
         }
 
-        function syncLocStyleSelect() {
+        // B12 — إصلاح المقاس عند الفتح (سبب شائع لخريطة رمادية عند أول فتح)
+        function ensureLocMapSize() {
             try {
-                const sel = document.getElementById('rb-loc-style');
-                if (!sel || sel.__filled) { if (sel) sel.value = rbLocStyleId(); return; }
-                sel.innerHTML = LOC_TILE_STYLES.map(s => `<option value="${s.id}" ${s.id === rbLocStyleId() ? 'selected' : ''}>${s.label}</option>`).join('');
-                sel.__filled = true;
+                setTimeout(() => {
+                    try { if (rbLocMap && rbLocMap.invalidateSize) rbLocMap.invalidateSize(); } catch (_) {}
+                }, 90);
             } catch (_) {}
         }
 
-        function onLocStyleChange() {
-            try { applyLocTileStyle(rbLocStyleId()); } catch (_) {}
-            try { rbLocMap && rbLocMap.invalidateSize && rbLocMap.invalidateSize(); } catch (_) {}
+        let rbLocOpenTimer = null;
+        let rbLocTab = 'map'; // map | log | archive
+        let locIntervalCache = 0;
+        const LOC_INTERVALS = [
+            [10, '10 ثوانٍ'], [30, '30 ثانية'], [60, '1 دقيقة'], [600, '10 دقائق'],
+            [1800, '30 دقيقة'], [3600, '1 ساعة'], [21600, '6 ساعات'], [43200, '12 ساعة'],
+            [86400, 'كل يوم'], [604800, 'كل أسبوع'], [2592000, 'كل شهر']
+        ];
+
+        function locIntervalLabel(sec) {
+            const found = LOC_INTERVALS.find(x => x[0] === Number(sec));
+            return found ? found[1] : (Number(sec) + ' ث');
         }
 
         function openLocationMapView(snapshotData) {
@@ -7192,27 +7347,112 @@
                 <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-4xl shadow-2xl p-3">
                     <div class="flex items-center justify-between mb-2 gap-2">
                         <h3 class="text-sm font-bold text-teal-300">🗺️ مسار مواقع الهاتف المضيف</h3>
-                        <div class="flex items-center gap-1.5">
-                            <!-- B6 — منظور الخريطة: قمر صناعي + شوارع (مزيج خرائط جوجل) أو طريق/شوارع أو بديل -->
-                            <select id="rb-loc-style" onchange="onLocStyleChange()" class="bg-slate-800 border border-slate-600 rounded-xl px-2 py-1.5 text-[11px] text-slate-100">
-                            </select>
-                            <select id="rb-loc-window" onchange="redrawLocationMap()" class="bg-slate-800 border border-slate-600 rounded-xl px-2 py-1.5 text-[11px] text-slate-100">
-                                <option value="5">آخر 5 دقائق</option>
-                                <option value="10">آخر 10 دقائق</option>
-                                <option value="60" selected>آخر ساعة</option>
-                                <option value="120">آخر ساعتين</option>
-                                <option value="all">كل السجل</option>
-                            </select>
-                            <button onclick="refreshLocationPoints()" class="px-2.5 py-1.5 rounded-xl text-[11px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700"> ⟳ </button>
-                            <button onclick="closeLocationMapModal()" class="text-slate-400 hover:text-white text-lg px-2">✕</button>
-                        </div>
+                        <button onclick="closeLocationMapModal()" class="text-slate-400 hover:text-white text-lg px-2">✕</button>
                     </div>
-                    <div id="rb-loc-map" class="w-full rounded-xl border border-slate-700" style="height: 62vh; background: #0f172a;"></div>
-                    <div id="rb-loc-summary" class="text-[10px] text-slate-500 mt-1.5 font-mono"></div>
+                    <div class="flex flex-wrap items-center gap-1.5 mb-2">
+                        <div class="flex rounded-xl overflow-hidden border border-slate-700">
+                            <button id="rb-loc-tab-map" onclick="rbLocSwitchTab('map')" class="px-3 py-1.5 text-[11px] font-bold bg-teal-600 text-white">الخريطة</button>
+                            <button id="rb-loc-tab-log" onclick="rbLocSwitchTab('log')" class="px-3 py-1.5 text-[11px] font-bold bg-slate-800 text-slate-300">السجل</button>
+                            <button id="rb-loc-tab-arch" onclick="rbLocSwitchTab('archive')" class="px-3 py-1.5 text-[11px] font-bold bg-slate-800 text-slate-300">الأرشيف</button>
+                        </div>
+                        <select id="rb-loc-window" onchange="redrawLocationMap()" class="bg-slate-800 border border-slate-600 rounded-xl px-2 py-1.5 text-[11px] text-slate-100">
+                            <option value="5">آخر 5 دقائق</option>
+                            <option value="10">آخر 10 دقائق</option>
+                            <option value="60" selected>آخر ساعة</option>
+                            <option value="120">آخر ساعتين</option>
+                            <option value="all">كل السجل</option>
+                        </select>
+                        <button onclick="refreshLocationPoints()" class="px-2.5 py-1.5 rounded-xl text-[11px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700"> ⟳ </button>
+                    </div>
+                    <div id="rb-loc-interval-row" class="flex flex-wrap items-center gap-1 mb-2"></div>
+                    <div id="rb-loc-pane-map">
+                        <div id="rb-loc-map" class="w-full rounded-xl border border-slate-700" style="height: 54vh; min-height: 300px; background: #0f172a;"></div>
+                        <div id="rb-loc-summary" class="text-[10px] text-slate-500 mt-1.5 font-mono"></div>
+                    </div>
+                    <div id="rb-loc-pane-log" class="hidden" style="max-height: 60vh; overflow-y: auto;"></div>
+                    <div id="rb-loc-pane-arch" class="hidden" style="max-height: 60vh; overflow-y: auto;"></div>
                 </div>`;
             el.classList.replace('hidden', 'flex');
-            syncLocStyleSelect(); // B6 — تعبئة قائمة منظور الخريطة (قمر صناعي/شوارع/بديل)
+            rbLocJumpPending = true;      // الانتقال إلى آخر إحداثية عند أول رسم
+            renderLocIntervalChips(locIntervalCache);
+            rbLocSwitchTab('map');
             refreshLocationPoints();
+            loadLocArchives();
+            ensureLocMapSize();
+            // B12 — تحديث ذاتي لكل النوافذ كل 20 ثانية أثناء انفتاحها
+            try { if (rbLocOpenTimer) clearInterval(rbLocOpenTimer); } catch (_) {}
+            rbLocOpenTimer = setInterval(() => {
+                try {
+                    const m = document.getElementById('rb-location-modal');
+                    if (!m || m.classList.contains('hidden')) {
+                        if (rbLocOpenTimer) clearInterval(rbLocOpenTimer);
+                        rbLocOpenTimer = null;
+                        return;
+                    }
+                    refreshLocationPoints();
+                    if (rbLocTab === 'archive' && isP2pAlive()) loadLocArchives();
+                } catch (_) {}
+            }, 20000);
+        }
+
+        function onLocationsIntervalChange(sec) {
+            locIntervalCache = Number(sec);
+            renderLocIntervalChips(locIntervalCache);
+            const targetId = activeTargetDeviceId || appConfig.targetDeviceId;
+            if (!targetId || !isP2pAlive()) {
+                showToast('اختر مضيفاً متصلاً أولاً لتطبيق فاصل تسجيل النقاط', 'error');
+                return;
+            }
+            sendRPCCommand('locations_interval_set', { seconds: Number(sec) }, { timeout: 12000 }).then(resp => {
+                const used = (resp && resp.data && Number(resp.data.intervalSec)) || Number(sec);
+                locIntervalCache = used;
+                showToast('تم ضبط فاصل تسجيل نقاط الموقع: ' + locIntervalLabel(used), 'success');
+                renderLocIntervalChips(used);
+                refreshLocationPoints();
+            }).catch(() => showToast('تعذر تطبيق الفاصل — تأكد من اتصال المضيف', 'error'));
+        }
+
+        function renderLocIntervalChips(curSec) {
+            const row = document.getElementById('rb-loc-interval-row');
+            if (!row) return;
+            const head = '<span class="text-[10px] text-slate-400">⏱ فاصل تسجيل النقاط:</span>';
+            const active = '<span class="text-[10px] text-teal-300">' + (Number(curSec) > 0 ? 'المُفعّل: ' + locIntervalLabel(curSec) : 'غير مضبوط') + '</span>';
+            row.innerHTML = head + ' ' + active + ' ' + LOC_INTERVALS.map(([sec, label]) =>
+                `<button onclick="onLocationsIntervalChange(${sec})" class="px-2 py-1 rounded-lg text-[10px] font-bold border ${Number(locIntervalCache) === sec ? 'bg-teal-600 text-white border-teal-500' : 'bg-slate-800 text-slate-300 border-slate-600 hover:bg-slate-700'}">${label}</button>`
+            ).join('');
+        }
+
+        function rbLocSwitchTab(tab) {
+            rbLocTab = tab;
+            const panes = { map: 'rb-loc-pane-map', log: 'rb-loc-pane-log', archive: 'rb-loc-pane-arch' };
+            Object.keys(panes).forEach(k => {
+                const el = document.getElementById(panes[k]);
+                if (el) el.classList.toggle('hidden', k !== tab);
+            });
+            const btns = { map: 'rb-loc-tab-map', log: 'rb-loc-tab-log', archive: 'rb-loc-tab-arch' };
+            Object.keys(btns).forEach(k => {
+                const el = document.getElementById(btns[k]);
+                if (!el) return;
+                el.classList.toggle('bg-teal-600', k === tab);
+                el.classList.toggle('text-white', k === tab);
+                el.classList.toggle('bg-slate-800', k !== tab);
+                el.classList.toggle('text-slate-300', k !== tab);
+            });
+            if (tab === 'map') { ensureLocMapSize(); if (rbLocMap) drawLocationMapData(); }
+            if (tab === 'log') renderLocLogPane();
+            if (tab === 'archive') renderLocArchivePane();
+        }
+
+        function rbLocFocusPoint(lat, lng) {
+            rbLocSwitchTab('map');
+            setTimeout(() => {
+                try {
+                    if (rbLocMap && window.L) {
+                        rbLocMap.setView([lat, lng], 17);
+                        window.L.circleMarker([lat, lng], { radius: 9, color: '#f59e0b', weight: 2.4, fillOpacity: 0.35 }).addTo(rbLocMap);
+                    }
+                } catch (_) {}
+            }, 150);
         }
 
         function refreshLocationPoints() {
@@ -7220,7 +7460,7 @@
             const useRpc = targetId && isP2pAlive();
             if (useRpc) {
                 locationSnapshotBuffer = null;
-                sendRPCCommand('locations_get', { limit: 400 }, { timeout: 10000 }).catch(() => {
+                sendRPCCommand('locations_get', { limit: 600 }, { timeout: 10000 }).catch(() => {
                     loadServerSnapshotLocation();
                 });
             } else {
@@ -7229,15 +7469,29 @@
         }
 
         async function loadServerSnapshotLocation() {
-            // حل وسط: لقطة نقاط مخزنة على الخادم (تبقى تُعرض حتى عند انقطاع المضيف)
+            // حل وسط: لقطة نقاط مخزنة على الخادم، ثم كاش القوائم التلقائي —
+            // تظل النقاط معروضة حتى عند انقطاع المضيف عن الإنترنت
+            const hostId = activeTargetDeviceId || appConfig.targetDeviceId;
+            const base = serverStateApiBase();
             try {
-                const hostId = activeTargetDeviceId || appConfig.targetDeviceId;
-                const base = serverStateApiBase();
-                if (!hostId || !base) { redrawLocationMap(); return; }
-                const res = await fetch(base + '/api/state?deviceId=' + encodeURIComponent(hostId));
-                if (!res.ok) { redrawLocationMap(); return; }
-                const snap = await res.json();
-                if (snap && snap.data) locationSnapshotBuffer = snap.data;
+                if (hostId && base) {
+                    const res = await fetch(base + '/api/state?deviceId=' + encodeURIComponent(hostId));
+                    if (res.ok) {
+                        const snap = await res.json();
+                        if (snap && snap.data) locationSnapshotBuffer = snap.data;
+                    }
+                }
+            } catch (_) {}
+            try {
+                if (hostId && base && (!locationSnapshotBuffer || !(locationSnapshotBuffer.location || []).length)) {
+                    const res2 = await fetch(base + '/api/cache?deviceId=' + encodeURIComponent(hostId) + '&cmd=locations_get');
+                    if (res2.ok) {
+                        const j = await res2.json();
+                        if (j && j.data && Array.isArray(j.data.items) && j.data.items.length) {
+                            locationSnapshotBuffer = { location: j.data.items };
+                        }
+                    }
+                }
             } catch (_) {}
             redrawLocationMap();
         }
@@ -7251,7 +7505,7 @@
                     rbLocMap = window.L.map('rb-loc-map', { zoomControl: true }).setView([24.7, 46.6], 11);
                     rbLocMarkersLayer = window.L.layerGroup().addTo(rbLocMap);
                     // B6 — بلاطات خريطة حقيقية (جوجل: قمر صناعي + شوارع و/أو طريق سير) بدل OSM الفارغ، مع بدائل تلقائية
-                    applyLocTileStyle(rbLocStyleId());
+                    applyLocTileStyle();
                 } else {
                     syncLocTiles();
                     try { setTimeout(() => rbLocMap.invalidateSize(), 60); } catch (_) {}
@@ -7266,10 +7520,14 @@
             return String(s || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
         }
 
+        let rbLocJumpPending = false;
+        let rbLocArchiveViewId = '';
+
         function drawLocationMapData() {
             if (!rbLocMap) return;
             const now = Date.now();
-            const win = document.getElementById('rb-loc-window').value;
+            const winEl = document.getElementById('rb-loc-window');
+            const win = winEl ? winEl.value : '60';
             const sel = { '5': 5 * 60e3, '10': 10 * 60e3, '60': 60 * 60e3, '120': 120 * 60e3 }[win];
             const all = locationSourcePoints().filter(p => p && typeof p.lat === 'number' && typeof p.lng === 'number');
             const pts = sel ? all.filter(p => (now - (Number(p.ts) || 0)) <= sel) : all;
@@ -7277,19 +7535,26 @@
             const summary = document.getElementById('rb-loc-summary');
             if (!pts.length) {
                 if (summary) summary.innerText = 'لا نقاط ضمن النطاق الزمني المحدد — إجمالي السجل: ' + all.length + ' نقطة';
+                renderLocLogPane();
                 return;
             }
-            const latlngs = pts.map(p => [Number(p.lat), Number(p.lng)]).reverse(); // oldest → newest
+            const latlngs = pts.map(p => [Number(p.lat), Number(p.lng)]).reverse(); // الأقدم → الأحدث
             window.L.polyline(latlngs, { color: '#34d399', weight: 3.2, opacity: 0.85 }).addTo(rbLocMap);
+            const latestTs = Number(pts[0].ts) || now;   // النقاط قادمة: الأحدث أولاً
+            const hostOnline = isP2pAlive();
+            const staleMin = Math.max(0, Math.round((now - latestTs) / 60000));
+            // B12 — لون آخر نقطة: أخضر = مضيف متصل • برتقالي = غير متصل لكن النشاط مستمر
+            const lastColor = hostOnline ? '#22c55e' : '#f97316';
             pts.forEach((p, i) => {
-                const isFirst = i === pts.length - 1; // after reverse logic ends at latest — الأحدث هي التي على سلسلتها الأخيرة
-                const latest = i === latlngs.length - 1;
+                const latest = i === 0;
                 const marker = window.L.circleMarker([Number(p.lat), Number(p.lng)], {
-                    radius: latest ? 6 : 3.4,
-                    color: latest ? '#22d3ee' : '#a78bfa',
+                    radius: latest ? 7 : 3.4,
+                    color: latest ? lastColor : '#a78bfa',
+                    fillColor: latest ? lastColor : '#a78bfa',
                     weight: latest ? 3 : 1.6,
                     fillOpacity: 0.85
                 }).bindPopup(
+                    (latest ? (hostOnline ? '🟢 آخر موضع (متصل)' : '🟠 آخر موضع (غير متصل — النشاط مستمر)') + '<br>' : '') +
                     recFmtDate(Number(p.ts) || now) + '<br>' + Number(p.lat).toFixed(5) + ', ' + Number(p.lng).toFixed(5) +
                     (p.acc !== undefined ? '<br>دقة ±' + Number(p.acc).toFixed(0) + ' م' : '') +
                     (p.provider ? '<br>' + escapeHtml2(p.provider) : '')
@@ -7299,11 +7564,244 @@
             const first = latlngs[0], last = latlngs[latlngs.length - 1];
             window.L.marker(first, { title: 'بداية المسار' }).addTo(rbLocMap).bindPopup('🚩 بداية المسار');
             window.L.marker(last, { title: 'آخر نقطة' }).addTo(rbLocMap).bindPopup('🏁 آخر موضع');
-            try { rbLocMap.fitBounds(window.L.latLngBounds(latlngs).pad(0.25)); } catch (_) {}
-            if (summary) summary.innerText = 'عرض ' + latlngs.length + ' نقطة ضمن النطاق (إجمالي ' + all.length + ') — نبضة كل 3 دقائق';
+            try {
+                if (rbLocJumpPending) {
+                    rbLocJumpPending = false;
+                    rbLocMap.setView(last, 16); // الانتقال مباشرة إلى آخر إحداثية عند فتح النافذة
+                } else if (!rbLocMap.getBounds().contains(last)) {
+                    rbLocMap.panTo(last);
+                }
+            } catch (_) {
+                try { rbLocMap.fitBounds(window.L.latLngBounds(latlngs).pad(0.25)); } catch (_) {}
+            }
+            const intLabel = Number(locIntervalCache) > 0 ? locIntervalLabel(locIntervalCache) : locIntervalLabel(30);
+            if (summary) {
+                summary.innerText = 'عرض ' + latlngs.length + ' نقطة (إجمالي ' + all.length + ') • فاصل التسجيل: ' + intLabel +
+                    ' • ' + (hostOnline ? 'المضيف متصل 🟢' : 'المضيف غير متصل 🟠 (آخر نقطة منذ ' + staleMin + ' د)');
+            }
+            if (rbLocTab === 'log') renderLocLogPane();
+        }
+
+        // ——— B12: سجل النقاط (فرز حسب الوقت + تصفية زمنية) ———
+        function renderLocLogPane() {
+            const pane = document.getElementById('rb-loc-pane-log');
+            if (!pane) return;
+            const all = (locationSourcePoints() || []).slice().sort((a, b) => (Number(b.ts) || 0) - (Number(a.ts) || 0));
+            const rangeEl = document.getElementById('rb-loc-log-range');
+            const sel = rangeEl ? rangeEl.value : 'all';
+            let pts = all;
+            if (sel !== 'all') {
+                const ms = Number(sel) * 60e3;
+                pts = all.filter(p => (Date.now() - (Number(p.ts) || 0)) <= ms);
+            }
+            const opts = [['all', 'كل الأوقات'], ['10', 'آخر 10 دقائق'], ['60', 'آخر ساعة'], ['1440', 'آخر 24 ساعة'], ['10080', 'آخر أسبوع'], ['43200', 'آخر 30 يوماً']];
+            const rowsHtml = pts.map((p, i) => {
+                const lat = Number(p.lat), lng = Number(p.lng);
+                return `<tr class="text-slate-300 hover:bg-slate-800/60">
+                    <td class="px-2 py-1.5 text-slate-500">${pts.length - i}</td>
+                    <td class="px-2 py-1.5">${recFmtDate(Number(p.ts) || 0)}</td>
+                    <td class="px-2 py-1.5 font-mono" style="direction:ltr">${lat.toFixed(5)}, ${lng.toFixed(5)}</td>
+                    <td class="px-2 py-1.5">${p.acc !== undefined ? '±' + Number(p.acc).toFixed(0) + ' م' : '—'}</td>
+                    <td class="px-2 py-1.5"><button onclick="rbLocFocusPoint(${lat}, ${lng})" class="text-teal-400 hover:text-teal-300 underline">على الخريطة</button></td>
+                </tr>`;
+            }).join('');
+            pane.innerHTML = `
+                <div class="flex flex-wrap items-center gap-1.5 mb-2">
+                    <select id="rb-loc-log-range" onchange="renderLocLogPane()" class="bg-slate-800 border border-slate-600 rounded-xl px-2 py-1.5 text-[11px] text-slate-100">
+                        ${opts.map(([v, l]) => `<option value="${v}" ${v === sel ? 'selected' : ''}>${l}</option>`).join('')}
+                    </select>
+                    <span class="text-[11px] text-slate-400">${pts.length} نقطة (من ${all.length} في السجل) — مرتبة من الأحدث إلى الأقدم</span>
+                    <button onclick="clearLocationsLog()" class="px-2.5 py-1.5 rounded-xl text-[11px] font-bold bg-rose-900/70 hover:bg-rose-800 text-rose-200 border border-rose-700/60 mr-auto">🗑️ مسح السجل</button>
+                </div>
+                ${pts.length ? `
+                <div class="rounded-xl border border-slate-700 overflow-x-auto">
+                    <table class="w-full text-[10.5px]">
+                        <thead class="bg-slate-800 text-slate-400">
+                            <tr><th class="px-2 py-1.5 text-right">#</th><th class="px-2 py-1.5 text-right">التاريخ والوقت</th><th class="px-2 py-1.5 text-right">الإحداثيات</th><th class="px-2 py-1.5 text-right">الدقة</th><th class="px-2 py-1.5 text-right">عرض</th></tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-800">${rowsHtml}</tbody>
+                    </table>
+                </div>` : '<div class="text-[11px] text-slate-500">لا نقاط — انتظر أول فاصل تسجيل أو فعّل تسجيل نقاط من زر الفاصل أعلاه.</div>'}`;
+        }
+
+        function clearLocationsLog() {
+            if (!confirm('مسح جميع نقاط سجل المواقع الحالي؟ الأراشيف المحفوظة تبقى موجودة.')) return;
+            sendRPCCommand('locations_clear', null, { timeout: 10000 }).then(() => {
+                showToast('تم مسح سجل النقاط الحالي', 'success');
+                refreshLocationPoints();
+                renderLocLogPane();
+            }).catch(() => showToast('تعذر المسح — تأكد من اتصال المضيف', 'error'));
+        }
+
+        // ——— B12: أرشيف المسارات الدائم ———
+        let locArchivesCache = [];
+
+        function loadLocArchives() {
+            const targetId = activeTargetDeviceId || appConfig.targetDeviceId;
+            if (!targetId || !isP2pAlive()) { renderLocArchivePane(); return; }
+            sendRPCCommand('locations_archive_list', null, { timeout: 12000 }).then(resp => {
+                locArchivesCache = (resp && resp.data && resp.data.items) || [];
+                renderLocArchivePane();
+            }).catch(() => renderLocArchivePane());
+        }
+
+        function renderLocArchivePane() {
+            const pane = document.getElementById('rb-loc-pane-arch');
+            if (!pane) return;
+            const createBox = `
+                <div class="rounded-xl border border-teal-700/60 bg-slate-800/60 p-2.5 mb-3">
+                    <div class="text-[12px] font-bold text-teal-300 mb-1.5">💾 إنشاء أرشيف من السجل الحالي</div>
+                    <div class="flex flex-wrap items-center gap-1.5">
+                        <input id="rb-loc-arch-name" placeholder="اسم الأرشيف (اختياري — يُسمّى باليوم تلقائياً)" class="bg-slate-900 border border-slate-600 rounded-xl px-2 py-1.5 text-[11px] text-slate-100 flex-1 min-w-[180px]">
+                        <button onclick="saveLocArchive()" class="px-2.5 py-1.5 rounded-xl text-[11px] font-bold bg-teal-600 hover:bg-teal-500 text-white">حفظ الأرشيف</button>
+                    </div>
+                    <div class="text-[10px] text-slate-500 mt-1">يُحفظ السجل الحالي كاملاً مرتباً من نقطة البداية إلى النهاية، والأرشفة اليومية التلقائية تحفظ "يوم YYYY-MM-DD" عند تغيّر اليوم.</div>
+                </div>`;
+            if (rbLocArchiveViewId) { openLocArchive(rbLocArchiveViewId, true); return; }
+            if (!locArchivesCache.length) {
+                pane.innerHTML = createBox + '<div class="text-[11px] text-slate-500">لا أراشيف بعد — أنشئ واحداً من السجل الحالي، أو انتظر الأرشفة اليومية التلقائية.</div>';
+                return;
+            }
+            const rows = locArchivesCache.map(a => {
+                const id = String(a.id || '');
+                const isAuto = a.auto === true;
+                return `<div class="rounded-xl border border-slate-700 bg-slate-800/50 p-2.5 mb-2">
+                    <div class="flex items-center justify-between gap-2">
+                        <div class="flex items-center gap-2 min-w-0">
+                            <span class="text-[12px] font-bold text-slate-100 truncate">${escapeHtml2(String(a.name || '—'))}</span>
+                            ${isAuto ? '<span class="text-[9px] px-1.5 py-0.5 rounded bg-teal-900/60 text-teal-300 border border-teal-700 shrink-0">تلقائي</span>' : ''}
+                        </div>
+                        <div class="flex items-center gap-1 shrink-0">
+                            <button onclick="openLocArchive('${id}')" class="px-2 py-1 rounded-lg text-[10px] bg-teal-700 hover:bg-teal-600 text-white font-bold">عرض النقاط</button>
+                            <button onclick="renameLocArchive('${id}')" class="px-2 py-1 rounded-lg text-[10px] bg-slate-700 hover:bg-slate-600 text-slate-200">تعديل الاسم</button>
+                            <button onclick="deleteLocArchive('${id}')" class="px-2 py-1 rounded-lg text-[10px] bg-rose-700/80 hover:bg-rose-600 text-white">حذف</button>
+                        </div>
+                    </div>
+                    <div class="text-[10px] text-slate-500 mt-1">🗺️ ${Number(a.count || 0)} نقطة • من ${recFmtDate(Number(a.startTs || 0))} إلى ${recFmtDate(Number(a.endTs || 0))}</div>
+                </div>`;
+            }).join('');
+            pane.innerHTML = createBox + rows;
+        }
+
+        function saveLocArchive() {
+            const inp = document.getElementById('rb-loc-arch-name');
+            const name = (inp && inp.value.trim()) || '';
+            const targetId = activeTargetDeviceId || appConfig.targetDeviceId;
+            if (!targetId || !isP2pAlive()) { showToast('اختر مضيفاً متصلاً أولاً', 'error'); return; }
+            sendRPCCommand('locations_archive_save', { name: name }, { timeout: 15000 }).then(resp => {
+                if (resp && resp.data && resp.data.ok === false) {
+                    showToast(String((resp.data && resp.data.error) || 'لا توجد نقاط قابلة للأرشفة'), 'error');
+                } else {
+                    showToast('تم إنشاء الأرشيف بنجاح ✅', 'success');
+                }
+                loadLocArchives();
+            }).catch(() => showToast('تعذر إنشاء الأرشيف — تأكد من اتصال المضيف', 'error'));
+        }
+
+        function openLocArchive(id, keepView) {
+            rbLocArchiveViewId = keepView ? rbLocArchiveViewId : id;
+            if (!keepView) rbLocArchiveViewId = id;
+            const targetId = activeTargetDeviceId || appConfig.targetDeviceId;
+            if (!targetId) { renderLocArchivePane(); return; }
+            const pane = document.getElementById('rb-loc-pane-arch');
+            if (pane) pane.innerHTML = '<div class="text-[11px] text-slate-400">جاري قراءة نقاط الأرشيف…</div>';
+            sendRPCCommand('locations_archive_points', { id: id }, { timeout: 15000 }).then(resp => {
+                const pts = (resp && resp.data && resp.data.items) || [];
+                renderLocArchivePoints(pts);
+            }).catch(() => {
+                rbLocArchiveViewId = '';
+                renderLocArchivePane();
+                showToast('تعذر قراءة نقاط الأرشيف', 'error');
+            });
+        }
+
+        function renderLocArchivePoints(pts) {
+            const pane = document.getElementById('rb-loc-pane-arch');
+            if (!pane) return;
+            const sorted = pts.slice().sort((a, b) => (Number(a.ts) || 0) - (Number(b.ts) || 0)); // نقطة البداية → نهاية
+            const rowsHtml = sorted.map((p, i) => {
+                const lat = Number(p.lat), lng = Number(p.lng);
+                return `<tr class="text-slate-300 hover:bg-slate-800/60">
+                    <td class="px-2 py-1.5 font-bold text-teal-300">${i + 1}</td>
+                    <td class="px-2 py-1.5">${recFmtDate(Number(p.ts) || 0)}</td>
+                    <td class="px-2 py-1.5 font-mono" style="direction:ltr">${lat.toFixed(5)}, ${lng.toFixed(5)}</td>
+                    <td class="px-2 py-1.5"><button onclick="rbLocFocusPoint(${lat}, ${lng})" class="text-teal-400 hover:text-teal-300 underline">نقطة</button></td>
+                </tr>`;
+            }).join('');
+            pane.innerHTML = `
+                <div class="flex flex-wrap items-center gap-1.5 mb-2">
+                    <button onclick="backToLocArchives()" class="px-2.5 py-1.5 rounded-xl text-[11px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700">← رجوع للقائمة</button>
+                    <button onclick="drawLocArchiveTrack()" class="px-2.5 py-1.5 rounded-xl text-[11px] font-bold bg-sky-700 hover:bg-sky-600 text-white">🗺️ عرض المسار كاملاً على الخريطة</button>
+                    <span class="text-[11px] text-slate-400">${sorted.length} نقطة مرتبة 1 ← ${sorted.length} (البداية ← النهاية)</span>
+                </div>
+                ${sorted.length ? `
+                <div class="rounded-xl border border-slate-700 overflow-x-auto">
+                    <table class="w-full text-[10.5px]">
+                        <thead class="bg-slate-800 text-slate-400">
+                            <tr><th class="px-2 py-1.5 text-right">الرقم</th><th class="px-2 py-1.5 text-right">الوقت والتاريخ</th><th class="px-2 py-1.5 text-right">الإحداثيات</th><th class="px-2 py-1.5 text-right">عرض</th></tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-800">${rowsHtml}</tbody>
+                    </table>
+                </div>` : '<div class="text-[11px] text-slate-500">الأرشيف فارغ.</div>'}`;
+        }
+
+        function backToLocArchives() {
+            rbLocArchiveViewId = '';
+            renderLocArchivePane();
+        }
+
+        function drawLocArchiveTrack() {
+            const targetId = activeTargetDeviceId || appConfig.targetDeviceId;
+            if (!targetId || !rbLocArchiveViewId) { showToast('افتح أرشيفاً أولاً', 'error'); return; }
+            sendRPCCommand('locations_archive_points', { id: rbLocArchiveViewId }, { timeout: 15000 }).then(resp => {
+                const pts = (resp && resp.data && resp.data.items) || [];
+                const sorted = pts.slice().sort((a, b) => (Number(a.ts) || 0) - (Number(b.ts) || 0));
+                rbLocSwitchTab('map');
+                rbLocJumpPending = true;
+                setTimeout(() => {
+                    try {
+                        if (!rbLocMap || !window.L || !sorted.length) return;
+                        rbLocMarkersLayer.clearLayers();
+                        const latlngs = sorted.map(p => [Number(p.lat), Number(p.lng)]);
+                        if (latlngs.length > 1) {
+                            window.L.polyline(latlngs, { color: '#38bdf8', weight: 3, opacity: 0.9 }).addTo(rbLocMap);
+                        }
+                        sorted.forEach((p, i) => {
+                            window.L.circleMarker([Number(p.lat), Number(p.lng)], {
+                                radius: 5, color: '#22d3ee', weight: 2, fillOpacity: 0.85
+                            }).bindTooltip('#' + (i + 1) + ' • ' + recFmtDate(Number(p.ts) || 0), { permanent: sorted.length <= 35, direction: 'top' }).addTo(rbLocMap);
+                        });
+                        if (latlngs.length) rbLocMap.fitBounds(window.L.latLngBounds(latlngs).pad(0.25));
+                    } catch (_) {}
+                }, 160);
+            }).catch(() => showToast('تعذر قراءة نقاط الأرشيف', 'error'));
+        }
+
+        function renameLocArchive(id) {
+            const cur = ((locArchivesCache || []).find(a => String(a.id) === String(id)) || {}).name || '';
+            const name = prompt('اسم الأرشيف:', cur);
+            if (name === null) return;
+            const nn = String(name).trim();
+            if (!nn) { showToast('الاسم فارغ', 'error'); return; }
+            sendRPCCommand('locations_archive_rename', { id: id, name: nn }, { timeout: 12000 }).then(() => {
+                showToast('تم تعديل اسم الأرشيف', 'success');
+                loadLocArchives();
+            }).catch(() => showToast('تعذر تعديل الاسم', 'error'));
+        }
+
+        function deleteLocArchive(id) {
+            const cur = ((locArchivesCache || []).find(a => String(a.id) === String(id)) || {}).name || 'هذا الأرشيف';
+            if (!confirm('حذف "' + cur + '" نهائياً؟')) return;
+            sendRPCCommand('locations_archive_delete', { id: id }, { timeout: 12000 }).then(() => {
+                showToast('تم حذف الأرشيف', 'success');
+                if (rbLocArchiveViewId === String(id)) rbLocArchiveViewId = '';
+                loadLocArchives();
+            }).catch(() => showToast('تعذر حذف الأرشيف', 'error'));
         }
 
         function closeLocationMapModal() {
+            try { if (rbLocOpenTimer) { clearInterval(rbLocOpenTimer); rbLocOpenTimer = null; } } catch (_) {}
+            rbLocArchiveViewId = '';
             const el = document.getElementById('rb-location-modal');
             if (el) el.classList.replace('flex', 'hidden');
         }
@@ -7625,6 +8123,7 @@
                         ${snapEmpty ? `<p class="text-[10px] text-amber-300/80 mt-2">لا حالة مخزنة على الخادم بعد — يصل التحديث تلقائياً كل 3 دقائق أثناء عمل المضيف، وتبقى بيانات تصفح الملفات مخزنة في ذاكرة الخادم حتى بعد انقطاعه.</p>` : ''}
                         <div class="space-y-2 mt-3">
                             <button id="rb-sw-map" class="w-full bg-teal-700 hover:bg-teal-600 text-teal-50 text-xs font-bold py-2.5 rounded-xl transition">🗺️ مسار المواقع المخزن على الخادم</button>
+                            <button id="rb-sw-cache" class="w-full bg-sky-800/70 hover:bg-sky-700/80 text-sky-200 border border-sky-500/40 text-xs font-bold py-2.5 rounded-xl transition">🗄️ البيانات المخزنة على الخادم (قوائم محفوظة تلقائياً)</button>
                             <button id="rb-sw-blobs" class="w-full bg-purple-900/70 hover:bg-purple-800/90 text-purple-200 border border-purple-500/40 text-xs font-bold py-2.5 rounded-xl transition">🗂️ تصفح بيانات ذاكرة خادم Render (رُفعت أثناء اتصال المضيف وغير اتصال المتحكم)</button>
                             ${archCounts ? `
                             <div class="bg-emerald-950/40 border border-emerald-500/30 rounded-xl p-2.5">
@@ -7648,6 +8147,11 @@
                 if (blobsBtn) blobsBtn.addEventListener('click', () => {
                     closeHostStatusWindow();
                     setTimeout(() => openVaultBlobsPanel(deviceId).catch(() => {}), 60);
+                });
+                const cacheBtn = el.querySelector('#rb-sw-cache');
+                if (cacheBtn) cacheBtn.addEventListener('click', () => {
+                    closeHostStatusWindow();
+                    setTimeout(() => openServerCacheWindow(deviceId), 60);
                 });
                 const archBtn = el.querySelector('#rb-sw-arch');
                 if (archBtn) archBtn.addEventListener('click', () => {
@@ -7677,6 +8181,197 @@
         function closeHostSnapshotModal() {
             const el = document.getElementById('rb-host-snapshot-modal');
             if (el) el.classList.replace('flex', 'hidden');
+        }
+
+        // ——— B12: نافذة البيانات المخزنة على الخادم (كاش القوائم التلقائي) ———
+        let srvCacheData = null;
+        let srvCacheCat = 'contacts_list';
+
+        const SRV_CACHE_CATS = [
+            ['contacts_list', '👥 الأسماء', 'contacts'],
+            ['calls_list', '📞 المكالمات', 'calls'],
+            ['sms_list', '💬 الرسائل', 'sms'],
+            ['notifications_list', '🔔 الإشعارات', 'notifications'],
+            ['recordings_list', '🎙️ التسجيلات', 'recordings'],
+            ['media_items', '🖼️ استوديو الوسائط', 'media'],
+            ['locations_get', '📍 نقاط المواقع', 'locations']
+        ];
+
+        function openServerCacheWindow(deviceId) {
+            ensureStreamModalsShell();
+            const el = document.getElementById('rb-server-cache-modal');
+            el.innerHTML = `<div class="rb-lightwin w-full max-w-3xl shadow-2xl" style="max-height: 92vh; display:flex; flex-direction:column;">
+                <div class="lwh">🗄️ البيانات المخزنة على الخادم <span class="lw-meta" id="rb-srv-cache-dev"></span>
+                    <span class="ml-auto"></span>
+                    <button onclick="refreshServerCacheWindow()" class="lw-chip">⟳ تحديث</button>
+                    <button onclick="closeServerCacheWindow()" class="lw-chip">إغلاق ✕</button>
+                </div>
+                <div class="lw-chips" id="rb-srv-cache-chips"></div>
+                <div class="lw-body" id="rb-srv-cache-body" style="flex:1; min-height:200px;"><div class="lw-meta">جاري الجلب…</div></div>
+            </div>`;
+            el.__deviceId = deviceId;
+            el.classList.replace('hidden', 'flex');
+            refreshServerCacheWindow();
+        }
+
+        function closeServerCacheWindow() {
+            const el = document.getElementById('rb-server-cache-modal');
+            if (el) el.classList.replace('flex', 'hidden');
+        }
+
+        async function refreshServerCacheWindow() {
+            const el = document.getElementById('rb-server-cache-modal');
+            if (!el) return;
+            const deviceId = el.__deviceId || activeTargetDeviceId || appConfig.targetDeviceId;
+            const base = serverStateApiBase();
+            const body = document.getElementById('rb-srv-cache-body');
+            if (!base) { if (body) body.innerHTML = '<div class="lw-meta">لا يوجد عنوان خادم مُعد — ضبط خادم Render أولاً.</div>'; return; }
+            if (!deviceId) { if (body) body.innerHTML = '<div class="lw-meta">اختر مضيفاً من القائمة أولاً.</div>'; return; }
+            try {
+                let j = null;
+                try {
+                    const res = await fetch(base + '/api/cache?deviceId=' + encodeURIComponent(deviceId));
+                    if (res.ok) j = await res.json();
+                    else if (res.status === 404) j = { cache: {} };
+                } catch (_) {}
+                srvCacheData = (j && j.cache) ? j.cache : null;
+            } catch (_) { srvCacheData = null; }
+            renderServerCacheWindow();
+        }
+
+        function srvCacheCatName(cmd) {
+            const found = SRV_CACHE_CATS.find(c => c[0] === cmd) || [];
+            return found[1] || cmd;
+        }
+
+        function srvCatItems(cmd, data) {
+            if (!data) return [];
+            if (Array.isArray(data.items)) return data.items;
+            if (Array.isArray(data)) return data;
+            return [];
+        }
+
+        function srvCatCount(cmd, data) {
+            return srvCatItems(cmd, data).length;
+        }
+
+        function srvCatRow(item, cmd) {
+            const it = item || {};
+            if (cmd === 'contacts_list') {
+                const phones = (it.phoneNumbers || []).join(' • ');
+                const mails = (it.emails || []).filter(Boolean).join(' • ');
+                return `<div class="lw-row">
+                    <div class="lw-title">👥 ${escapeHtml2(it.displayName || '—')}</div>
+                    <div class="lw-sub">${escapeHtml2(phones || 'لا أرقام')}</div>
+                    ${mails ? `<div class="lw-sub" style="direction:ltr">${escapeHtml2(mails)}</div>` : ''}
+                </div>`;
+            }
+            if (cmd === 'calls_list') {
+                const t = Number(it.type || 0);
+                const tLabel = t === 1 ? '🟢 واردة' : (t === 2 ? '🔵 صادرة' : (t === 3 ? '🔴 لم يُرد عليها' : '📞 مكالمة'));
+                const dur = Number(it.durationSec || 0);
+                return `<div class="lw-row">
+                    <div class="lw-title">${tLabel} — <span style="direction:ltr">${escapeHtml2(String(it.number || ''))}</span></div>
+                    <div class="lw-meta">${recFmtDate(Number(it.date || 0))}${dur > 0 ? ' • مدة: ' + Math.floor(dur / 60) + ' د ' + (dur % 60) + ' ث' : ' • لم تُرد'}</div>
+                </div>`;
+            }
+            if (cmd === 'sms_list') {
+                const st = Number(it.type || 0);
+                const stLabel = st === 1 ? '📥 واردة' : (st === 2 ? '📤 صادرة' : '💬 رسالة');
+                return `<div class="lw-row">
+                    <div class="lw-title">${stLabel} ${escapeHtml2(it.contactName || it.address || '')}</div>
+                    <div class="lw-sub" style="direction:rtl">${escapeHtml2(String(it.body || '')).slice(0, 400)}</div>
+                    <div class="lw-meta">${recFmtDate(Number(it.date || 0))}</div>
+                </div>`;
+            }
+            if (cmd === 'notifications_list') {
+                return `<div class="lw-row">
+                    <div class="lw-title">🔔 ${escapeHtml2(it.title || '—')}</div>
+                    <div class="lw-sub" style="direction:rtl">${escapeHtml2(String(it.text || '')).slice(0, 300)}</div>
+                    <div class="lw-meta">${escapeHtml2(it.packageName || '')} • ${recFmtDate(Number(it.postTime || 0))}</div>
+                </div>`;
+            }
+            if (cmd === 'recordings_list') {
+                const k = String(it.kind || '');
+                const icon = k === 'video' ? '🎥' : (k === 'image' ? '📷' : '🎙️');
+                const pth = String(it.path || '');
+                return `<div class="lw-row">
+                    <div class="lw-title">${icon} ${escapeHtml2(it.name || '—')}</div>
+                    <div class="lw-meta">${rbFmtMB(Number(it.size || 0))} • ${recFmtDate(Number(it.dateMs || 0))}</div>
+                    ${pth ? `<div class="lw-sub"><span class="lw-link" onclick="rbJumpToExplorerDir('${escapeHtml2(pth).replace(/'/g, '&#39;')}')">📂 ${escapeHtml2(pth)}</span> — انقر للانتقال إلى المجلد في مستكشف الملفات</div>` : ''}
+                </div>`;
+            }
+            if (cmd === 'media_items') {
+                const k = String(it.kind || '');
+                const icon = k === 'video' ? '🎬' : (k === 'audio' ? '🎵' : '🖼️');
+                const dur = Number(it.durationMs || 0);
+                const pth = String(it.path || '');
+                return `<div class="lw-row">
+                    <div class="lw-title">${icon} ${escapeHtml2(it.name || '—')}</div>
+                    <div class="lw-meta">${rbFmtMB(Number(it.size || 0))}${dur > 0 ? ' • المدة: ' + Math.floor(dur / 60000) + ':' + String(Math.floor((dur % 60000) / 1000)).padStart(2, '0') : ''} • ${recFmtDate(Number(it.dateMs || 0))}</div>
+                    ${pth ? `<div class="lw-sub"><span class="lw-link" onclick="rbJumpToExplorerDir('${escapeHtml2(pth).replace(/'/g, '&#39;')}')">📂 ${escapeHtml2(pth)}</span> — انقر للانتقال إلى المجلد في مستكشف الملفات</div>` : ''}
+                </div>`;
+            }
+            if (cmd === 'locations_get') {
+                const lat = Number(it.lat), lng = Number(it.lng);
+                return `<div class="lw-row">
+                    <div class="lw-title">📍 ${recFmtDate(Number(it.ts || 0))}</div>
+                    <div class="lw-sub">${lat.toFixed(5)}, ${lng.toFixed(5)}${it.acc !== undefined ? ' • دقة ±' + Number(it.acc).toFixed(0) + ' م' : ''}</div>
+                </div>`;
+            }
+            return `<div class="lw-row"><div class="lw-title">${escapeHtml2(JSON.stringify(it || {})).slice(0, 200)}</div></div>`;
+        }
+
+        function renderServerCacheWindow() {
+            const chipsEl = document.getElementById('rb-srv-cache-chips');
+            const body = document.getElementById('rb-srv-cache-body');
+            const devEl = document.getElementById('rb-srv-cache-dev');
+            if (!chipsEl || !body) return;
+            const el = document.getElementById('rb-server-cache-modal');
+            if (devEl) devEl.textContent = (el && el.__deviceId ? ' • ' + el.__deviceId : '');
+            const win = document.querySelector('#rb-server-cache-modal > div');
+            if (win) {
+                const cat = (SRV_CACHE_CATS.find(c => c[0] === srvCacheCat) || [])[2] || '';
+                if (cat) win.setAttribute('data-cat', cat);
+            }
+            chipsEl.innerHTML = SRV_CACHE_CATS.map(([cmd, label]) => {
+                const entry = srvCacheData && srvCacheData[cmd];
+                const n = entry ? srvCatCount(cmd, entry.data) : 0;
+                return `<button onclick="srvCacheCat='${cmd}'; renderServerCacheWindow()" class="lw-chip ${cmd === srvCacheCat ? 'active' : ''}">${label}${entry ? ' (' + n + ')' : ''}</button>`;
+            }).join('');
+            const entry = srvCacheData && srvCacheData[srvCacheCat];
+            if (!entry) {
+                const catsSaved = srvCacheData ? Object.keys(srvCacheData).map(srvCacheCatName).join('، ') : '';
+                body.innerHTML = '<div class="lw-meta">لا بيانات مخزنة لهذه القائمة بعد.' + (catsSaved ? ' القوائم المتوفرة: ' + catsSaved + '.' : ' تُحفظ تلقائياً لكل قائمة تفتحها أثناء توصيل المضيف بالخادم.') + ' أعد المحاولة بعد توصيل المضيف وتصفح القوائم.</div>';
+                return;
+            }
+            const items = srvCatItems(srvCacheCat, entry.data);
+            const stamp = entry.ts ? 'آخر حفظ على الخادم: ' + recFmtDate(Number(entry.ts)) + ' • ' : '';
+            body.innerHTML = `<div class="lw-meta mb-2">${stamp}${items.length} عنصر</div>` +
+                items.slice(0, 300).map(it => srvCatRow(it, srvCacheCat)).join('') +
+                (items.length > 300 ? `<div class="lw-meta">يُعرض أول 300 من ${items.length}</div>` : '');
+        }
+
+        // B12 — قفزة مسار إلى مستكشف الملفات: تحويل المسار المطلق إلى نسبي تحت جذر الخارجي
+        function rbRelPathOf(p) {
+            let s = String(p || '').replace(/\\/g, '/');
+            s = s.replace(/^\/storage\/emulated\/\d+/i, '');
+            s = s.replace(/^\/sdcard/i, '');
+            s = s.replace(/^\/mnt\/sdcard/i, '');
+            s = s.replace(/^\/+/, '');
+            return s;
+        }
+
+        function rbJumpToExplorerDir(anyPath) {
+            try {
+                let p = String(anyPath || '').replace(/\\/g, '/');
+                if (!p) { showToast('لا يوجد مسار متاح لهذا العنصر', 'warning'); return; }
+                p = rbRelPathOf(p);
+                const dir = p.endsWith('/') ? p : (p.includes('/') ? p.slice(0, p.lastIndexOf('/') + 1) : '/');
+                switchTab('files');
+                setTimeout(() => navigateExplorerPath(dir), 120);
+                showToast('📂 الانتقال إلى: ' + dir, 'info');
+            } catch (_) {}
         }
 
         // ——— التمهيد: استرجاع/تزامن دوري ———

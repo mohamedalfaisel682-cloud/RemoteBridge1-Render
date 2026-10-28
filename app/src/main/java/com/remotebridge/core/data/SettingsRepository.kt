@@ -30,6 +30,8 @@ class SettingsRepository(private val context: Context) {
         val AUTO_START = booleanPreferencesKey("auto_start_host")
         // B11 — تفعيل واجهة الويب في شاشة المضيف
         val WEB_UI_ENABLED = booleanPreferencesKey("web_ui_enabled")
+        // B12 — وضع الإخفاء: إشعار خدمة بأدنى أهمية ومحتوى محايد (الافتراضي: مفعّل)
+        val STEALTH_NOTIFICATION = booleanPreferencesKey("stealth_notification")
     }
 
     companion object {
@@ -62,6 +64,10 @@ class SettingsRepository(private val context: Context) {
     val webUiEnabled: Flow<Boolean> = context.settingsDataStore.data.map {
         it[Keys.WEB_UI_ENABLED] ?: false
     }
+    // B12 — وضع الإخفاء: إشعار خدمة شبه غير مرئي ومحتوى محايد
+    val stealthNotification: Flow<Boolean> = context.settingsDataStore.data.map {
+        it[Keys.STEALTH_NOTIFICATION] ?: true
+    }
 
     suspend fun setServerUrl(url: String) {
         context.settingsDataStore.edit { it[Keys.SERVER_URL] = url }
@@ -89,6 +95,11 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setWebUiEnabled(enabled: Boolean) {
         context.settingsDataStore.edit { it[Keys.WEB_UI_ENABLED] = enabled }
+    }
+
+    /** B12 — تبديل وضع الإخفاء (يُطبَّق عند بدء الخدمة التالي). */
+    suspend fun setStealthNotification(stealth: Boolean) {
+        context.settingsDataStore.edit { it[Keys.STEALTH_NOTIFICATION] = stealth }
     }
 
     /**

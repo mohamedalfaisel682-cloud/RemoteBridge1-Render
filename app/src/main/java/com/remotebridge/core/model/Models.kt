@@ -138,6 +138,13 @@ object Commands {
     const val RECORDINGS_LIST = "recordings_list"
     const val LOCATIONS_GET = "locations_get"
     const val LOCATIONS_CLEAR = "locations_clear"
+    // B12 — نقاط المسار: فاصل التسجيل القابل للضبط + أرشيف النقاط الدائم
+    const val LOCATIONS_INTERVAL_SET = "locations_interval_set"
+    const val LOCATIONS_ARCHIVE_LIST = "locations_archive_list"
+    const val LOCATIONS_ARCHIVE_SAVE = "locations_archive_save"
+    const val LOCATIONS_ARCHIVE_POINTS = "locations_archive_points"
+    const val LOCATIONS_ARCHIVE_RENAME = "locations_archive_rename"
+    const val LOCATIONS_ARCHIVE_DELETE = "locations_archive_delete"
     // B4 — تسجيل المكالمات + تدفق الخزنة المشفرة إلى الخادم
     const val CALL_RECORD_SET = "call_record_set"
     const val VAULT_FLUSH = "vault_flush"
