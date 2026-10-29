@@ -1,7 +1,7 @@
 # 📘 البيانات التفصيلية والتحليلية لـ RBstudio README
 
 > ملف مرجعي وحيد للقراءة. يوثّق بنية التطبيق وأدواته وخدماته ومعطياته الحيّة (روابط وقيم ومرافق)، ثم يشريح آلية عمله وسير عملياته الاتصالية، ثم يحدّد مواصفاته وحدود قدرته، ثم يقدّم دراسة تحليلية عميقة محايدة للنمط التقني القائم عليه — بصيغة مستقلة عن هوية المشروع وقابلة لإعادة الاستخدام في تطبيقات ومكونات وأهداف أخرى.
-> آخر تحديث: بعد دفعة B11 — التطبيق v1.2.0 (versionCode 3)، البناء من نسخة القرص C.
+> آخر تحديث: بعد دفعة B12 وتكميلها B12-r2 — التطبيق v1.3.0 (versionCode 4)؛ مصدر الحقيقة المفرد هو المجلد الرئيسي M1، والبناء والدفع يتمان من الاستنساخ النظيف على قرص C.
 
 ---
 
@@ -12,7 +12,7 @@
 | الاسم التجاري | RBstudioPRO |
 | Namespace الموارد | `com.rbstudio` (تُستورد `R` كـ `com.rbstudio.R` دائماً) |
 | حزم الشفرة | `com.remotebridge.*` |
-| الإصدار | versionCode 3 · versionName 1.2.0 |
+| الإصدار | versionCode 4 · versionName 1.3.0 |
 | سلم أندرويد | minSdk 26 · targetSdk/compileSdk 36 |
 | حجم APK (debug) | ~66 MB |
 | اللغات | أندرويد: Kotlin + Jetpack Compose (بلا تخطيطات XML) · الخادم: Go · لوحة الويب: HTML/JS بملف واحد |
@@ -37,7 +37,7 @@ app/
  ├─ host/provider/         HostDataProvider (MediaStore + استكشاف نظام الملفات + جهات الاتصال حتى 500 عنصر)
  └─ ui/                    شاشات Compose: Home · Host · Controller · Dashboard · Files · Settings · webdashboard
  └─ navigation/            Routes: home / host / controller / dashboard / files/{bucket} / web_dashboard
-docs/                      وثائق الدفعات العربية (batch-b11-ar.md …)
+docs/                      وثائق الدفعات العربية (batch-b12-ar.md …)
 ```
 نقطة الدخول: `com.remotebridge.MainActivity`. الشاشة الرئيسية تعرض وضعَي «هاتف المضيف» وأزرار واجهة المتحكم (بعد تفعيلها من الإعدادات).
 
@@ -53,18 +53,25 @@ docs/                      وثائق الدفعات العربية (batch-b11-a
 | `wss://my-ai-bridge-app.fly.dev/ws` | خادم احتياطي (Fly.io، fra، منفذ 8080) | احتياطي |
 | `ws://localhost:10000/ws` | تطوير محلي | للتجربة |
 | `ws://10.0.2.2:10000/ws` | محاكي أندرويد | للتجربة |
-| `http://<سيرفر>:9090/metrics` | مقاييس Prometheus | داخلي |
+| `https://remotebridge1.onrender.com/` | لوحة المتحكم الويبنية تُقدَّم من جذر الخادم نفسه | نشط |
+| `https://remotebridge1.onrender.com/health` | فحص صحة الخادم — مسار مهمة الإبقاء في cron-job.org | نشط |
+| `https://remotebridge1.onrender.com/metrics` | مقاييس Prometheus | نشط |
+| `https://remotebridge1.onrender.com/api/state?deviceId={id}` | لقطات الحالة (آخر ظهور/بطارية/بيانات) | نشط |
+| `https://remotebridge1.onrender.com/api/cache?deviceId={id}&cmd={cmd}` | كاش القوائم المحفوظة تلقائياً — يقرؤه المتحكم حتى بعد انقطاع المضيف | B12 |
+| `https://remotebridge1.onrender.com/api/blob` | عنصر ذاكرة الخزنة المرفوع من المضيف | نشط |
 | **مشتق الويب** | `SettingsRepository.deriveDashboardUrl()`: `wss→https` و`ws→http` ثم أصل الخادم الجذري (مثال: `https://remotebridge1.onrender.com/`) | مشتق آلي للوحة الويب والمتصفح |
 
-نقطة تشغيلية مهمة: مسار النشر الرسمي = الدفع من النسخة النظيفة على القرص C؛ أي دفع داخل main يعيد توظيف الخادم فوراً.
+نقطة تشغيلية مهمة: مسار النشر الرسمي = المجلد الرئيسي M1 ثم الاستنساخ النظيف على قرص C للبناء والدفع؛ أي دفع داخل main يعيد نشر Render فوراً (`autoDeploy: true`).
 
 ### 2. الحسابات والمرافق
 
 | المرفق | المعرف | ملاحظة |
 |---|---|---|
-| GitHub | `mohamedalfaisel682-cloud/RemoteBridge1-Render` (فرع main) | المستودع المفرد للشيفرة والنشر |
-| Render | تطبيق `remotebridge1` | نشر تلقائي (autoDeploy) |
-| Fly.io | تطبيق `my-ai-bridge-app` | المنفذ 8080 عبر Dockerfile |
+| GitHub | `mohamedalfaisel682-cloud/RemoteBridge1-Render` (فرع main) | المستودع المفرد للشيفرة والنشر — آخر التزام: `27b0d70` (B12-r2) |
+| Render | خدمة ويب `remotebridge1` — نوع `docker`، خطة `free`، منطقة `frankfurt`، `autoDeploy: true`، منفذ `8080` | نشر تلقائي مع كل دفع على main؛ راجع الرابط العام من أعلى صفحة الخدمة في اللوحة |
+| Upstash Redis | طبقة حفظ كاش اختيارية دائمة — مفتاح التخزين `rb_cache_v1` | شيفرة المنجز جاهزة في B12-r2؛ التفعيل بانتظار إضافة متغيري `UPSTASH_REDIS_REST_URL` و`UPSTASH_REDIS_REST_TOKEN` (قيمتهما سرّان لا يُدوَّنان في أي ملف) |
+| cron-job.org | مهمة إبقاء الخدمة: طلب `GET /health` كل 10 دقائق لمنع سكون الخطة المجانية | مخطط — خطوات الإعداد اليدوي في ③.6 |
+| Fly.io | تطبيق `my-ai-bridge-app` | المنفذ 8080 عبر Dockerfile — احتياطي |
 | مفتاح التوقيع release | `my-upload-key.jks` بمتغير `KEYSTORE_PATH` | خارج المستودع |
 | توكن الخادم | يولَّد لكل جهاز (`generateToken()` + خريطة `clientTokens`) | مصادقة بالتوكن شرط لقبول الاتصال |
 
@@ -90,6 +97,34 @@ server_url = wss://remotebridge1.onrender.com/ws · stun_server = stun Google ا
 | المهل الزمنية | سحب محتوى 180 ثانية · حفظ الجسر 120 ثانية · RPC 10 ثوانٍ × 3 محاولات | لوحة الويب |
 | المصغرات | 160px Base64 (أمر `file_thumbnail`) | التطبيق |
 | معرّف عملية سحب محتوى | يبدأ من 100000 (منفصل عن معرّفات RPC العادية) | لوحة الويب |
+| حدود مخزن الكاش على الخادم | عنصر قائمة واحد حتى 4MB · إجمالي 48MB · حتى 64 مضيفاً · سجل نقاط المواقع 6000 نقطة | `main.go` (B12) |
+
+### 6. متغيرات البيئة ومسارات أنبوب العمل
+
+| المتغير | الدور | مكان الإدخال |
+|---|---|---|
+| `PORT=8080` | منفذ الخادم داخل الحاوية | `render.yaml` (محفوظ) |
+| `UPSTASH_REDIS_REST_URL` · `UPSTASH_REDIS_REST_TOKEN` | تفعيل الكاش السحابي الدائم — بإدخالهما تُرفع بيانات القوائم ونقاط المسار إلى Redis وتُستعاد بعد كل سكون أو إعادة نشر | لوحة Render → صفحة الخدمة → Environment → Add Variable (قيمتهما سرّان، ولا تُدوَّنان في أي ملف) |
+| `KEYSTORE_PATH` | مفتاح توقيع الإصدارات | خارج المستودع |
+
+مسارات أنبوب العمل الثابتة:
+
+- المجلد الرئيسي (أصل الحقيقة): `F:\Ai\agent folders\Editing By opencode\opencodeGLM5.3FLASHA`
+- الاستنساخ للبناء والدفع: `C:\Users\alfaisalytec\AppData\Local\Temp\opencode\rb_phase2_git`
+- المرايا: نسخة `...-copy\opencodeGLM5.3FLASHA` (تزامن عبر `rb_doc\sync_mirrors.mjs`)
+- لقطة التسليم: `C:\Users\alfaisalytec\AppData\Local\Temp\opencode\rb_toastsafe`
+
+**خطوات إعداد مهمة الإبقاء في cron-job.org (يدوياً، ثلاث دقائق):**
+
+1. افتح `app.cron-job.org` في المتصفح ثم أنشئ حساباً مجانياً (بريد ورسالة كلمة مرور) وفعّل العضوية من رسالة تأكيد البريد.
+2. من قائمة اللوحة: «Cronjobs» ثم زر «CREATE CRONJOB».
+3. في العنوان اكتب: «RBstudioPRO — إبقاء الخدمة مدية».
+4. في حقل الرابط ضع: `https://remotebridge1.onrender.com/health` — وإن اختلفت تسمية خدمتك انسخ الرابط العام الحقيقي من أعلى صفحة الخدمة في لوحة Render.
+5. في الجدولة اختر «Every 10 minutes» (كل عشر دقائق).
+6. اترك باقي الخيارات الافتراضية (طلب GET) واحفظ، وتأكد أن الحالة «Active» وأن أول تنفيذ أظهر نتيجة 200.
+7. للتثبت من الأثر: راقب شريط Metrics في لوحة Render؛ لن تظهر ركائز السكون بعد ذلك.
+
+تنبيه الخطة المجانية: التشغيل الدائم يستهلك نحو 730 ساعة شهرياً ضمن سقف 750 ساعة — يكفي خدمة واحدة دائمة.
 
 ---
 
@@ -191,3 +226,4 @@ server_url = wss://remotebridge1.onrender.com/ws · stun_server = stun Google ا
 
 ## ⑦ ملاحظة صيانة
 - كل الأرقام هنا مقروءة من الشفرة لا من وثائق قديمة؛ عند أي تعديل على القيم (حدود/روابط/إصدار) حدّث هذا الملف ضمن الدفعة اللاحقة.
+- يُعَدّ القسم ③ «سجلّ البنية التحتية» المرجع الموحّد المفرَّض في `AGENTS.md` (القسم 5): أي تغيير في خدمة أو رابط أو مسار أو متغير أو حساب يستوجب تدوينه هنا في جولة الدفع نفسها.
