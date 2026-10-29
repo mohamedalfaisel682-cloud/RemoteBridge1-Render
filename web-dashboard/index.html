@@ -276,6 +276,68 @@
             50%      { opacity: 1;   transform: scaleX(1); }
         }
 
+        /* ===== B13 — أضواء حالة التشغيل داخل التبويبات: أخضر = مفعّل ويعمل · أحمر = موقوف أو محيَّد · رمادي = بلا دليل بعد ===== */
+        .tab-state-dot {
+            width: 7px; height: 7px; border-radius: 999px; display: inline-block;
+            margin-inline-start: 6px; flex-shrink: 0;
+            background: #475569; box-shadow: 0 0 0 1px rgba(148,163,184,.22);
+        }
+        .tab-btn-mobile .tab-state-dot { width: 6px; height: 6px; margin-inline-start: 5px; }
+        .tab-state-dot.dot-on {
+            background: #34d399;
+            animation: rbDotGreen 1.7s ease-in-out infinite;
+        }
+        .tab-state-dot.dot-off {
+            background: #fb7185;
+            animation: rbDotRed 1.15s ease-in-out infinite;
+        }
+        @keyframes rbDotGreen {
+            0%, 100% { opacity: 1; box-shadow: 0 0 5px 1px rgba(52,211,153,.8); }
+            50%      { opacity: .6; box-shadow: 0 0 13px 3px rgba(52,211,153,.32); }
+        }
+        @keyframes rbDotRed {
+            0%, 100% { opacity: 1; box-shadow: 0 0 5px 1px rgba(251,113,133,.78); }
+            50%      { opacity: .5; box-shadow: 0 0 12px 3px rgba(251,113,133,.3); }
+        }
+        .active-tab .tab-emoji { filter: drop-shadow(0 0 5px rgba(52,211,153,.85)); }
+
+        /* ===== B13 — القائمة المنسدلة تحت تبويب الإعدادات (الشريط الجانبي) ===== */
+        .settings-submenu {
+            display: flex; flex-direction: column; gap: 3px; overflow: hidden;
+            margin-top: 3px; padding: 5px; border-radius: 12px;
+            background: rgba(2,6,23,.7); border: 1px solid rgba(51,65,85,.7);
+            animation: rbSubmenuIn .22s ease both;
+        }
+        @keyframes rbSubmenuIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
+        .settings-subitem {
+            text-align: right; font-size: 10.5px; font-weight: 700; line-height: 1.5;
+            padding: 6.5px 11px; border-radius: 9px; color: #cbd5e1;
+            border: 1px solid transparent; cursor: pointer; transition: all .18s ease;
+            display: flex; align-items: center; gap: 7px;
+        }
+        .settings-subitem:hover { background: rgba(30,41,59,.9); color: #f1f5f9; border-color: rgba(71,85,105,.5); }
+        .settings-subitem.on {
+            background: rgba(16,185,129,.16); color: #34d399;
+            border-color: rgba(16,185,129,.42);
+            box-shadow: 0 0 10px 1px rgba(16,185,129,.12);
+        }
+
+        /* ===== B13 — بطاقات البيانات: دخول سريع + رفع عند التمرير (الحاسوب والهاتف) ===== */
+        .rb-card-in { animation: rbCardIn .38s cubic-bezier(.2,.8,.25,1) both; }
+        @keyframes rbCardIn { from { opacity: 0; transform: translateY(10px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        .rb-card-lift { transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease; }
+        .rb-card-lift:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(2,6,23,.5); }
+
+        /* ===== B13 — قضيب امتلاء المساحة في بطاقة النظام المدمجة ===== */
+        .rb-storage-bar { height: 5px; border-radius: 999px; background: rgba(2,6,23,.92); border: 1px solid rgba(51,65,85,.75); overflow: hidden; margin-top: 6px; }
+        .rb-storage-fill { height: 100%; border-radius: 999px; width: 0%; background: linear-gradient(90deg, #10b981, #34d399); transition: width .5s ease, background .4s ease; }
+
+        @media (prefers-reduced-motion: reduce) {
+            .tab-state-dot.dot-on, .tab-state-dot.dot-off, .active-tab::after,
+            .blink-pill, .rb-card-in, .settings-submenu { animation: none !important; }
+            .rb-card-lift:hover { transform: none; }
+        }
+
         /* ===== B4 — أيقونة نابضة تدل على وجود تفاصيل مخفية ===== */
         @keyframes blinkPillDot {
             0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(56,189,248,0.65), 0 0 10px 1px rgba(56,189,248,0.5); }
@@ -628,15 +690,15 @@
 
     <!-- Mobile Horizontal Tabs Navigation (Visually Optimized for Phones) -->
     <div class="md:hidden bg-slate-900/95 border-b border-slate-800 px-2 py-2 overflow-x-auto no-scrollbar flex items-center gap-1.5 sticky top-[53px] z-30 shadow-md">
-        <button onclick="switchTab('dashboard')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap bg-emerald-600/20 text-emerald-400 border border-emerald-500/30">📊 الرئيسية</button>
-        <button onclick="switchTab('studio')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">🎬 الاستوديو <span id="badge-studio-m" class="tab-badge" hidden>0</span></button>
-        <button onclick="switchTab('files')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">📁 الملفات والذاكرة <span id="badge-files-m" class="tab-badge" hidden>0</span></button>
-        <button onclick="switchTab('camera')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">📹 البث الحي</button>
-        <button onclick="switchTab('contacts')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">📇 الأسماء <span id="badge-contacts-m" class="tab-badge" hidden>0</span></button>
-        <button onclick="switchTab('sms')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">💬 الرسائل <span id="badge-sms-m" class="tab-badge" hidden>0</span></button>
-        <button onclick="switchTab('calls')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">📞 المكالمات <span id="badge-calls-m" class="tab-badge" hidden>0</span></button>
-        <button onclick="switchTab('notifications')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">🔔 الإشعارات <span id="badge-notifications-m" class="tab-badge" hidden>0</span></button>
-        <button onclick="switchTab('settings')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">⚙️ الإعدادات</button>
+        <button onclick="switchTab('dashboard')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap bg-emerald-600/20 text-emerald-400 border border-emerald-500/30">📊 الرئيسية <span class="tab-state-dot" data-tab-dot="dashboard" title="حالة الميزة الحيّة"></span></button>
+        <button onclick="switchTab('studio')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">🎬 الاستوديو <span class="tab-state-dot" data-tab-dot="studio" title="حالة الميزة الحيّة"></span> <span id="badge-studio-m" class="tab-badge" hidden>0</span></button>
+        <button onclick="switchTab('files')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">📁 الملفات والذاكرة <span class="tab-state-dot" data-tab-dot="files" title="حالة الميزة الحيّة"></span> <span id="badge-files-m" class="tab-badge" hidden>0</span></button>
+        <button onclick="switchTab('camera')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">📹 البث الحي <span class="tab-state-dot" data-tab-dot="camera" title="حالة الميزة الحيّة"></span></button>
+        <button onclick="switchTab('contacts')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">📇 الأسماء <span class="tab-state-dot" data-tab-dot="contacts" title="حالة الميزة الحيّة"></span> <span id="badge-contacts-m" class="tab-badge" hidden>0</span></button>
+        <button onclick="switchTab('sms')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">💬 الرسائل <span class="tab-state-dot" data-tab-dot="sms" title="حالة الميزة الحيّة"></span> <span id="badge-sms-m" class="tab-badge" hidden>0</span></button>
+        <button onclick="switchTab('calls')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">📞 المكالمات <span class="tab-state-dot" data-tab-dot="calls" title="حالة الميزة الحيّة"></span> <span id="badge-calls-m" class="tab-badge" hidden>0</span></button>
+        <button onclick="switchTab('notifications')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">🔔 الإشعارات <span class="tab-state-dot" data-tab-dot="notifications" title="حالة الميزة الحيّة"></span> <span id="badge-notifications-m" class="tab-badge" hidden>0</span></button>
+        <button onclick="switchTab('settings')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">⚙️ الإعدادات <span class="tab-state-dot" data-tab-dot="settings" title="حالة الميزة الحيّة"></span></button>
     </div>
 
     <!-- Main Content Layout (Desktop Grid / Mobile Full Width) -->
@@ -647,38 +709,44 @@
             <nav class="glass-panel rounded-2xl p-2.5 flex flex-col gap-1 shadow-xl">
                 <div class="px-3 py-1 text-[11px] font-bold text-slate-400 uppercase tracking-wider">القوائم والأقسام</div>
                 <button onclick="switchTab('dashboard')" class="tab-btn w-full text-right px-3.5 py-2.5 rounded-xl bg-emerald-600/20 text-emerald-400 font-bold transition flex items-center justify-between group">
-                    <span class="flex items-center gap-2.5 text-xs">📊 لوحة النظام الرئيسية</span>
+                    <span class="flex items-center gap-2.5 text-xs"><span class="tab-emoji">📊</span> لوحة النظام الرئيسية<span class="tab-state-dot" data-tab-dot="dashboard" title="حالة الميزة الحيّة"></span></span>
                 </button>
                 <button onclick="switchTab('studio')" class="tab-btn w-full text-right px-3.5 py-2.5 rounded-xl hover:bg-slate-800/80 text-slate-300 font-medium transition flex items-center justify-between group">
-                    <span class="flex items-center gap-2.5 text-xs">🎬 الاستوديو — الوسائط المصغرة</span>
+                    <span class="flex items-center gap-2.5 text-xs"><span class="tab-emoji">🎬</span> الاستوديو — الوسائط المصغرة<span class="tab-state-dot" data-tab-dot="studio" title="حالة الميزة الحيّة"></span></span>
                     <span id="badge-studio" class="tab-badge" hidden>0</span>
                 </button>
                 <button onclick="switchTab('files')" class="tab-btn w-full text-right px-3.5 py-2.5 rounded-xl hover:bg-slate-800/80 text-slate-300 font-medium transition flex items-center justify-between group">
-                    <span class="flex items-center gap-2.5 text-xs">📁 مستكشف ملفات وذاكرة الهاتف</span>
+                    <span class="flex items-center gap-2.5 text-xs"><span class="tab-emoji">📁</span> مستكشف ملفات وذاكرة الهاتف<span class="tab-state-dot" data-tab-dot="files" title="حالة الميزة الحيّة"></span></span>
                     <span id="badge-files" class="tab-badge" hidden>0</span>
                 </button>
                 <button onclick="switchTab('camera')" class="tab-btn w-full text-right px-3.5 py-2.5 rounded-xl hover:bg-slate-800/80 text-slate-300 font-medium transition flex items-center justify-between group">
-                    <span class="flex items-center gap-2.5 text-xs">📹 البث الحي للكاميرا والصوت</span>
+                    <span class="flex items-center gap-2.5 text-xs"><span class="tab-emoji">📹</span> البث الحي للكاميرا والصوت<span class="tab-state-dot" data-tab-dot="camera" title="حالة الميزة الحيّة"></span></span>
                 </button>
                 <button onclick="switchTab('contacts')" class="tab-btn w-full text-right px-3.5 py-2.5 rounded-xl hover:bg-slate-800/80 text-slate-300 font-medium transition flex items-center justify-between group">
-                    <span class="flex items-center gap-2.5 text-xs">📇 الأسماء وجهات الاتصال</span>
+                    <span class="flex items-center gap-2.5 text-xs"><span class="tab-emoji">📇</span> الأسماء وجهات الاتصال<span class="tab-state-dot" data-tab-dot="contacts" title="حالة الميزة الحيّة"></span></span>
                     <span id="badge-contacts" class="tab-badge" hidden>0</span>
                 </button>
                 <button onclick="switchTab('sms')" class="tab-btn w-full text-right px-3.5 py-2.5 rounded-xl hover:bg-slate-800/80 text-slate-300 font-medium transition flex items-center justify-between group">
-                    <span class="flex items-center gap-2.5 text-xs">💬 الرسائل القصيرة (SMS)</span>
+                    <span class="flex items-center gap-2.5 text-xs"><span class="tab-emoji">💬</span> الرسائل القصيرة (SMS)<span class="tab-state-dot" data-tab-dot="sms" title="حالة الميزة الحيّة"></span></span>
                     <span id="badge-sms" class="tab-badge" hidden>0</span>
                 </button>
                 <button onclick="switchTab('calls')" class="tab-btn w-full text-right px-3.5 py-2.5 rounded-xl hover:bg-slate-800/80 text-slate-300 font-medium transition flex items-center justify-between group">
-                    <span class="flex items-center gap-2.5 text-xs">📞 سجل المكالمات</span>
+                    <span class="flex items-center gap-2.5 text-xs"><span class="tab-emoji">📞</span> سجل المكالمات<span class="tab-state-dot" data-tab-dot="calls" title="حالة الميزة الحيّة"></span></span>
                     <span id="badge-calls" class="tab-badge" hidden>0</span>
                 </button>
                 <button onclick="switchTab('notifications')" class="tab-btn w-full text-right px-3.5 py-2.5 rounded-xl hover:bg-slate-800/80 text-slate-300 font-medium transition flex items-center justify-between group">
-                    <span class="flex items-center gap-2.5 text-xs">🔔 الإشعارات الحية</span>
+                    <span class="flex items-center gap-2.5 text-xs"><span class="tab-emoji">🔔</span> الإشعارات الحية<span class="tab-state-dot" data-tab-dot="notifications" title="حالة الميزة الحيّة"></span></span>
                     <span id="badge-notifications" class="tab-badge" hidden>0</span>
                 </button>
-                <button onclick="switchTab('settings')" class="tab-btn w-full text-right px-3.5 py-2.5 rounded-xl hover:bg-slate-800/80 text-slate-300 font-medium transition flex items-center justify-between group">
-                    <span class="flex items-center gap-2.5 text-xs">⚙️ الإعدادات والبروفايلات</span>
+                <button onclick="switchTab('settings')" id="settings-tab-btn" class="tab-btn w-full text-right px-3.5 py-2.5 rounded-xl hover:bg-slate-800/80 text-slate-300 font-medium transition flex items-center justify-between group">
+                    <span class="flex items-center gap-2.5 text-xs"><span class="tab-emoji">⚙️</span> الإعدادات والبروفايلات<span class="tab-state-dot" data-tab-dot="settings" title="حالة الميزة الحيّة"></span></span>
+                    <span id="settings-chev" class="text-[10px] text-slate-500 transition-transform" style="transition-duration:.2s">▾</span>
                 </button>
+                <div id="settings-submenu" hidden>
+                    <button onclick="switchSettingsGroup('connection')" class="settings-subitem" data-sg="connection"><span>🔌</span><span>إعدادات الاتصال والربط</span></button>
+                    <button onclick="switchSettingsGroup('ui')" class="settings-subitem" data-sg="ui"><span>🎨</span><span>إعدادات الواجهة</span></button>
+                    <button onclick="switchSettingsGroup('quick')" class="settings-subitem" data-sg="quick"><span>⚡</span><span>إعدادات الخيارات السريعة</span></button>
+                </div>
             </nav>
 
             <!-- Desktop Host Selection -->
@@ -1045,6 +1113,9 @@
                 }
                 if (statusText) statusText.className = "font-bold text-amber-400";
             }
+
+            // B13 — أضواء حالة التبويبات تتبع حالة الخادم لحظياً
+            updateTabStateDots();
         }
 
         function startPing() {
@@ -3323,6 +3394,16 @@
             if (osEl) {
                 osEl.innerText = `Android ${data.androidVersion} (API ${data.sdkInt})`;
             }
+            // B13 — قضيب امتلاء المساحة في بطاقة النظام المدمجة (أخضر → كهرماني 70%+ → أحمر 90%+)
+            const barFill = document.getElementById('dash-storage-bar-fill');
+            if (barFill && data.storageTotalBytes > 0) {
+                const pct = Math.round(((data.storageTotalBytes - data.storageFreeBytes) / data.storageTotalBytes) * 100);
+                barFill.style.width = Math.min(100, Math.max(3, pct)) + '%';
+                barFill.style.background = pct >= 90 ? 'linear-gradient(90deg,#f43f5e,#fb7185)' : pct >= 70 ? 'linear-gradient(90deg,#f59e0b,#fbbf24)' : 'linear-gradient(90deg,#10b981,#34d399)';
+                const pctHint = document.getElementById('dash-storage-pct');
+                if (pctHint) pctHint.innerText = `· استُخدم ${pct}%`;
+            }
+            updateTabStateDots();
         }
 
         // ============================================================
@@ -3557,6 +3638,8 @@
             p.ok = ok;
             const host = document.getElementById('host-perms-status');
             if (host) host.innerHTML = renderHostPermsStatus();
+            // B13 — أضواء التبويبات تتبع أذونات المضيف (أحمر عند الإيقاف/الحياد)
+            updateTabStateDots();
         }
 
         function renderHostPermsStatus() {
@@ -3672,6 +3755,7 @@
         }
 
         // Tab Switching
+        let settingsSubOpen = false;
         function switchTab(tab) {
             activeTab = tab;
 
@@ -3692,6 +3776,16 @@
                 const m = (btn.getAttribute('onclick') || '').match(/switchTab\(['"]([\w-]+)['"]\)/);
                 if (m && m[1] === tab) { btn.classList.add('active-tab'); btn.classList.remove('bg-slate-800/60', 'text-slate-300', 'font-medium'); }
             });
+
+            // B13 — القائمة المنسدلة تحت تبويب الإعدادات: تُفتح آلياً عند دخول الإعدادات وتُطوى عند مغادرته
+            settingsSubOpen = (tab === 'settings');
+            const sub = document.getElementById('settings-submenu');
+            if (sub) sub.hidden = !settingsSubOpen;
+            const chev = document.getElementById('settings-chev');
+            if (chev) chev.style.transform = settingsSubOpen ? 'rotate(0deg)' : 'rotate(-90deg)';
+
+            // B13 — أضواء حالة التبويبات (أخضر = تعمل · أحمر = موقوف · رمادي = بلا دليل)
+            updateTabStateDots();
 
             const panel = document.getElementById("panel-content");
             // أي دخول لتبويب قائمة = تسجيل المعاينة وإصفار شارته
@@ -3727,6 +3821,7 @@
                 if (studioFolders.length && !studioLoading) setTimeout(() => { try { fetchStudioMedia(true); } catch (_) {} }, 150);
             } else if (tab === 'settings') {
                 panel.innerHTML = renderSettingsView();
+                switchSettingsGroup(currentSettingsGroup(), true);
             }
         }
 
@@ -4539,6 +4634,11 @@
             const lastSeenDetail = lastSeenTs ? recFmtDate(lastSeenTs) : 'يبدأ العد تلقائياً بعد أول اتصال بالجهاز';
             const storageText = latestDeviceInfo ? `${(latestDeviceInfo.storageFreeBytes / 1073741824).toFixed(1)} GB / ${(latestDeviceInfo.storageTotalBytes / 1073741824).toFixed(0)} GB` : 'جارٍ جلب البيانات...';
             const osText = latestDeviceInfo ? `Android ${latestDeviceInfo.androidVersion} (API ${latestDeviceInfo.sdkInt})` : 'جارٍ جلب البيانات...';
+            // B13 — حساب نسبة الامتلاء لقضيب المساحة داخل بطاقة النظام المدمجة (أخضر → كهرماني 70%+ → أحمر 90%+)
+            const storagePct = latestDeviceInfo && latestDeviceInfo.storageTotalBytes > 0
+                ? Math.min(100, Math.max(0, Math.round(((latestDeviceInfo.storageTotalBytes - latestDeviceInfo.storageFreeBytes) / latestDeviceInfo.storageTotalBytes) * 100)))
+                : 0;
+            const storageBarColor = storagePct >= 90 ? 'linear-gradient(90deg,#f43f5e,#fb7185)' : storagePct >= 70 ? 'linear-gradient(90deg,#f59e0b,#fbbf24)' : 'linear-gradient(90deg,#10b981,#34d399)';
 
             return `
                 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-3 mb-3 border-b border-slate-800 gap-2">
@@ -4554,40 +4654,38 @@
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 md:gap-4 mb-4">
-                    <!-- B7 — بطاقة بنصفين للموقع وآخر الرؤية فقط (خطوط أكبر لمعاينة واضحة) • تفاصيل البطارية نُقلت إلى بطاقة نظام التشغيل مع أيقونة الشحن -->
-                    <div class="bg-slate-900/80 rounded-xl border border-slate-800 grid grid-cols-2 overflow-hidden">
-                        <div class="p-4 flex items-center gap-3 cursor-pointer hover:bg-slate-900/70 transition select-none" onclick="openLocationMapView()" title="انقر لفتح الخريطة التفاعلية الحقيقية (قمر صناعي + طريق سير وشوارع)">
-                            <div class="w-12 h-12 rounded-xl bg-teal-500/10 border border-teal-500/25 flex items-center justify-center text-2xl shrink-0">🗺️</div>
-                            <div class="min-w-0">
-                                <p class="text-[11px] text-slate-400 font-medium">الموقع</p>
-                                <p class="text-sm md:text-lg font-bold text-teal-200 truncate">خريطة تفاعلية</p>
-                                <p class="text-[10px] text-slate-500 truncate">قمر صناعي + شوارع ← انقر</p>
-                            </div>
-                        </div>
-                        <div class="p-4 flex items-center gap-3 border-r border-slate-800 bg-slate-950/50">
-                            <div class="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-2xl shrink-0">🕒</div>
-                            <div class="min-w-0">
-                                <p class="text-[11px] text-slate-400 font-medium">آخر رؤية — المنقضي</p>
-                                <p id="dash-lastseen" class="text-base md:text-xl font-bold text-amber-200 font-mono truncate" title="الوقت المنقضي منذ آخر رؤية (يُعدّ باستمرار كل ثانية)">${lastSeenText}</p>
-                                <p id="dash-lastseen-detail" class="text-[10px] text-slate-500 truncate">${escapeHtml2(lastSeenDetail)}</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="bg-slate-900/80 p-3.5 rounded-xl border border-slate-800 flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-xl">💾</div>
-                        <div>
-                            <p class="text-[11px] text-slate-400 font-medium">المساحة المتوفرة</p>
-                            <p id="dash-storage" class="text-sm md:text-base font-bold text-slate-100">${storageText}</p>
-                        </div>
-                    </div>
-                    <div class="bg-slate-900/80 p-3.5 rounded-xl border border-slate-800 flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-xl">📱</div>
+                    <!-- B13 — بطاقة الموقع مستقلة بمعاينة نظيفة وقابلة للنقر نحو الخريطة التفاعلية -->
+                    <div class="rb-card-in rb-card-lift bg-slate-900/80 cursor-pointer p-4 rounded-xl border border-teal-500/25 hover:border-teal-500/50 flex items-center gap-3 select-none" onclick="openLocationMapView()" title="انقر لفتح الخريطة التفاعلية الحقيقية (قمر صناعي + خط سير وشوارع)">
+                        <div class="w-12 h-12 rounded-xl bg-teal-500/10 border border-teal-500/30 flex items-center justify-center text-2xl shrink-0">🗺️</div>
                         <div class="min-w-0">
-                            <p class="text-[11px] text-slate-400 font-medium">نظام التشغيل</p>
+                            <p class="text-[11px] text-slate-400 font-medium">الموقع</p>
+                            <p class="text-sm md:text-lg font-bold text-teal-200 truncate">خريطة تفاعلية</p>
+                            <p class="text-[10px] text-slate-500 truncate">قمر صناعي + شوارع ← انقر للعرض</p>
+                        </div>
+                    </div>
+                    <!-- B13 — بطاقة آخر رؤية مستقلة بمعاينة نظيفة وعدّاد حي كل ثانية -->
+                    <div class="rb-card-in rb-card-lift bg-slate-900/80 p-4 rounded-xl border border-amber-500/25 flex items-center gap-3">
+                        <div class="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-2xl shrink-0">🕒</div>
+                        <div class="min-w-0">
+                            <p class="text-[11px] text-slate-400 font-medium">آخر رؤية — المنقضي</p>
+                            <p id="dash-lastseen" class="text-base md:text-xl font-bold text-amber-200 font-mono truncate" title="الوقت المنقضي منذ آخر رؤية (يُعدّ باستمرار كل ثانية)">${lastSeenText}</p>
+                            <p id="dash-lastseen-detail" class="text-[10px] text-slate-500 truncate">${escapeHtml2(lastSeenDetail)}</p>
+                        </div>
+                    </div>
+                    <!-- B13 — بطاقة النظام والمساحة المدمجة: نظام + بطارية + مساحة مع قضيب امتلاء ثميني -->
+                    <div class="rb-card-in rb-card-lift bg-slate-900/80 p-4 rounded-xl border border-slate-800 flex items-center gap-3">
+                        <div class="w-12 h-12 rounded-xl bg-purple-500/10 border border-purple-500/25 flex items-center justify-center text-2xl shrink-0">📱</div>
+                        <div class="min-w-0 flex-1">
+                            <p class="text-[11px] text-slate-400 font-medium">النظام والمساحة</p>
                             <p id="dash-os" class="text-sm md:text-base font-bold text-slate-100 truncate">${osText}</p>
-                            <!-- B7 — تفاصيل البطارية (نُقلت إلى هنا) + أيقونة جاري الشحن عند اتصال الشاحن -->
                             <p id="dash-battery" class="text-[11px] font-bold text-emerald-300 mt-0.5 truncate">🔋 ${batteryText}</p>
                             <span id="dash-charge-icon" class="text-[10px] font-bold text-yellow-300 hidden">⚡ جارٍ الشحن الآن</span>
+                            <div class="rb-storage-bar"><div id="dash-storage-bar-fill" class="rb-storage-fill" style="width:${storagePct}%"></div></div>
+                            <p class="mt-1 flex items-center gap-1 text-[10px] text-slate-400">
+                                <span>💾</span>
+                                <span id="dash-storage" class="font-bold text-slate-200">${storageText}</span>
+                                <span id="dash-storage-pct" class="text-slate-500">· استُخدم ${storagePct}%</span>
+                            </p>
                         </div>
                     </div>
                 </div>
@@ -6318,101 +6416,149 @@
 
         // View 8: Settings View
         function renderSettingsView() {
+            // B13 — تصفية ذكية: القائمة المنسدلة تُظهر مجموعة متناسبة مع نوعها، وكل الحلول الحالية موزّعة بإحكام
+            const g = currentSettingsGroup();
+            const isOpen = (k) => g === k ? '' : 'hidden';
+            const selAttr = (k) => g === k ? 'selected' : '';
             return `
                 <div class="pb-2.5 mb-2.5 border-b border-slate-800">
-                    <h2 class="text-lg md:text-xl font-bold text-emerald-300">⚙️ إعدادات الربط والخيارات السريعة</h2>
-                    <p class="text-xs text-slate-400 mt-0.5">تخصيص عناوين السيرفر وحفظ البيانات تلقائياً</p>
+                    <h2 class="text-lg md:text-xl font-bold text-emerald-300">⚙️ الإعدادات والبروفايلات</h2>
+                    <p class="text-xs text-slate-400 mt-0.5">قائمة منسدلة تصفّي الخيارات بذكاء حسب المجموعة: الاتصال والربط · الواجهة · الخيارات السريعة</p>
                 </div>
 
-                <div class="space-y-3.5 max-w-xl text-xs">
-                    <div>
-                        <label class="block text-xs font-bold text-slate-300 mb-1">عنوان خادم الإشارات (Signaling Server URL):</label>
-                        <input type="text" id="cfg-server-url" oninput="saveWebSettings(true)" value="${appConfig.serverUrl}" placeholder="ws://<Local-IP>:10000/ws أو wss://..." class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100 font-mono focus:outline-none focus:border-emerald-500 transition">
-                        
-                        <div class="grid grid-cols-3 gap-2 mt-2">
-                            <button onclick="setPreset('render')" class="text-[10px] font-bold bg-slate-800 hover:bg-slate-700 border border-slate-700/80 px-2 py-1.5 rounded-xl text-purple-300 transition">
-                                ☁️ Render
-                            </button>
-                            <button onclick="setPreset('fly')" class="text-[10px] font-bold bg-slate-800 hover:bg-slate-700 border border-slate-700/80 px-2 py-1.5 rounded-xl text-emerald-300 transition">
-                                🌐 Fly.io
-                            </button>
-                            <button onclick="setPreset('local')" class="text-[10px] font-bold bg-slate-800 hover:bg-slate-700 border border-slate-700/80 px-2 py-1.5 rounded-xl text-amber-300 transition">
-                                💻 محلي LAN
-                            </button>
+                <div class="max-w-xl text-xs mb-3">
+                    <label class="block text-[11px] font-bold text-slate-300 mb-1">اختر مجموعة الإعدادات (تصفية ذكية):</label>
+                    <select id="cfg-group" onchange="switchSettingsGroup(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-slate-100 font-bold focus:outline-none focus:border-emerald-500 transition cursor-pointer">
+                        <option value="connection" ${selAttr('connection')}>🔌 إعدادات الاتصال والربط</option>
+                        <option value="ui" ${selAttr('ui')}>🎨 إعدادات الواجهة</option>
+                        <option value="quick" ${selAttr('quick')}>⚡ إعدادات الخيارات السريعة</option>
+                    </select>
+                </div>
+
+                <div class="max-w-xl text-xs">
+                    <!-- المجموعة 1: إعدادات الاتصال والربط -->
+                    <div class="settings-group rb-card-in" data-sg-panel="connection" ${isOpen('connection')}>
+                        <div class="flex items-center gap-2 mb-2.5 px-1">
+                            <div class="w-8 h-8 rounded-lg bg-emerald-950/60 border border-emerald-500/30 flex items-center justify-center text-base">🔌</div>
+                            <div>
+                                <p class="text-[11px] font-bold text-emerald-300">إعدادات الاتصال والربط</p>
+                                <p class="text-[9.5px] text-slate-500">الخادم · البروفايل · الاسم · STUN</p>
+                            </div>
+                        </div>
+                        <div class="space-y-3.5">
+                            <div>
+                                <label class="block text-xs font-bold text-slate-300 mb-1">عنوان خادم الإشارات (Signaling Server URL):</label>
+                                <input type="text" id="cfg-server-url" oninput="saveWebSettings(true)" value="${appConfig.serverUrl}" placeholder="ws://<Local-IP>:10000/ws أو wss://..." class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100 font-mono focus:outline-none focus:border-emerald-500 transition">
+
+                                <div class="grid grid-cols-3 gap-2 mt-2">
+                                    <button onclick="setPreset('render')" class="text-[10px] font-bold bg-slate-800 hover:bg-slate-700 border border-slate-700/80 px-2 py-1.5 rounded-xl text-purple-300 transition">
+                                        ☁️ Render
+                                    </button>
+                                    <button onclick="setPreset('fly')" class="text-[10px] font-bold bg-slate-800 hover:bg-slate-700 border border-slate-700/80 px-2 py-1.5 rounded-xl text-emerald-300 transition">
+                                        🌐 Fly.io
+                                    </button>
+                                    <button onclick="setPreset('local')" class="text-[10px] font-bold bg-slate-800 hover:bg-slate-700 border border-slate-700/80 px-2 py-1.5 rounded-xl text-amber-300 transition">
+                                        💻 محلي LAN
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-bold text-slate-300 mb-1">اسم جهاز الويب (Dashboard Name):</label>
+                                <input type="text" id="cfg-device-name" oninput="saveWebSettings(true)" value="${appConfig.deviceName}" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 transition">
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-bold text-slate-300 mb-1">بروفايلات وأنماط نقل البيانات والاتصال:</label>
+                                <select id="cfg-profile" onchange="setConnectionProfile(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 transition">
+                                    <option value="HYBRID" ${appConfig.connectionProfile === 'HYBRID' ? 'selected' : ''}>1. هجين متكامل (WebRTC P2P + Cloud) [الافتراضي والسرعة الأعلى]</option>
+                                    <option value="RENDER_ONLY" ${appConfig.connectionProfile === 'RENDER_ONLY' ? 'selected' : ''}>2. خادم Render فقط (للإشارات والأوامر والبث والبيانات معاً)</option>
+                                    <option value="FLY_ONLY" ${appConfig.connectionProfile === 'FLY_ONLY' ? 'selected' : ''}>3. خادم Fly.io فقط (للإشارات والأوامر والبث والبيانات معاً)</option>
+                                    <option value="LOCAL_LAN" ${appConfig.connectionProfile === 'LOCAL_LAN' ? 'selected' : ''}>4. شبكة محلية LAN فقط (بدون إنترنت، ربط داخلي مباشر)</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-bold text-slate-300 mb-1">خادم الـ STUN الخاص بـ WebRTC:</label>
+                                <input type="text" id="cfg-stun" oninput="saveWebSettings(true)" value="${appConfig.stunServer}" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100 font-mono focus:outline-none focus:border-emerald-500 transition">
+                                <div class="mt-2 flex flex-wrap items-center gap-2">
+                                    <button type="button" onclick="testStunConnectivity()" class="text-[11px] font-bold bg-sky-950/80 hover:bg-sky-900/90 text-sky-300 border border-sky-500/40 px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 shadow">
+                                        <span>🌐 فحص Google STUN ومنافذ UDP</span>
+                                    </button>
+                                    <span class="text-[10px] text-slate-400 font-mono">أو عبر الكونسول: <code class="text-sky-300 bg-slate-950 px-1.5 py-0.5 rounded">testStunConnectivity()</code></span>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    <div>
-                        <label class="block text-xs font-bold text-slate-300 mb-1">اسم جهاز الويب (Dashboard Name):</label>
-                        <input type="text" id="cfg-device-name" oninput="saveWebSettings(true)" value="${appConfig.deviceName}" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 transition">
-                    </div>
-
-                    <div>
-                        <label class="block text-xs font-bold text-slate-300 mb-1">بروفايلات وأنماط نقل البيانات والاتصال:</label>
-                        <select id="cfg-profile" onchange="setConnectionProfile(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 transition">
-                            <option value="HYBRID" ${appConfig.connectionProfile === 'HYBRID' ? 'selected' : ''}>1. هجين متكامل (WebRTC P2P + Cloud) [الافتراضي والسرعة الأعلى]</option>
-                            <option value="RENDER_ONLY" ${appConfig.connectionProfile === 'RENDER_ONLY' ? 'selected' : ''}>2. خادم Render فقط (للإشارات والأوامر والبث والبيانات معاً)</option>
-                            <option value="FLY_ONLY" ${appConfig.connectionProfile === 'FLY_ONLY' ? 'selected' : ''}>3. خادم Fly.io فقط (للإشارات والأوامر والبث والبيانات معاً)</option>
-                            <option value="LOCAL_LAN" ${appConfig.connectionProfile === 'LOCAL_LAN' ? 'selected' : ''}>4. شبكة محلية LAN فقط (بدون إنترنت، ربط داخلي مباشر)</option>
-                        </select>
-                    </div>
-
-                    <div>
-                        <label class="block text-xs font-bold text-slate-300 mb-1">خادم الـ STUN الخاص بـ WebRTC:</label>
-                        <input type="text" id="cfg-stun" oninput="saveWebSettings(true)" value="${appConfig.stunServer}" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100 font-mono focus:outline-none focus:border-emerald-500 transition">
-                        <div class="mt-2 flex flex-wrap items-center gap-2">
-                            <button type="button" onclick="testStunConnectivity()" class="text-[11px] font-bold bg-sky-950/80 hover:bg-sky-900/90 text-sky-300 border border-sky-500/40 px-3 py-1.5 rounded-xl transition flex items-center gap-1.5 shadow">
-                                <span>🌐 فحص Google STUN ومنافذ UDP</span>
-                            </button>
-                            <span class="text-[10px] text-slate-400 font-mono">أو عبر الكونسول: <code class="text-sky-300 bg-slate-950 px-1.5 py-0.5 rounded">testStunConnectivity()</code></span>
+                    <!-- المجموعة 2: إعدادات الواجهة -->
+                    <div class="settings-group rb-card-in" data-sg-panel="ui" ${isOpen('ui')}>
+                        <div class="flex items-center gap-2 mb-2.5 px-1">
+                            <div class="w-8 h-8 rounded-lg bg-emerald-950/60 border border-emerald-500/30 flex items-center justify-center text-base">🎨</div>
+                            <div>
+                                <p class="text-[11px] font-bold text-emerald-300">إعدادات الواجهة</p>
+                                <p class="text-[9.5px] text-slate-500">نمط العرض · الأقسام السريعة الظاهرة</p>
+                            </div>
+                        </div>
+                        <div class="space-y-3.5">
+                            <div>
+                                <div class="flex items-center justify-between mb-1.5">
+                                    <label class="block text-xs font-bold text-emerald-300">🎨 نمط العرض (الفاتح/الداكن)</label>
+                                    <span class="text-[10px] text-slate-500">محفوظ تلقائياً</span>
+                                </div>
+                                <div class="grid grid-cols-2 gap-2 mb-2">
+                                    <label class="flex items-center gap-2 px-2.5 py-1.5 rounded-xl border ${getUiTheme() === 'dark' ? 'border-emerald-500/50 bg-emerald-950/40' : 'border-slate-700 bg-slate-950/50'} cursor-pointer select-none">
+                                        <input type="radio" name="ui-theme" id="ui-theme-dark" ${getUiTheme() === 'dark' ? 'checked' : ''} onchange="setUiTheme('dark')" class="accent-emerald-500 w-3.5 h-3.5">
+                                        <span class="text-[11px] font-bold text-slate-200">🌙 داكن</span>
+                                    </label>
+                                    <label class="flex items-center gap-2 px-2.5 py-1.5 rounded-xl border ${getUiTheme() === 'light' ? 'border-amber-500/50 bg-amber-950/30' : 'border-slate-700 bg-slate-950/50'} cursor-pointer select-none">
+                                        <input type="radio" name="ui-theme" id="ui-theme-light" ${getUiTheme() === 'light' ? 'checked' : ''} onchange="setUiTheme('light')" class="accent-amber-500 w-3.5 h-3.5">
+                                        <span class="text-[11px] font-bold text-slate-200">☀️ فاتح</span>
+                                    </label>
+                                </div>
+                                <p class="text-[10px] text-slate-400 mb-1.5">اختر الأقسام الظاهرة في القائمة الرئيسية (الأقسام السريعة):</p>
+                                <div class="flex flex-wrap gap-1.5">${renderQuickSectionEditor()}</div>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- B4 — العرض والواجهة: نمط العرض + تخصيص الأقسام السريعة -->
-                    <div class="pt-3 border-t border-slate-800/80">
-                        <div class="flex items-center justify-between mb-1.5">
-                            <label class="block text-xs font-bold text-emerald-300">🎨 العرض والواجهة</label>
-                            <span class="text-[10px] text-slate-500">نمط العرض + الأقسام السريعة</span>
+                    <!-- المجموعة 3: إعدادات الخيارات السريعة -->
+                    <div class="settings-group rb-card-in" data-sg-panel="quick" ${isOpen('quick')}>
+                        <div class="flex items-center gap-2 mb-2.5 px-1">
+                            <div class="w-8 h-8 rounded-lg bg-emerald-950/60 border border-emerald-500/30 flex items-center justify-center text-base">⚡</div>
+                            <div>
+                                <p class="text-[11px] font-bold text-emerald-300">إعدادات الخيارات السريعة</p>
+                                <p class="text-[9.5px] text-slate-500">حالة الأذونات · تسجيل وخزنة · الأقراص السحابية</p>
+                            </div>
                         </div>
-                        <div class="grid grid-cols-2 gap-2 mb-2">
-                            <label class="flex items-center gap-2 px-2.5 py-1.5 rounded-xl border ${getUiTheme() === 'dark' ? 'border-emerald-500/50 bg-emerald-950/40' : 'border-slate-700 bg-slate-950/50'} cursor-pointer select-none">
-                                <input type="radio" name="ui-theme" id="ui-theme-dark" ${getUiTheme() === 'dark' ? 'checked' : ''} onchange="setUiTheme('dark')" class="accent-emerald-500 w-3.5 h-3.5">
-                                <span class="text-[11px] font-bold text-slate-200">🌙 داكن</span>
-                            </label>
-                            <label class="flex items-center gap-2 px-2.5 py-1.5 rounded-xl border ${getUiTheme() === 'light' ? 'border-amber-500/50 bg-amber-950/30' : 'border-slate-700 bg-slate-950/50'} cursor-pointer select-none">
-                                <input type="radio" name="ui-theme" id="ui-theme-light" ${getUiTheme() === 'light' ? 'checked' : ''} onchange="setUiTheme('light')" class="accent-amber-500 w-3.5 h-3.5">
-                                <span class="text-[11px] font-bold text-slate-200">☀️ فاتح</span>
-                            </label>
-                        </div>
-                        <p class="text-[10px] text-slate-400 mb-1.5">اختر الأقسام الظاهرة في القائمة الرئيسية (الأقسام السريعة):</p>
-                        <div class="flex flex-wrap gap-1.5">${renderQuickSectionEditor()}</div>
-                    </div>
+                        <div class="space-y-3.5">
+                            <!-- حالة أذونات الهاتف المضيف (حالة حقيقية من ردود الأوامر) -->
+                            <div>
+                                <div class="flex items-center justify-between mb-1.5">
+                                    <label class="block text-xs font-bold text-emerald-300">🛡️ حالة أذونات الهاتف المضيف</label>
+                                    <button onclick="refreshHostPermsNow()" class="text-[10px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-2 py-1 rounded-lg">🔄 تحقق</button>
+                                </div>
+                                <div id="host-perms-status" class="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[10px]">
+                                    ${renderHostPermsStatus()}
+                                </div>
+                                <p class="text-[10px] text-slate-500 mt-1.5">تُحدَّث الحالة تلقائياً من ردود أوامر الهاتف المضيف الحقيقية (منح الإشعارات/المكالمات/الملفات/الكاميرا) — لإدارة الأذونات افتح معالج الأذونات في تطبيق المضيف</p>
+                            </div>
 
-                    <!-- B4 — حالة أذونات الهاتف المضيف (منتقلة من اللوحة الرئيسية — حالة حقيقية) -->
-                    <div class="pt-3 border-t border-slate-800/80">
-                        <div class="flex items-center justify-between mb-1.5">
-                            <label class="block text-xs font-bold text-emerald-300">🛡️ حالة أذونات الهاتف المضيف</label>
-                            <button onclick="refreshHostPermsNow()" class="text-[10px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-2 py-1 rounded-lg">🔄 تحقق</button>
-                        </div>
-                        <div id="host-perms-status" class="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[10px]">
-                            ${renderHostPermsStatus()}
-                        </div>
-                        <p class="text-[10px] text-slate-500 mt-1.5">تُحدَّث الحالة تلقائياً من ردود أوامر الهاتف المضيف الحقيقية (منح الإشعارات/المكالمات/الملفات/الكاميرا) — لإدارة الأذونات افتح معالج الأذونات في تطبيق المضيف</p>
-                    </div>
+                            <!-- تسجيل المكالمات + الخزنة المشفرة (بدون تكرار مع خادم Render) -->
+                            <div class="pt-3 border-t border-slate-800/80">
+                                <label class="block text-xs font-bold text-emerald-300 mb-1.5">☎️🔐 تسجيل المكالمات والخزنة المشفرة</label>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <button onclick="setCallRecording(true)" class="text-[11px] font-bold bg-emerald-950/80 hover:bg-emerald-900/90 text-emerald-300 border border-emerald-500/40 px-3 py-1.5 rounded-xl transition">▶️ تفعيل التسجيل على المضيف</button>
+                                    <button onclick="setCallRecording(false)" class="text-[11px] font-bold bg-rose-950/70 hover:bg-rose-900/80 text-rose-300 border border-rose-500/40 px-3 py-1.5 rounded-xl transition">⏹️ إيقاف التسجيل</button>
+                                    <button onclick="flushVaultNow()" class="text-[11px] font-bold bg-sky-950/80 hover:bg-sky-900/90 text-sky-300 border border-sky-500/40 px-3 py-1.5 rounded-xl transition">🔐 دفعة الخزنة الآن</button>
+                                    <button onclick="openVaultBlobsPanel()" class="text-[11px] font-bold bg-purple-950/70 hover:bg-purple-900/80 text-purple-300 border border-purple-500/40 px-3 py-1.5 rounded-xl transition">📦 ملفات الخزنة على الخادم</button>
+                                </div>
+                                <p class="text-[10px] text-slate-500 mt-1.5">المكالمات والتسجيلات تُشفَّر (AES-256/GCM) وتُحفظ مخفية داخل ملفات المضيف (.rbvault) وترفع تلقائياً إلى خادم Render عند توفر الإنترنت، مع مزامنة بلا تكرار عبر sha256</p>
+                            </div>
 
-                    <!-- B4 — تسجيل المكالمات + الخزنة المشفرة (بدون تكرار مع خادم Render) -->
-                    <div class="pt-3 border-t border-slate-800/80">
-                        <label class="block text-xs font-bold text-emerald-300 mb-1.5">☎️🔐 تسجيل المكالمات والخزنة المشفرة</label>
-                        <div class="flex flex-wrap items-center gap-2">
-                            <button onclick="setCallRecording(true)" class="text-[11px] font-bold bg-emerald-950/80 hover:bg-emerald-900/90 text-emerald-300 border border-emerald-500/40 px-3 py-1.5 rounded-xl transition">▶️ تفعيل التسجيل على المضيف</button>
-                            <button onclick="setCallRecording(false)" class="text-[11px] font-bold bg-rose-950/70 hover:bg-rose-900/80 text-rose-300 border border-rose-500/40 px-3 py-1.5 rounded-xl transition">⏹️ إيقاف التسجيل</button>
-                            <button onclick="flushVaultNow()" class="text-[11px] font-bold bg-sky-950/80 hover:bg-sky-900/90 text-sky-300 border border-sky-500/40 px-3 py-1.5 rounded-xl transition">🔐 دفعة الخزنة الآن</button>
-                            <button onclick="openVaultBlobsPanel()" class="text-[11px] font-bold bg-purple-950/70 hover:bg-purple-900/80 text-purple-300 border border-purple-500/40 px-3 py-1.5 rounded-xl transition">📦 ملفات الخزنة على الخادم</button>
+                            ${rbDriveSettingsCardHtml()}
                         </div>
-                        <p class="text-[10px] text-slate-500 mt-1.5">المكالمات والتسجيلات تُشفَّر (AES-256/GCM) وتُحفظ مخفية داخل ملفات المضيف (.rbvault) وترفع تلقائياً إلى خادم Render عند توفر الإنترنت، مع مزامنة بلا تكرار عبر sha256</p>
                     </div>
-
-                    ${rbDriveSettingsCardHtml()}
 
                     <button onclick="saveWebSettings(false)" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-5 py-2 rounded-xl text-xs transition shadow-md">
                         💾 حفظ الإعدادات
@@ -6420,6 +6566,81 @@
                 </div>
             `;
         }
+
+        /* ================================================================
+           B13 — تصفية الإعدادات الذكية + أضواء حالة التبويبات
+           ================================================================ */
+        const SETTINGS_GROUPS_LABELS = {
+            connection: 'إعدادات الاتصال والربط',
+            ui: 'إعدادات الواجهة',
+            quick: 'إعدادات الخيارات السريعة',
+        };
+        const SETTINGS_GROUP_KEY = 'rb_settings_group_v1';
+        function currentSettingsGroup() {
+            try {
+                const g = localStorage.getItem(SETTINGS_GROUP_KEY);
+                return ['connection', 'ui', 'quick'].includes(g) ? g : 'connection';
+            } catch (_) { return 'connection'; }
+        }
+        function switchSettingsGroup(g, silent) {
+            if (!Object.prototype.hasOwnProperty.call(SETTINGS_GROUPS_LABELS, g)) g = 'connection';
+            try { localStorage.setItem(SETTINGS_GROUP_KEY, g); } catch (_) {}
+            document.querySelectorAll('[data-sg-panel]').forEach(p => {
+                const show = p.getAttribute('data-sg-panel') === g;
+                p.hidden = !show;
+                if (show) { p.classList.remove('rb-card-in'); void p.offsetWidth; p.classList.add('rb-card-in'); }
+            });
+            document.querySelectorAll('[data-sg]').forEach(ch => ch.classList.toggle('on', ch.getAttribute('data-sg') === g));
+            const sel = document.getElementById('cfg-group');
+            if (sel) sel.value = g;
+            if (!silent) showToast('تم فتح: ' + (SETTINGS_GROUPS_LABELS[g] || g), 'success');
+        }
+
+        function wsOnlineNow() { return !!(ws && ws.readyState === WebSocket.OPEN); }
+        function dataChannelOpenNow() { return !!(dataChannel && dataChannel.readyState === 'open'); }
+        function arrLen(v) { return Array.isArray(v) ? v.length : 0; }
+
+        // B13 — أضواء حالة التبويبات: أخضر = الميزة مفعّلة وتعمل · أحمر = موقوفة/مقيَّدة · رمادي = بلا دليل بعد
+        function updateTabStateDots() {
+            try {
+                const live = wsOnlineNow();
+                const dcOpen = dataChannelOpenNow();
+                const cameraMicOk = hostPermHints.cameraMic.ok;
+                const storageOk = hostPermHints.storage.ok;
+                const streamActive = (typeof streamState !== 'undefined' && streamState && !!streamState.active) || !!document.querySelector('.rb-stream-card-on');
+                document.querySelectorAll('[data-tab-dot]').forEach(dot => {
+                    const t = dot.getAttribute('data-tab-dot');
+                    let cls = 'dot-idle';
+                    if (t === 'dashboard') cls = live ? 'dot-on' : 'dot-off';
+                    else if (t === 'settings') cls = 'dot-on';
+                    else if (t === 'files' || t === 'studio') {
+                        if (storageOk === false) cls = 'dot-off';
+                        else if (storageOk === true && (live || arrLen(filesData))) cls = 'dot-on';
+                    } else if (t === 'camera') {
+                        if (cameraMicOk === false) cls = 'dot-off';
+                        else if (streamActive && dcOpen) cls = 'dot-on';
+                        else if (!live) cls = 'dot-off';
+                    } else if (t === 'contacts') {
+                        if (arrLen(contactsData) > 0 || (live && dcOpen)) cls = 'dot-on';
+                        else if (!live) cls = 'dot-off';
+                    } else if (t === 'calls') {
+                        if (hostPermHints.callLog.ok === false) cls = 'dot-off';
+                        else if (arrLen(callsData) > 0 || (live && dcOpen)) cls = 'dot-on';
+                        else if (!live) cls = 'dot-off';
+                    } else if (t === 'sms') {
+                        if (arrLen(smsData) > 0 || (live && dcOpen)) cls = 'dot-on';
+                        else if (!live) cls = 'dot-off';
+                    } else if (t === 'notifications') {
+                        if (hostPermHints.notifications.ok === false) cls = 'dot-off';
+                        else if (arrLen(notificationsData) > 0 || (live && dcOpen)) cls = 'dot-on';
+                        else if (!live) cls = 'dot-off';
+                    }
+                    dot.className = 'tab-state-dot ' + cls;
+                });
+            } catch (_) {}
+        }
+        // تحديث آلي خفيف كل ثانيتين يبقي الأضواء صادقة دوماً دون لحاف بأي استدعاء ناقص
+        setInterval(updateTabStateDots, 2000);
 
         function setPreset(key) {
             if (PRESETS[key]) {
