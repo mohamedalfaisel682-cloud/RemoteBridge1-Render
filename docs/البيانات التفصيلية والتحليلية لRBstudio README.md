@@ -53,7 +53,7 @@ docs/                      وثائق الدفعات العربية (batch-b13-a
 | `wss://my-ai-bridge-app.fly.dev/ws` | خادم احتياطي (Fly.io، fra، منفذ 8080) | احتياطي |
 | `ws://localhost:10000/ws` | تطوير محلي | للتجربة |
 | `ws://10.0.2.2:10000/ws` | محاكي أندرويد | للتجربة |
-| `https://remotebridge1.onrender.com/` | لوحة المتحكم الويبنية تُقدَّم من جذر الخادم نفسه | نشط |
+| `https://remotebridge1.onrender.com/` | لوحة المتحكم الويبنية تُقدَّم من جذر الخادم نفسه (تضمين مجلد `web-dashboard` في عبوة Docker: B13-r2) | نشط |
 | `https://remotebridge1.onrender.com/health` | فحص صحة الخادم — مسار مهمة الإبقاء في cron-job.org | نشط |
 | `https://remotebridge1.onrender.com/metrics` | مقاييس Prometheus | نشط |
 | `https://remotebridge1.onrender.com/api/state?deviceId={id}` | لقطات الحالة (آخر ظهور/بطارية/بيانات) | نشط |
