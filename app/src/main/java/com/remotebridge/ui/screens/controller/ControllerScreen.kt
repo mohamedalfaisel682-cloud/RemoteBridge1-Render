@@ -101,6 +101,25 @@ fun ControllerContent(
         }
     }
 
+    // الاتصال التلقائي بالمضيف المتاح دون الحاجة للنقر عليه:
+    // إذا وُجد مضيف نشط ومتصل ولم نكن مرتبطين بشيء صالح، نرتبط تلقائياً
+    // بأول مضيف متصل — وعند انقطاع المضيف الحالي ننتقل تلقائياً إلى المضيف التالي.
+    LaunchedEffect(
+        state.signalingState,
+        state.connectedHost?.deviceId,
+        hosts.map { it.deviceId to it.online }
+    ) {
+        if (state.signalingState != SignalingState.Connected) return@LaunchedEffect
+        val onlineHosts = hosts.filter { it.online }
+        if (onlineHosts.isEmpty()) return@LaunchedEffect
+        val current = state.connectedHost
+        val currentStillOnline = current != null && onlineHosts.any { it.deviceId == current.deviceId }
+        if (currentStillOnline) return@LaunchedEffect
+        // لا نكرر العروض أثناء محاولة اتصال جارية
+        if (state.peerState == PeerState.Connecting) return@LaunchedEffect
+        viewModel.connectToHost(onlineHosts.first())
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()

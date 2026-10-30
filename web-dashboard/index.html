@@ -837,18 +837,28 @@
         }
 
         let autoDiscoveryIntervalId = null;
+        let autoDiscoveryIntervalMs = 0;
+        const AUTO_DISCOVERY_FAST_MS = 3000;   // قبل الربط بمضيف: فحص سريع لالتقاط المضيف فور توافره
+        const AUTO_DISCOVERY_SLOW_MS = 60000;  // بعد الربط بمضيف متصل: كل دقيقة (بطلب من المستخدم)
+
+        function setAutoDiscoveryInterval(ms) {
+            if (autoDiscoveryIntervalId && autoDiscoveryIntervalMs === ms) return;
+            autoDiscoveryIntervalMs = ms;
+            if (autoDiscoveryIntervalId) {
+                clearInterval(autoDiscoveryIntervalId);
+                autoDiscoveryIntervalId = null;
+            }
+            autoDiscoveryIntervalId = setInterval(() => { performHostScan(); }, ms);
+        }
 
         function autoDiscoverAndConnectHosts() {
-            showToast("تم تفعيل الفحص الدوري الآلي والبحث التلقائي عن الهواتف المضيفة (كل 3 ثوانٍ)...", "info");
+            showToast("تم تفعيل الفحص الدوري الآلي: سريع (كل 3 ثوانٍ) قبل ربط المضيف ثم كل دقيقة بعده", "info");
 
             // Execute scan immediately
             performHostScan();
 
-            // Set up 3-second polling interval
             if (!autoDiscoveryIntervalId) {
-                autoDiscoveryIntervalId = setInterval(() => {
-                    performHostScan();
-                }, 3000);
+                setAutoDiscoveryInterval(AUTO_DISCOVERY_FAST_MS);
             }
         }
 
@@ -858,21 +868,28 @@
                 return;
             }
 
-            // Update host selection if none is currently selected
+            // لا يوجد مضيف متصل: فحص سريع حتى يظهر أحدهم
             if (!onlineHosts || onlineHosts.length === 0) {
                 renderHostList();
-            } else {
-                const targetEl = document.getElementById("target-device-id");
-                const currentTarget = (targetEl && targetEl.value.trim()) || activeTargetDeviceId || appConfig.targetDeviceId;
-                const hostExists = onlineHosts.some(h => h.deviceId === currentTarget);
+                setAutoDiscoveryInterval(AUTO_DISCOVERY_FAST_MS);
+                return;
+            }
 
-                if (!currentTarget || !hostExists) {
-                    const firstHost = onlineHosts[0];
-                    selectHost(firstHost.deviceId);
-                    showToast(`تم اكتشاف المضيف [${firstHost.deviceName || firstHost.deviceId}] والربط به تلقائياً`, "success");
-                } else {
-                    renderHostList();
-                }
+            // Update host selection if none is currently selected
+            const targetEl = document.getElementById("target-device-id");
+            const currentTarget = (targetEl && targetEl.value.trim()) || activeTargetDeviceId || appConfig.targetDeviceId;
+            const hostExists = onlineHosts.some(h => h.deviceId === currentTarget);
+
+            if (!currentTarget || !hostExists) {
+                // الاتصال التلقائي: ربط المضيف المتاح دون الحاجة للنقر عليه
+                const firstHost = onlineHosts[0];
+                selectHost(firstHost.deviceId);
+                showToast(`تم اكتشاف المضيف [${firstHost.deviceName || firstHost.deviceId}] والربط به تلقائياً`, "success");
+                setAutoDiscoveryInterval(AUTO_DISCOVERY_SLOW_MS);
+            } else {
+                renderHostList();
+                // نحن مرتبطون بمضيف متصل الآن: نخفف الفحص إلى كل دقيقة بدل كل 3 ثوانٍ
+                setAutoDiscoveryInterval(AUTO_DISCOVERY_SLOW_MS);
             }
         }
 
@@ -884,7 +901,7 @@
             const offlineIds = Object.keys(knownHosts).filter(id => !onlineIds.includes(id));
 
             if ((!onlineHosts || onlineHosts.length === 0) && offlineIds.length === 0) {
-                listEl.innerHTML = `<div class="text-[10px] text-slate-500 text-center py-2 bg-slate-900/40 rounded-xl border border-slate-800 animate-pulse">لا توجد أجهزة مضيفة أونلاين حالياً. جارٍ الفحص الدوري عبر السيرفر كل 3 ثوانٍ...</div>`;
+                listEl.innerHTML = `<div class="text-[10px] text-slate-500 text-center py-2 bg-slate-900/40 rounded-xl border border-slate-800 animate-pulse">لا توجد أجهزة مضيفة أونلاين حالياً. جارٍ الفحص الدوري: سريع (كل 3 ثوانٍ) قبل الربط ثم كل دقيقة بعده...</div>`;
                 return;
             }
 
