@@ -62,6 +62,42 @@ class RemoteRepository(val manager: ControllerManager) {
     }
 
     /**
+     * يجلب لقطة الموقع الحالية من الجهاز المضيف (قد تكون null إن لم يتوفر إذن).
+     */
+    suspend fun getLocationSnapshot(): com.remotebridge.core.model.LocationSnapshot? {
+        val response = request(Commands.LOCATION_SNAPSHOT)
+        if (!response.ok) return null
+        val snap = response.data?.get("snapshot") ?: return null
+        return try {
+            json.decodeFromString(
+                com.remotebridge.core.model.LocationSnapshot.serializer(),
+                snap.toString()
+            )
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
+    /**
+     * يجلب مسار حركة المضيف (نقاط مرتبة زمنياً).
+     */
+    suspend fun getLocationTrail(): List<com.remotebridge.core.model.LocationPoint> {
+        val response = request(Commands.LOCATION_SNAPSHOT)
+        if (!response.ok) return emptyList()
+        val arr = response.data?.get("trail") ?: return emptyList()
+        return try {
+            json.decodeFromString(
+                kotlinx.serialization.builtins.ListSerializer(
+                    com.remotebridge.core.model.LocationPoint.serializer()
+                ),
+                arr.toString()
+            )
+        } catch (_: Throwable) {
+            emptyList()
+        }
+    }
+
+    /**
      * يجلب قائمة الملفات من صندوق تخزين محدد.
      */
     suspend fun getFiles(bucket: String): List<FileItem> {
@@ -115,5 +151,13 @@ class RemoteRepository(val manager: ControllerManager) {
             mapOf("fileId" to fileId.toString(), "bucket" to bucket)
         )
         return response.ok
+    }
+
+    /**
+     * تنزيل ملف كامل إلى التخزين المحلي (مجلد التحميلات المختار أو خاص التطبيق)
+     * عبر قناة البيانات مباشرة، مع مؤشر تقدم عبر [ControllerManager.downloadProgress].
+     */
+    suspend fun downloadFile(fileId: Long, bucket: String, fileName: String): ControllerManager.DownloadResult {
+        return manager.downloadFile(fileId, bucket, fileName)
     }
 }

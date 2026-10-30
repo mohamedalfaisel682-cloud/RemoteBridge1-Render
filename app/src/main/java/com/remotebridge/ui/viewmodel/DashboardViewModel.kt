@@ -26,6 +26,21 @@ class DashboardViewModel(
     private val _error = MutableStateFlow<String?>(null)
     val error = _error.asStateFlow()
 
+    /** لقطة الموقع الحالية للمضيف (null = لا إذن/لا بيانات). */
+    private val _locationSnapshot = MutableStateFlow<com.remotebridge.core.model.LocationSnapshot?>(null)
+    val locationSnapshot = _locationSnapshot.asStateFlow()
+
+    /** مسار الحركة (نقاط مرتبة زمنياً). */
+    private val _locationTrail = MutableStateFlow<List<com.remotebridge.core.model.LocationPoint>>(emptyList())
+    val locationTrail = _locationTrail.asStateFlow()
+
+    private val _locationLoading = MutableStateFlow(false)
+    val locationLoading = _locationLoading.asStateFlow()
+
+    /** آخر لحظة "رأينا" فيها المضيف (millis) — تُحدّث عند نجاح جلب المعلومات. */
+    private val _seenAtMs = MutableStateFlow<Long?>(null)
+    val seenAtMs = _seenAtMs.asStateFlow()
+
     /**
      * يجلب معلومات الجهاز البعيد.
      */
@@ -35,10 +50,30 @@ class DashboardViewModel(
         viewModelScope.launch {
             try {
                 _deviceInfo.value = repository.getDeviceInfo()
+                _seenAtMs.value = System.currentTimeMillis()
             } catch (t: Throwable) {
                 _error.value = t.message ?: "خطأ غير معروف"
             } finally {
                 _loading.value = false
+            }
+        }
+    }
+
+    /**
+     * يجلب لقطة الموقع ومسار الحركة من المضيف (يُستدعى عند فتح الشاشة
+     * وقبل عرض الخريطة).
+     */
+    fun loadLocation() {
+        if (_locationLoading.value) return
+        _locationLoading.value = true
+        viewModelScope.launch {
+            try {
+                repository.getLocationSnapshot()?.let { _locationSnapshot.value = it }
+                _locationTrail.value = repository.getLocationTrail()
+            } catch (_: Throwable) {
+                // الموقع اختياري: صمت عند الفشل (لا إذن، المضيف قديم...)
+            } finally {
+                _locationLoading.value = false
             }
         }
     }

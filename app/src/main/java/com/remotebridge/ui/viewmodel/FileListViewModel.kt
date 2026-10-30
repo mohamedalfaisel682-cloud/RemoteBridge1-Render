@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
- * نموذج عرض شاشة قائمة الملفات.
+ * نموذج عرض شاشة قائمة الملفات + تنزيل الملفات على الجهاز.
  */
 class FileListViewModel(
     private val repository: RemoteRepository
@@ -24,6 +24,9 @@ class FileListViewModel(
 
     private val _error = MutableStateFlow<String?>(null)
     val error = _error.asStateFlow()
+
+    /** تقدم التنزيل الحالي (اسم/حجم) أو null. */
+    val downloadProgress = repository.manager.downloadProgress
 
     /**
      * يجلب قائمة الملفات من الجهاز البعيد.
@@ -39,6 +42,17 @@ class FileListViewModel(
             } finally {
                 _loading.value = false
             }
+        }
+    }
+
+    /**
+     * ينزّل ملفاً على الجهاز الحالي ويحفظه في مجلد التحميلات المختار.
+     */
+    fun downloadFile(file: FileItem, onDone: (ok: Boolean, label: String?, error: String?) -> Unit) {
+        _error.value = null
+        viewModelScope.launch {
+            val result = repository.downloadFile(file.id, file.bucket, file.name)
+            onDone(result.ok, result.fileLabel.ifBlank { null }, result.error)
         }
     }
 }

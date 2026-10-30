@@ -34,6 +34,68 @@ class ControllerViewModel(
 
     val hosts = controllerManager.hosts
 
+    /** خريطة "آخر ظهور" (deviceId -> millis) لحساب الدوائر البرتقالية. */
+    val lastSeen = controllerManager.lastSeen
+
+    /** آخر إطار بث حي مرحّل (الوسيلة البديلة MJPEG-over-Relay) للعرض في الواجهة. */
+    val liveFrame = controllerManager.liveFrame
+
+    /** معلومات البث الحي المرحّل النشط (نوعه + مصدره). */
+    val liveStreamInfo = controllerManager.liveStreamInfo
+
+    /**
+     * بدء بث الكاميرا الحي عبر الترحيل (يعمل على أي شبكة — بلا شرط ICE).
+     * الرد يُستهلك هنا: نجاحه يظهَر في [liveFrame] لاحقاً وسيأتي بالإطارات.
+     */
+    fun startLiveCamera(hostId: String, front: Boolean, audio: Boolean = false) {
+        controllerManager.sendRequestRelay(
+            hostId = hostId,
+            cmd = com.remotebridge.core.model.Commands.START_CAMERA_STREAM,
+            params = mapOf(
+                "front" to front.toString(),
+                "audio" to audio.toString(),
+                "mode" to "relay"
+            )
+        )
+    }
+
+    /** بث الشاشة الحي عبر الترحيل (يتطلب إذن MediaProjection على المضيف). */
+    fun startLiveScreen(hostId: String) {
+        controllerManager.sendRequestRelay(
+            hostId = hostId,
+            cmd = com.remotebridge.core.model.Commands.START_SCREEN_STREAM,
+            params = mapOf("mode" to "relay")
+        )
+    }
+
+    /** إيقاف البث الحي (يوقف مسار الترحيل ومسار WebRTC معاً في المضيف). */
+    fun stopLive(hostId: String) {
+        controllerManager.sendRequestRelay(
+            hostId = hostId,
+            cmd = com.remotebridge.core.model.Commands.STOP_CAMERA_STREAM
+        )
+    }
+
+    /** تبديل عدسة الكاميرا في البث المرحّل. */
+    fun switchLiveLens(hostId: String) {
+        controllerManager.sendRequestRelay(
+            hostId = hostId,
+            cmd = com.remotebridge.core.model.Commands.SWITCH_CAMERA
+        )
+    }
+
+    /** تفريغ عارض البث المرحّل (بعد الإيقاف). */
+    fun clearLiveView() {
+        controllerManager.clearLiveFrame()
+    }
+
+    /**
+     * يستعلم الخادم عن "آخر ظهور" (يُستدعى عند فتح نافذة الحالة).
+     */
+    fun requestLastSeen() {
+        controllerManager.requestLastSeen()
+    }
+
     /**
      * يتصل بخادم الإشارات.
      */

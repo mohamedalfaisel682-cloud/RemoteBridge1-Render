@@ -45,6 +45,20 @@ sealed class Signal {
         val deviceId: String
     ) : Signal()
 
+    /** رد الخادم على استعلام "آخر ظهور": items = deviceId -> millis */
+    @Serializable
+    @SerialName("last_seen")
+    data class LastSeen(
+        val items: Map<String, Long> = emptyMap()
+    ) : Signal()
+
+    /** استعلام آخر ظهور يوجهه المتحكم للخادم مباشرة (deviceIds فارغة = الكل). */
+    @Serializable
+    @SerialName("get_last_seen")
+    data class GetLastSeen(
+        val deviceIds: List<String> = emptyList()
+    ) : Signal()
+
     @Serializable
     @SerialName("offer")
     data class Offer(
@@ -119,5 +133,39 @@ sealed class Signal {
     @SerialName("error")
     data class Error(
         val message: String
+    ) : Signal()
+
+    /**
+     * مزامنة الإعدادات بين المضيف والمتحكم (واجهة الويب أو التطبيق).
+     * إلى = null يعني بثاً عاماً غير موجه لجهاز محدد أو طلب سحب.
+     * طابع `ts` = 0 يعني طلب سحب لقطة كاملة (pull).
+     * اخترنا إرسال اللقطة كاملة في JsonObject بحيث تظل الرسالة مرنة
+     * لإضافة حقول جديدة دون تغيير البروتوكول.
+     */
+    @Serializable
+    @SerialName("settings_sync")
+    data class SettingsSync(
+        val from: String,
+        val to: String? = null,
+        val ts: Long = 0,
+        val settings: kotlinx.serialization.json.JsonObject = kotlinx.serialization.json.JsonObject(emptyMap())
+    ) : Signal()
+
+    /**
+     * إطار بث حي بوسيلة الترحيل (MJPEG-over-Relay): صورة JPEG مضغوطة مرمّزة
+     * base64 تُرحَّل عبر خادم الإشارات من المضيف إلى جهاز العرض (متحكم/لوحة ويب).
+     * تعمل على أي شبكة تمرر فيها رسائل الإشارات عادةً — دون أي شرط ICE/TURN.
+     */
+    @Serializable
+    @SerialName("live_frame")
+    data class LiveFrame(
+        val from: String,
+        val to: String,
+        val stream: String, // camera | screen
+        val seq: Long,
+        val w: Int = 0,
+        val h: Int = 0,
+        val ts: Long = 0,
+        val b64: String
     ) : Signal()
 }

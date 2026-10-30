@@ -36,6 +36,46 @@
         }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        /* ——— تأثيرات واجهة البث الحي ——— */
+        @keyframes liveGlow {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(16,185,129,0.35); }
+            50% { box-shadow: 0 0 22px 3px rgba(16,185,129,0.15); }
+        }
+        .stream-btn-active {
+            background: linear-gradient(135deg, rgba(16,185,129,0.95), rgba(5,150,105,0.92)) !important;
+            color: #ffffff !important;
+            border-color: rgba(52,211,153,0.65) !important;
+            animation: liveGlow 2.2s ease-in-out infinite;
+        }
+        .stream-btn {
+            background: rgba(30,41,59,0.9);
+            color: #e2e8f0;
+            border: 1px solid rgba(51,65,85,0.95);
+        }
+        .stream-btn:hover {
+            background: rgba(16,185,129,0.12);
+            border-color: rgba(16,185,129,0.35);
+        }
+        .stream-stop {
+            background: linear-gradient(135deg, rgba(244,63,94,0.92), rgba(190,18,60,0.92));
+            color: #ffffff;
+            border: 1px solid rgba(251,113,133,0.6);
+        }
+        .stream-stop:hover { filter: brightness(1.1); }
+        .stream-stage-live {
+            border-color: rgba(16,185,129,0.55) !important;
+            animation: liveGlow 3s ease-in-out infinite;
+        }
+        @keyframes scanSlide {
+            0% { transform: translateY(-64px); opacity: 0; }
+            50% { opacity: 1; }
+            100% { transform: translateY(calc(100vh)); opacity: 0; }
+        }
+        .scanline {
+            height: 64px;
+            background: linear-gradient(180deg, transparent, rgba(16,185,129,0.10), transparent);
+            animation: scanSlide 4s linear infinite;
+        }
     </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col custom-scrollbar selection:bg-emerald-500 selection:text-slate-950 overflow-x-hidden">
@@ -81,6 +121,7 @@
         <button onclick="switchTab('dashboard')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap bg-emerald-600/20 text-emerald-400 border border-emerald-500/30">📊 الرئيسية</button>
         <button onclick="switchTab('files')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">📁 الملفات والذاكرة</button>
         <button onclick="switchTab('camera')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">📹 البث الحي</button>
+        <button onclick="switchTab('commands')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">⚡ الأوامر والتحكم البعيد</button>
         <button onclick="switchTab('contacts')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">📇 الأسماء</button>
         <button onclick="switchTab('sms')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">💬 الرسائل</button>
         <button onclick="switchTab('calls')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">📞 المكالمات</button>
@@ -103,6 +144,9 @@
                 </button>
                 <button onclick="switchTab('camera')" class="tab-btn w-full text-right px-3.5 py-2.5 rounded-xl hover:bg-slate-800/80 text-slate-300 font-medium transition flex items-center justify-between group">
                     <span class="flex items-center gap-2.5 text-xs">📹 البث الحي للكاميرا والصوت</span>
+                </button>
+                <button onclick="switchTab('commands')" class="tab-btn w-full text-right px-3.5 py-2.5 rounded-xl hover:bg-slate-800/80 text-slate-300 font-medium transition flex items-center justify-between group">
+                    <span class="flex items-center gap-2.5 text-xs">⚡ الأوامر والتحكم البعيد</span>
                 </button>
                 <button onclick="switchTab('contacts')" class="tab-btn w-full text-right px-3.5 py-2.5 rounded-xl hover:bg-slate-800/80 text-slate-300 font-medium transition flex items-center justify-between group">
                     <span class="flex items-center gap-2.5 text-xs">📇 الأسماء وجهات الاتصال</span>
@@ -162,7 +206,7 @@
     </main>
 
     <!-- Toast Notification Container -->
-    <div id="toast-container" class="fixed bottom-4 left-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+    <div id="toast-container" class="fixed inset-x-0 top-2 md:top-3 z-[95] flex flex-col items-center gap-2 pointer-events-none px-4"></div>
 
     <!-- Image / File Preview Modal -->
     <div id="image-modal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 hidden items-center justify-center p-3">
@@ -234,6 +278,10 @@
         let lastPingTime = 0;
         let activeTab = 'dashboard';
         let onlineHosts = [];
+        // سجل كل الأجهزة التي رأيناها سابقاً: {deviceId: {name, lastSeen}}
+        // يُغذّى من قوائم الخادم الحية وحدث قطع الاتصال وذاكرة "آخر ظهور"
+        // على الخادم (رندر) — يغذي ألوان الدوائر دون أي نص حالة.
+        let knownHosts = {};
 
         // CLEAN DEFAULT DATA STORES (Zero Fake Items by Default)
         let filesData = [];
@@ -291,6 +339,35 @@
             try { localStorage.setItem('remotebridge_config', JSON.stringify(appConfig)); } catch (e) {}
         }
 
+        // بذر إعدادات من معاملات عنوان الصفحة (تشغيل داخل WebView تطبيق المضيف):
+        // hostServerUrl / hostDeviceName / hostDeviceId تُعتمد عند أول فتح فقط
+        // أو حين تكون القيم المحلية فارغة، حتى لا تطغى على خيارات المستخدم.
+        (function seedFromHostApp() {
+            try {
+                const q = new URLSearchParams(window.location.search || '');
+                const hadConfig = !!localStorage.getItem('remotebridge_config');
+                const serverUrl = q.get('hostServerUrl');
+                const deviceName = q.get('hostDeviceName');
+                const deviceId = q.get('hostDeviceId');
+                let changed = false;
+                if (serverUrl && (!hadConfig || !appConfig.serverUrl)) {
+                    appConfig.serverUrl = serverUrl;
+                    changed = true;
+                }
+                if (deviceName && (!hadConfig || appConfig.deviceName === DEFAULT_CONFIG.deviceName)) {
+                    appConfig.deviceName = deviceName;
+                    changed = true;
+                }
+                if (deviceId && !appConfig.targetDeviceId) {
+                    appConfig.targetDeviceId = deviceId;
+                    changed = true;
+                }
+                if (changed) {
+                    localStorage.setItem('remotebridge_config', JSON.stringify(appConfig));
+                }
+            } catch (e) {}
+        })();
+
         // Auto Battery Refresh Interval
         let batteryAutoRefreshTimer = null;
 
@@ -299,6 +376,7 @@
             const targetEl = document.getElementById("target-device-id");
             if (targetEl && appConfig.targetDeviceId) targetEl.value = appConfig.targetDeviceId;
             switchTab('dashboard');
+            setTimeout(() => updateQuickOptsUI(), 300);
             // Auto connect signaling server & discover host
             setTimeout(() => autoDiscoverAndConnectHosts(), 800);
         });
@@ -322,11 +400,11 @@
                 warning: "bg-amber-950/90 border-amber-500/40 text-amber-200",
                 error: "bg-rose-950/90 border-rose-500/40 text-rose-200"
             };
-            toast.className = `p-3 rounded-xl border shadow-xl text-xs font-medium flex items-center justify-between gap-3 transition-all duration-300 pointer-events-auto transform translate-y-2 opacity-0 ${colors[type] || colors.info}`;
+            toast.className = `px-4 py-2.5 rounded-2xl border shadow-2xl text-xs md:text-sm font-medium flex items-center justify-between gap-3 transition-all duration-300 pointer-events-auto transform translate-y-3 scale-95 opacity-0 max-w-2xl w-fit mx-auto drop-shadow-lg ${colors[type] || colors.info}`;
             toast.innerHTML = `<span>${message}</span><button onclick="this.parentElement.remove()" class="text-slate-400 hover:text-white text-xs">✕</button>`;
-            
+
             container.appendChild(toast);
-            setTimeout(() => toast.classList.remove("translate-y-2", "opacity-0"), 10);
+            setTimeout(() => toast.classList.remove("translate-y-3", "scale-95", "opacity-0"), 10);
             setTimeout(() => {
                 toast.classList.add("opacity-0", "translate-y-2");
                 setTimeout(() => toast.remove(), 300);
@@ -440,19 +518,49 @@
             switch (msg.type) {
                 case "registered":
                     showToast("تم تسجيل جهاز الويب كـ Controller بنجاح", "success");
+                    // مزامنة أولية للإعدادات: دفع لقطتنا إن وُجدت وإلا سحب لقطة المضيف
+                    setTimeout(() => { try { maybeInitialSettingsSync(); } catch (_) {} }, 600);
+                    // نطلب من الخادم ذاكرة "آخر ظهور" لكل الأجهزة المعروفة
+                    try {
+                        if (ws && ws.readyState === WebSocket.OPEN) {
+                            ws.send(JSON.stringify({ type: "get_last_seen" }));
+                        }
+                    } catch (_) {}
                     break;
                 case "hosts":
                     onlineHosts = msg.hosts || [];
+                    (msg.hosts || []).forEach(h => {
+                        if (!knownHosts[h.deviceId]) knownHosts[h.deviceId] = { name: h.deviceName || h.deviceId, lastSeen: 0 };
+                        knownHosts[h.deviceId].name = h.deviceName || h.deviceId;
+                        if (h.lastSeenMs) knownHosts[h.deviceId].lastSeen = h.lastSeenMs;
+                    });
                     renderHostList();
                     break;
                 case "host_online":
                     showToast(`جهاز مضيف متصل: ${msg.host.deviceName}`, "info");
+                    if (msg.host && msg.host.deviceId) {
+                        if (!knownHosts[msg.host.deviceId]) knownHosts[msg.host.deviceId] = { name: msg.host.deviceName || msg.host.deviceId, lastSeen: 0 };
+                        knownHosts[msg.host.deviceId].name = msg.host.deviceName || knownHosts[msg.host.deviceId].name;
+                        knownHosts[msg.host.deviceId].lastSeen = Date.now();
+                    }
                     refreshHostList();
                     break;
                 case "host_offline":
                     showToast(`انقطع المضيف: ${msg.deviceId}`, "warning");
+                    if (!knownHosts[msg.deviceId]) knownHosts[msg.deviceId] = { name: msg.deviceId, lastSeen: 0 };
+                    knownHosts[msg.deviceId].lastSeen = msg.ts || Date.now();
                     refreshHostList();
                     break;
+                case "last_seen": {
+                    const items = msg.items || {};
+                    Object.keys(items).forEach(id => {
+                        if (!knownHosts[id]) knownHosts[id] = { name: id, lastSeen: 0 };
+                        knownHosts[id].lastSeen = items[id];
+                    });
+                    renderHostList();
+                    updateStatusModalIfOpen();
+                    break;
+                }
                 case "pong":
                     const latency = Date.now() - lastPingTime;
                     const pingText = document.getElementById("ping-text");
@@ -476,6 +584,249 @@
                         data: msg.data
                     });
                     break;
+                case "live_frame":
+                    handleLiveFrame(msg);
+                    break;
+                case "settings_sync":
+                    handleIncomingSettingsSync(msg);
+                    break;
+            }
+        }
+
+        // ================================================================
+        // عارض البث عبر خادم الإشارات (وضع الترحيل MJPEG):
+        // الإطارات تصل كرسائل live_frame (JPEG مشفّر Base64) عبر قناة wss نفسها،
+        // دون الحاجة إلى WebRTC/STUN/TURN. فيديو WebRTC النشط يحتفظ بالأولوية.
+        // ================================================================
+        let relayStreamActive = false;   // عارض إطارات الترحيل يعمل الآن؟
+        let relayLastDataURL = null;     // آخر إطار سليم لاستعادته بعد إعادة رسم اللوحة
+        let relayFrameCount = 0;         // عدد إطارات الترحيل المستلمة
+        let webrtcVideoActive = false;   // يوجد مسار فيديو WebRTC نشط (له الأولوية)
+
+        function handleLiveFrame(msg) {
+            try {
+                if (!msg || !msg.b64) return;
+                relayFrameCount++;
+                if (webrtcVideoActive) {
+                    console.log(`[Relay] تجاهل إطار ${msg.seq}: فيديو WebRTC النشط له الأولوية`);
+                    return;
+                }
+                relayLastDataURL = "data:image/jpeg;base64," + msg.b64;
+                const firstFrame = !relayStreamActive;
+                relayStreamActive = true;
+                if (firstFrame) {
+                    // نخفي عنصر الفيديو فقط إن لم يكن هناك بث WebRTC حقيقي معروض
+                    const videoEl = document.getElementById("remote-video");
+                    const placeholder = document.getElementById("video-placeholder");
+                    if (videoEl && !videoEl.srcObject) videoEl.classList.add('hidden');
+                    if (placeholder) placeholder.classList.add('hidden');
+                    showToast("بدأ استقبال البث الحي عبر خادم الإشارات (وضع الترحيل) 📡", "success");
+                    // نعيد رسم اللوحة فقط إذا كانت لوحة البث هي العرض الحالي (لا نخطف تنقل المستخدم)
+                    if (document.getElementById("video-placeholder") || document.getElementById("relay-frame")) {
+                        renderCameraStreamView();
+                    }
+                } else {
+                    const imgEl = document.getElementById("relay-frame");
+                    if (imgEl && imgEl.src !== relayLastDataURL) imgEl.src = relayLastDataURL;
+                }
+            } catch (e) {
+                console.warn("[Relay Frame Error]", e);
+            }
+        }
+
+        function clearRelayViewer() {
+            relayStreamActive = false;
+            relayLastDataURL = null;
+            relayFrameCount = 0;
+            const imgEl = document.getElementById("relay-frame");
+            if (imgEl) {
+                imgEl.classList.add('hidden');
+                imgEl.removeAttribute('src');
+            }
+        }
+
+        function clearWebRtcVideoForRelayStart() {
+            // عند بدء بث الترحيل: نُصفّي فيديو WebRTC القديم المنتهي كي لا يغطي عارض الإطارات
+            try {
+                const videoEl = document.getElementById("remote-video");
+                if (!videoEl || !videoEl.srcObject) { webrtcVideoActive = false; return; }
+                const vt = videoEl.srcObject.getVideoTracks ? videoEl.srcObject.getVideoTracks() : [];
+                if (!vt.length || vt.every(t => t.readyState === 'ended')) {
+                    videoEl.srcObject = null;
+                    videoEl.classList.add('hidden');
+                    webrtcVideoActive = false;
+                }
+            } catch (_) {}
+        }
+
+        // ================================================================
+        // مزامنة الإعدادات السريعة مع تطبيق المضيف (settings_sync):
+        //  - ts = 0 : طلب سحب لقطة من الطرف الآخر
+        //  - ts > 0 : تعديل حديث (التعديل الأحدث يفوز)
+        //  لا نرد تلقائياً على اللقطات ts>0 (يرد المضيف بنفسه عند الحاجة)
+        //  وهو ما يمنع أي حلقة لانهائية من التردد.
+        // ================================================================
+        function currentSyncTargetId() {
+            const targetEl = document.getElementById("target-device-id");
+            return (targetEl && targetEl.value.trim()) || appConfig.targetDeviceId;
+        }
+
+        function loadQuickOpts() {
+            try {
+                const raw = JSON.parse(localStorage.getItem('remotebridge_quick_opts') || '{}');
+                return {
+                    ts: raw.ts || 0,
+                    autoStartHost: raw.autoStartHost === true,
+                    restartOnKill: raw.restartOnKill !== false,
+                    restartDelayMinutes: raw.restartDelayMinutes || 10
+                };
+            } catch (e) {
+                return { ts: 0, autoStartHost: false, restartOnKill: true, restartDelayMinutes: 10 };
+            }
+        }
+        let quickOpts = loadQuickOpts();
+
+        function saveQuickOpts() {
+            try { localStorage.setItem('remotebridge_quick_opts', JSON.stringify(quickOpts)); } catch (e) {}
+            updateQuickOptsUIStatus();
+        }
+
+        function buildQuickSnapshot(tsOverride) {
+            return {
+                ts: tsOverride !== undefined ? tsOverride : Date.now(),
+                serverUrl: appConfig.serverUrl || PRESETS.render,
+                stunServer: appConfig.stunServer || DEFAULT_CONFIG.stunServer,
+                connectionProfile: appConfig.connectionProfile || 'HYBRID',
+                deviceName: appConfig.deviceName || DEFAULT_CONFIG.deviceName,
+                autoStartHost: quickOpts.autoStartHost,
+                restartOnKill: quickOpts.restartOnKill,
+                restartDelayMinutes: quickOpts.restartDelayMinutes
+            };
+        }
+
+        function sendSettingsSync(settings, targetOverride) {
+            const target = targetOverride || currentSyncTargetId();
+            if (!target) {
+                showToast('حدد معرّف الجهاز المضيف أولاً لأرسل الإعدادات للمكان الصحيح', 'warning');
+                return;
+            }
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                showToast('اتصال السيرفر غير مفتوح — لا تُرسل الإعدادات الآن', 'warning');
+                return;
+            }
+            const message = {
+                type: 'settings_sync',
+                from: myDeviceId,
+                to: target,
+                ts: settings ? settings.ts : 0,
+                settings: settings || {}
+            };
+            ws.send(JSON.stringify(message));
+        }
+
+        /** دفع اللقطة الحالية للمضيف (التعديل الأحدث يفوز عنده). */
+        function pushQuickOptsSync() {
+            quickOpts.ts = Date.now();
+            saveQuickOpts();
+            sendSettingsSync(buildQuickSnapshot(quickOpts.ts));
+            showToast('أُرسلت خيارات الاستمرارية المحدثة للمضيف للمزامنة', 'success');
+        }
+
+        /** طلب سحب لقطة المضيف الحالية (ts = 0). */
+        function pullHostSettingsSync() {
+            sendSettingsSync(null);
+            showToast('أمرك بجلب لقطة إعدادات المضيف الحالية...', 'info');
+        }
+
+        function handleIncomingSettingsSync(msg) {
+            if (!msg || (msg.to && msg.to !== myDeviceId)) return;
+            const settings = msg.settings || {};
+            const incomingTs = parseInt(msg.ts, 10) || parseInt(settings.ts, 10) || 0;
+
+            // طلب سحب من الطرف الآخر: نرد بلقطة كاملة (معرف بجهازنا)
+            if (incomingTs === 0) {
+                sendSettingsSync(buildQuickSnapshot(), msg.from);
+                showToast('وصلنا طلب سحب الإعدادات — تمت الاستجابة بلقطة الإعدادات الحالية', 'info');
+                return;
+            }
+
+            // تبني اللقطة فقط إن كانت أحدث من حافظنا (التعديل الأحدث يفوز)
+            if (incomingTs <= quickOpts.ts) {
+                updateQuickOptsUI();
+                return;
+            }
+            applySnapshotToLocal(settings, incomingTs);
+            showToast('تُبنّيت إعدادات الاستمرارية الأحدث من المضيف وتمت مطابقته هنا', 'success');
+        }
+
+        function applySnapshotToLocal(snapshot, ts) {
+            try {
+                quickOpts.ts = ts;
+                if (typeof snapshot.restartOnKill === 'boolean') quickOpts.restartOnKill = snapshot.restartOnKill;
+                else if (typeof snapshot.restartOnKill === 'string') quickOpts.restartOnKill = snapshot.restartOnKill === 'true';
+                if (typeof snapshot.autoStartHost === 'boolean') quickOpts.autoStartHost = snapshot.autoStartHost;
+                else if (typeof snapshot.autoStartHost === 'string') quickOpts.autoStartHost = snapshot.autoStartHost === 'true';
+                const delay = parseInt(snapshot.restartDelayMinutes, 10);
+                if (delay > 0) quickOpts.restartDelayMinutes = delay;
+                const serverUrl = typeof snapshot.serverUrl === 'string' ? snapshot.serverUrl : '';
+                const stunServer = typeof snapshot.stunServer === 'string' ? snapshot.stunServer : '';
+                const connectionProfile = typeof snapshot.connectionProfile === 'string' ? snapshot.connectionProfile : '';
+                const deviceName = typeof snapshot.deviceName === 'string' ? snapshot.deviceName : '';
+                if (serverUrl) appConfig.serverUrl = serverUrl;
+                if (stunServer) appConfig.stunServer = stunServer;
+                if (connectionProfile) appConfig.connectionProfile = connectionProfile;
+                if (deviceName) appConfig.deviceName = deviceName;
+                localStorage.setItem('remotebridge_config', JSON.stringify(appConfig));
+                saveQuickOpts();
+                updateQuickOptsUI();
+            } catch (e) {
+                console.error('تطبيق لقطة الإعدادات فشل:', e);
+            }
+        }
+
+        function updateQuickOptsUI() {
+            const killEl = document.getElementById('qopt-restart-on-kill');
+            const delayEl = document.getElementById('qopt-restart-delay');
+            const autoEl = document.getElementById('qopt-autostart');
+            if (killEl) killEl.checked = quickOpts.restartOnKill;
+            if (autoEl) autoEl.checked = quickOpts.autoStartHost;
+            if (delayEl) delayEl.value = String(quickOpts.restartDelayMinutes);
+            updateQuickOptsUIStatus();
+        }
+
+        function updateQuickOptsUIStatus() {
+            const statusEl = document.getElementById('qopt-sync-status');
+            if (statusEl) {
+                statusEl.textContent = quickOpts.ts > 0
+                    ? `آخر مزامنة/تعديل: ${new Date(quickOpts.ts).toLocaleString('ar')}`
+                    : 'آخر مزامنة: لم تُزامَن بعد (سيرسل عند أول تعديل أو عند الاتصال)';
+            }
+        }
+
+        // مستمع التبديلات (تعديل محلّي → دفع فوري للمزامنة)
+        function setQuickRestartOnKill(v) {
+            if (quickOpts.restartOnKill === v && quickOpts.ts > 0) return;
+            quickOpts.restartOnKill = v;
+            pushQuickOptsSync();
+        }
+        function setQuickRestartDelay(v) {
+            const d = parseInt(v, 10) || 10;
+            if (quickOpts.restartDelayMinutes === d && quickOpts.ts > 0) return;
+            quickOpts.restartDelayMinutes = d;
+            pushQuickOptsSync();
+        }
+        function setQuickAutoStart(v) {
+            if (quickOpts.autoStartHost === v && quickOpts.ts > 0) return;
+            quickOpts.autoStartHost = v;
+            pushQuickOptsSync();
+        }
+
+        /** بعد التسجيل في السيرفر: لو لدينا لقطة سابقة ن pushها، وإلا ن pull. */
+        function maybeInitialSettingsSync() {
+            if (quickOpts.ts > 0) {
+                sendSettingsSync(buildQuickSnapshot(quickOpts.ts));
+            } else {
+                try { sendSettingsSync(null); } catch (e) {}
             }
         }
 
@@ -529,28 +880,199 @@
             const listEl = document.getElementById("hosts-list");
             if (!listEl) return;
 
-            if (!onlineHosts || onlineHosts.length === 0) {
+            const onlineIds = (onlineHosts || []).map(h => h.deviceId);
+            const offlineIds = Object.keys(knownHosts).filter(id => !onlineIds.includes(id));
+
+            if ((!onlineHosts || onlineHosts.length === 0) && offlineIds.length === 0) {
                 listEl.innerHTML = `<div class="text-[10px] text-slate-500 text-center py-2 bg-slate-900/40 rounded-xl border border-slate-800 animate-pulse">لا توجد أجهزة مضيفة أونلاين حالياً. جارٍ الفحص الدوري عبر السيرفر كل 3 ثوانٍ...</div>`;
                 return;
             }
 
             const currentTarget = activeTargetDeviceId || appConfig.targetDeviceId;
-            if (!currentTarget && onlineHosts.length > 0) {
+            if (!currentTarget && onlineHosts && onlineHosts.length > 0) {
                 selectHost(onlineHosts[0].deviceId);
             }
 
-            listEl.innerHTML = onlineHosts.map(h => `
-                <div onclick="selectHost('${h.deviceId}')" class="p-2 bg-slate-900/80 hover:bg-slate-800/90 border ${h.deviceId === currentTarget ? 'border-emerald-500/80 bg-emerald-950/20' : 'border-slate-700/60'} rounded-xl flex items-center justify-between cursor-pointer transition">
+            // فقط ألوان الدوائر: أخضر = متصل، برتقالي = غير متصل لكن لدينا
+            // بيانات آخر ظهور، أحمر = غير متصل بلا بيانات — ولا نص حالة أبداً.
+            const hostRow = (id, name, online) => {
+                const kind = online ? 'online'
+                    : ((knownHosts[id] && knownHosts[id].lastSeen) ? 'seen' : 'never');
+                const dotClass = kind === 'online'
+                    ? 'bg-emerald-400'
+                    : kind === 'seen' ? 'bg-amber-400' : 'bg-rose-500';
+                return `
+                <div onclick="selectHost('${id}')" class="p-2 bg-slate-900/80 hover:bg-slate-800/90 border ${id === currentTarget ? 'border-emerald-500/80 bg-emerald-950/20' : 'border-slate-700/60'} rounded-xl flex items-center justify-between cursor-pointer transition">
                     <div class="flex items-center gap-2">
-                        <div class="w-2 h-2 rounded-full bg-emerald-400"></div>
+                        <div title="نافذة الحالة" onclick="event.stopPropagation(); showStatusModal('${id}')" class="cursor-pointer ${dotClass} w-2.5 h-2.5 rounded-full ring-2 ring-slate-900 hover:scale-125 transition"></div>
                         <div>
-                            <p class="text-xs font-bold text-slate-200">${h.deviceName || h.deviceId}</p>
-                            <p class="text-[10px] font-mono text-slate-400">${h.deviceId}</p>
+                            <p class="text-xs font-bold text-slate-200">${name}</p>
+                            <p class="text-[10px] font-mono text-slate-400">${id}</p>
                         </div>
                     </div>
-                    <span class="text-[9px] bg-emerald-950 border border-emerald-500/30 text-emerald-300 px-2 py-0.5 rounded-full">نشط أونلاين</span>
-                </div>
-            `).join('');
+                    <button title="نافذة الحالة" onclick="event.stopPropagation(); showStatusModal('${id}')" class="text-[13px] text-slate-500 hover:text-slate-200 px-1">ⓘ</button>
+                </div>`;
+            };
+
+            const rows = (onlineHosts || []).map(h =>
+                hostRow(h.deviceId, h.deviceName || h.deviceId, true)
+            ).concat(
+                offlineIds.map(id => hostRow(id, (knownHosts[id] && knownHosts[id].name) || id, false))
+            );
+            listEl.innerHTML = rows.join('');
+        }
+
+        // ================================================================
+        // نافذة الحالة (تُفتح عند النقر على دائرة الحالة أو ⓘ):
+        // تعرض آخر ظهور من ذاكرة خادم رندر + تفحّص ملفات الجلسات المحفوظة
+        // تلقائياً في ملفات المتحكم عندما كان المضيف والمتحكمان متصلين
+        // في نفس الجلسة.
+        // ================================================================
+        let statusModalId = null;
+
+        function showStatusModal(deviceId) {
+            if (!deviceId) return;
+            statusModalId = deviceId;
+            try {
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: 'get_last_seen' }));
+                }
+            } catch (_) {}
+            updateStatusModalIfOpen();
+            const modal = document.getElementById('status-modal');
+            if (modal) modal.classList.remove('hidden');
+            refreshSavedSessions();
+        }
+
+        function closeStatusModal() {
+            statusModalId = null;
+            const modal = document.getElementById('status-modal');
+            if (modal) modal.classList.add('hidden');
+        }
+
+        function updateStatusModalIfOpen() {
+            if (!statusModalId) return;
+            const modal = document.getElementById('status-modal');
+            if (!modal || modal.classList.contains('hidden')) return;
+            const id = statusModalId;
+            const alive = (onlineHosts || []).find(h => h.deviceId === id);
+            const info = knownHosts[id] || {};
+            const titleEl = document.getElementById('status-modal-title');
+            const bodyEl = document.getElementById('status-modal-body');
+            if (!titleEl || !bodyEl) return;
+            titleEl.innerText = info.name || (alive && alive.deviceName) || id;
+
+            const statusHtml = alive
+                ? '<span class="text-emerald-400 font-bold">● متصل الآن</span>'
+                : '<span class="text-rose-400 font-bold">● غير متصل</span>';
+
+            let lastSeenText = 'لا توجد معلومات موثّقة بعد';
+            const ls = info.lastSeen;
+            if (ls && ls > 0) {
+                try { lastSeenText = new Date(ls).toLocaleString(); } catch (_) {}
+            }
+
+            bodyEl.innerHTML = `
+                <p>${statusHtml}</p>
+                <p>المعرّف: <span class="font-mono text-[10px]"> ${id}</span></p>
+                <p>آخر ظهور (من ذاكرة الخادم): <span class="text-amber-300 font-bold">${lastSeenText}</span></p>
+            `;
+        }
+
+        function refreshSavedSessions() {
+            const el = document.getElementById('saved-sessions-list');
+            if (!el) return;
+            let html = '';
+            if (window.RBNative && typeof window.RBNative.listSavedSessions === 'function') {
+                try {
+                    const items = JSON.parse(window.RBNative.listSavedSessions() || '[]');
+                    if (!items.length) {
+                        html = '<p class="text-slate-500">لا توجد ملفات بعد — تُكتب تلقائياً عند اكتمال اتصال مضيف ومتحكم في نفس الجلسة.</p>';
+                    } else {
+                        html = items.map(f => `
+                            <button onclick="openSavedSession('${String(f.name).replace(/'/g, "\\'")}')" class="w-full text-right px-2 py-1 rounded-lg bg-slate-800/70 hover:bg-slate-700 border border-slate-700 flex items-center justify-between gap-2">
+                                <span class="truncate">🗂 ${f.name}</span>
+                                <span class="text-slate-500 text-[9px] whitespace-nowrap">${new Date(f.modified).toLocaleString()}</span>
+                            </button>
+                        `).join('');
+                    }
+                } catch (e) {
+                    html = '<p class="text-rose-400">تعذر سرد ملفات الجلسات</p>';
+                }
+            } else {
+                html = '<p class="text-slate-500">تصفح الملفات يعمل داخل تطبيق أندرويد (الربط الأصلي غير متاح في المتصفح).</p>';
+            }
+            el.innerHTML = html;
+        }
+
+        function openSavedSession(name) {
+            if (!(window.RBNative && typeof window.RBNative.readSavedSession === 'function')) return;
+            let content = '';
+            try { content = window.RBNative.readSavedSession(name) || ''; } catch (_) {}
+            const modal = document.getElementById('session-content-modal');
+            const titleEl = document.getElementById('session-content-title');
+            const bodyEl = document.getElementById('session-content-body');
+            if (!modal || !titleEl || !bodyEl) return;
+            titleEl.innerText = name;
+            bodyEl.innerText = content || 'الملف فارغ أو غير قابل للقراءة';
+            modal.classList.remove('hidden');
+        }
+
+        function closeSavedSession() {
+            const modal = document.getElementById('session-content-modal');
+            if (modal) modal.classList.add('hidden');
+        }
+
+        // حفظ تلقائي لقطة الجلسة في ملفات المتحكم عندما يتصل المضيف والمتحكم
+        // في نفس الجلسة (نجاح device_info على قناة WebRTC الحية) — مرة كل 5 د.
+        const savedSessionTargets = {};
+
+        function saveTextViaNative(fileName, text) {
+            if (!(window.RBNative && typeof window.RBNative.saveStart === 'function')) return;
+            try {
+                const id = Math.floor(Math.random() * 1000000000);
+                const bytes = new TextEncoder().encode(text);
+                let bin = '';
+                const chunkSize = 0x8000;
+                for (let i = 0; i < bytes.length; i += chunkSize) {
+                    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+                }
+                const b64 = btoa(bin);
+                window.RBNative.saveStart(id, fileName);
+                window.RBNative.saveChunk(id, b64);
+                const savedPath = window.RBNative.saveComplete(id) || '';
+                if (savedPath) showToast('حفظ تلقائي لملف الجلسة: ' + savedPath, 'info');
+            } catch (_) {}
+        }
+
+        function autoSaveSessionSnapshot(targetId, data) {
+            if (!targetId) return;
+            const now = Date.now();
+            if (savedSessionTargets[targetId] && (now - savedSessionTargets[targetId]) < 5 * 60 * 1000) return;
+            savedSessionTargets[targetId] = now;
+            try {
+                const snapshot = {
+                    kind: 'rb_session',
+                    capturedAt: now,
+                    hostId: targetId,
+                    hostName: (data.deviceName || (knownHosts[targetId] && knownHosts[targetId].name) || targetId),
+                    controllerDeviceName: appConfig.deviceName || 'لوحة ويب',
+                    connectionProfile: appConfig.connectionProfile || '',
+                    serverUrl: appConfig.serverUrl || '',
+                    hostOnline: true,
+                    deviceInfo: {
+                        manufacturer: data.manufacturer || '',
+                        model: data.model || '',
+                        batteryLevel: data.batteryLevel,
+                        isCharging: data.isCharging,
+                        androidVersion: data.androidVersion || '',
+                        sdkInt: data.sdkInt,
+                        storageFreeBytes: data.storageFreeBytes,
+                        storageTotalBytes: data.storageTotalBytes
+                    }
+                };
+                saveTextViaNative('RB_Session_Web_' + String(now) + '.json', JSON.stringify(snapshot, null, 2));
+            } catch (_) {}
         }
 
         function selectHost(deviceId) {
@@ -948,7 +1470,12 @@
 
                 if (event.track.kind === 'video' && videoEl) {
                     videoEl.srcObject = remoteMediaStream;
+                    videoEl.muted = true; // إصلاح العيب F: سياسات التشغيل التلقائي تسمح بالتشغيل المكتوم فقط
                     videoEl.classList.remove('hidden');
+                    webrtcVideoActive = true;
+                    // فيديو WebRTC له الأولوية: نخفي عارض إطارات الترحيل إن كان ظاهراً
+                    const relayImg = document.getElementById("relay-frame");
+                    if (relayImg) relayImg.classList.add('hidden');
                     const placeholder = document.getElementById("video-placeholder");
                     if (placeholder) placeholder.classList.add('hidden');
                     videoEl.play().catch(e => console.log("Video auto-play policy:", e));
@@ -1060,10 +1587,191 @@
             }
         }
 
-        let activeFileDownloads = {};
-        let deviceInfoResolver = null;
+        // ================================================================
+        // نظام تنزيل الملفات الحقيقية عبر قناة البيانات P2P:
+        //  - في المتصفح العادي: تُجمّع القطع في Blob ثم تُنزّل تلقائياً
+        //    عبر رابط مؤقت مع خاصية download.
+        //  - داخل WebView التطبيق (window.RBNative): تُحفظ الأجزاء مباشرة
+        //    على الهاتف عبر جسر Kotlin إلى مجلد التحميلات المختار.
+        // رأس الإطار الثنائي الفعلي 22 بايت:
+        //   type@0، messageId@1، seq@5، total@9، flags@13، checksum@14،
+        //   payloadLen@18، payload@22.
+        // ================================================================
+        let activeFileDownloads = {};       // reqId -> حالة تنزيل جارٍ
+        let filesRenderedList = [];         // ترتيب عناصر المستكشف المعروضة (ربط أزرار التنزيل)
+        let nextDownloadRequestId = -1000;  // معرفات سلبية لا تتصادم مع أرقام sendRPCCommand
+        const DOWNLOAD_TIMEOUT_MS = 15 * 60 * 1000;
+        const DOWNLOAD_MAX_PARALLEL = 3;
 
-        function waitForDeviceInfoResponse(timeoutMs = 3500) {
+        /** هل نحن داخل WebView التطبيق مع جسر الحفظ الأصلي؟ */
+        function activeNativeSaver() {
+            return !!(window.RBNative && typeof window.RBNative.saveStart === 'function');
+        }
+
+        /** تحويل ArrayBuffer إلى Base64 على دفعات (لجسر الحفظ الأصلي). */
+        function arrayBufferToBase64(buffer, cb) {
+            try {
+                const bytes = new Uint8Array(buffer);
+                let bin = '';
+                for (let i = 0; i < bytes.length; i += 8192) {
+                    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
+                }
+                cb(btoa(bin));
+            } catch (e) {
+                cb('');
+            }
+        }
+
+        /** بطاقة تقدم التنزيل العائمة (لا تُمحى عند إعادة رسم المستكشف). */
+        function ensureDownloadCard(name) {
+            let card = document.getElementById('active-download-card');
+            if (!card) {
+                card = document.createElement('div');
+                card.id = 'active-download-card';
+                card.className = 'fixed top-16 left-4 right-4 sm:left-auto sm:w-80 z-[60] p-3 rounded-xl border border-emerald-500/40 bg-emerald-950/95 text-emerald-100 shadow-2xl';
+                card.innerHTML = `
+                    <div class="flex items-center justify-between gap-2">
+                        <div class="text-xs font-bold truncate" id="dl-card-name"></div>
+                        <button onclick="removeDownloadCard(0)" class="text-emerald-300 hover:text-white text-xs">✕</button>
+                    </div>
+                    <div class="text-[10px] text-emerald-300 font-mono mt-1" id="dl-card-progress"></div>
+                    <div class="w-full bg-slate-900 rounded-full h-1.5 overflow-hidden mt-1">
+                        <div id="dl-card-bar" class="bg-emerald-400 h-full transition-all" style="width:0%"></div>
+                    </div>`;
+                document.body.appendChild(card);
+            }
+            const nameEl = document.getElementById('dl-card-name');
+            if (nameEl) nameEl.textContent = name;
+        }
+
+        function updateDownloadCard(received, size, indeterminate) {
+            const progEl = document.getElementById('dl-card-progress');
+            const barEl = document.getElementById('dl-card-bar');
+            if (!progEl || !barEl) return;
+            if (indeterminate) {
+                progEl.textContent = `${(received / 1048576).toFixed(2)} MB — جارٍ النقل...`;
+                barEl.style.width = '40%';
+            } else {
+                const pct = Math.min(100, Math.round((received / Math.max(1, size)) * 100));
+                progEl.textContent = `${(received / 1048576).toFixed(2)} / ${(size / 1048576).toFixed(2)} MB (${pct}%)`;
+                barEl.style.width = pct + '%';
+            }
+        }
+
+        function removeDownloadCard(delayMs = 0) {
+            const card = document.getElementById('active-download-card');
+            if (!card) return;
+            if (delayMs > 0) setTimeout(removeDownloadCard, delayMs);
+            else card.remove();
+        }
+
+        /**
+         * بدء تنزيل حقيقي من المضيف عبر قناة البيانات.
+         * params إما {fileId, bucket} لعناصر MediaStore، أو {bucket:'fs', path}
+         * لعناصر مستكشف الذاكرة (مضيف يفتح بالمسار).
+         */
+        function beginFileDownload(params, name, sizeHint = 0) {
+            if (!(dataChannel && dataChannel.readyState === 'open')) {
+                showToast('التنزيل الحقيقي يحتاج قناة البيانات P2P المفتوحة — ابدأ بثاً (كاميرا/شاشة) مرة لتأسيسها أو أعد الاتصال بالمضيف', 'error');
+                return false;
+            }
+            const key = JSON.stringify(params);
+            if (activeFileDownloadKeys[key]) {
+                showToast(`«${name}» قيد التنزيل بالفعل`, 'warning');
+                return false;
+            }
+            const reqId = nextDownloadRequestId--;
+            const state = {
+                name: name,
+                size: sizeHint || 0,
+                parts: [],
+                received: 0,
+                lastSeq: -1,
+                native: activeNativeSaver(),
+                startedAt: Date.now(),
+                timer: setTimeout(() => {
+                    const dl = activeFileDownloads[reqId];
+                    if (dl) { dl.error = 'انتهت مهلة النقل (15 دقيقة)'; }
+                    finalizeFileDownload(reqId, false);
+                }, DOWNLOAD_TIMEOUT_MS)
+            };
+            activeFileDownloads[reqId] = state;
+            activeFileDownloadKeys[key] = reqId;
+            if (state.native) {
+                try { window.RBNative.saveStart(reqId, name); }
+                catch (e) { state.native = false; }
+            }
+            ensureDownloadCard(name);
+            updateDownloadCard(0, state.size, state.size <= 0);
+            try {
+                dataChannel.send(JSON.stringify({ id: reqId, cmd: 'file_open', params: params }));
+            } catch (e) {
+                state.error = 'فشل إرسال الطلب: ' + e.message;
+                finalizeFileDownload(reqId, false);
+                return false;
+            }
+            showToast(`بدأ تنزيل «${name}» عبر قناة البيانات...`, 'info');
+            return true;
+        }
+        const activeFileDownloadKeys = {};
+
+        /** ختم التنزيل: حفظ نهائي أو تنظيف. */
+        function finalizeFileDownload(id, ok, bytesOverride) {
+            const dl = activeFileDownloads[id];
+            if (!dl) return;
+            if (dl.timer) clearTimeout(dl.timer);
+            for (const k in activeFileDownloadKeys) {
+                if (activeFileDownloadKeys[k] === id) delete activeFileDownloadKeys[k];
+            }
+            delete activeFileDownloads[id];
+            if (!ok) {
+                if (dl.native) { try { window.RBNative.saveFailed(id); } catch (e) {} }
+                showToast(`فشل تنزيل «${dl.name}» — ${dl.error || 'انقطع النقل'}`, 'error');
+                removeDownloadCard(1500);
+                return;
+            }
+            const bytes = bytesOverride || dl.received;
+            if (dl.native) {
+                // إفلاغ المخزن عبر الجسر بعد لحظة قصيرة (واجهة Kotlin متزامنة)
+                setTimeout(() => {
+                    let savedPath = '';
+                    try { savedPath = window.RBNative.saveComplete(id) || ''; }
+                    catch (e) { showToast('فشل حفظ الملف على الهاتف: ' + e.message, 'error'); }
+                    showToast(
+                        savedPath ? `حُفظ «${dl.name}» في: ${savedPath}` : `تعذّر حفظ «${dl.name}» في مجلد التحميلات`,
+                        savedPath ? 'success' : 'error'
+                    );
+                    removeDownloadCard(100);
+                }, 150);
+            } else {
+                try {
+                    const blob = new Blob(dl.parts, { type: 'application/octet-stream' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = dl.name || ('rb-file-' + id);
+                    document.body.appendChild(a);
+                    a.click();
+                    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 4000);
+                    showToast(`نُزّل «${dl.name}» بحجم ${(bytes / 1048576).toFixed(2)} MB إلى مجلد التحميلات`, 'success');
+                } catch (e) {
+                    showToast('فشل حفظ الملف في المتصفح: ' + e.message, 'error');
+                }
+                removeDownloadCard(400);
+            }
+        }
+
+        /** تنزيل عنصر من المستكشف حسب موقعه في القائمة المعروضة حالياً. */
+        function startFileDownloadByIndex(idx) {
+            const f = filesRenderedList[idx];
+            if (!f) { showToast('تم تغيير القائمة — عُد لجلب الملفات ثم أعد المحاولة', 'warning'); return false; }
+            if (f.isDir || f.bucket === 'folder') return false;
+            // عناصر مستكشف الذاكرة: تنزيل بالمسار النسبي مباشرة
+            const fsPath = (currentExplorerPath === '/' ? '' : currentExplorerPath) + f.name;
+            return beginFileDownload({ bucket: 'fs', path: fsPath }, f.name, f.size || 0);
+        }
+
+        function waitForFileInfoResponse(timeoutMs = 3500) {
             return new Promise((resolve) => {
                 if (latestDeviceInfo && latestDeviceInfo.batteryLevel !== undefined) {
                     resolve(latestDeviceInfo);
@@ -1083,7 +1791,7 @@
         }
 
         function handleBinaryChunk(buffer) {
-            if (!buffer || buffer.byteLength < 17) return;
+            if (!buffer || buffer.byteLength < 22) return;
             try {
                 const view = new DataView(buffer);
                 const type = view.getInt8(0);
@@ -1091,14 +1799,27 @@
 
                 const messageId = view.getInt32(1);
                 const seq = view.getInt32(5);
-                const payloadLen = view.getInt32(13);
+                const payloadLen = view.getInt32(18);
+                if (payloadLen <= 0 || buffer.byteLength < 22 + payloadLen) return;
 
-                const chunkData = buffer.slice(17, 17 + payloadLen);
+                const chunkData = buffer.slice(22, 22 + payloadLen);
+                const dl = activeFileDownloads[messageId];
+                if (!dl) return;
 
-                if (!activeFileDownloads[messageId]) {
-                    activeFileDownloads[messageId] = [];
+                // حاجز تكرار على قناة مرتبة (يقطع إعادة الوصول بالخطأ)
+                if (seq <= dl.lastSeq) return;
+                dl.lastSeq = seq;
+                dl.received += payloadLen;
+
+                if (dl.native) {
+                    arrayBufferToBase64(chunkData, (b64) => {
+                        if (!b64) return;
+                        try { window.RBNative.saveChunk(messageId, b64); } catch (e) {}
+                    });
+                } else {
+                    dl.parts.push(chunkData);
                 }
-                activeFileDownloads[messageId].push(chunkData);
+                updateDownloadCard(dl.received, dl.size, dl.size <= 0);
             } catch (e) {
                 console.error("Binary chunk handling error:", e);
             }
@@ -1212,134 +1933,39 @@
                 showToast("لا توجد استجابة من المضيف", "warning");
                 return;
             }
-
-            // معالجة الردود من الطلبات المعلقة (مع retry)
-            const pending = pendingRpcRequests.get(resp.id);
-            if (pending) {
-                clearTimeout(pending.timer);
+            // تسليم الرد إلى من انتظره كوعد (أوامر تبويب التحكم البعيد) قبل أي معالجة أخرى
+            const pendingRes = pendingRpcRequests.get(resp.id);
+            if (pendingRes) {
+                clearTimeout(pendingRes.timer);
                 pendingRpcRequests.delete(resp.id);
+                try { pendingRes.resolve(resp); } catch (_) {}
+            }
+            if (!resp.ok) {
+                showToast("رد المضيف: " + (resp.error || "خطأ في تنفيذ الأمر"), "warning");
+                return;
+            }
+            const data = resp.data || {};
+            const cmd = data.cmd || resp.cmd;
+
+            // اعتراض ردود نقل الملفات (file_open): القطع تصل ثنائية مسبقاً،
+            // واللقطت هنا {started:true} للبدء و{completed:true,size} للختام
+            const pendingDownload = activeFileDownloads[resp.id];
+            if (pendingDownload) {
+                if (data && data.completed !== undefined) {
+                    finalizeFileDownload(resp.id, resp.ok, data.size || pendingDownload.received);
+                    return;
+                }
+                if (data && data.started !== undefined) {
+                    if (data.size) pendingDownload.size = data.size;
+                    pendingDownload.startedAt = Date.now();
+                    return;
+                }
                 if (!resp.ok) {
-                    pending.reject(new Error(resp.error || "فشل تنفيذ الأمر"));
-                } else {
-                    pending.resolve(resp.data);
+                    pendingDownload.error = resp.error || 'رفض المضيف طلب النقل';
+                    finalizeFileDownload(resp.id, false);
+                    return;
                 }
-                return;
             }
-
-            if (!resp.ok) {
-                showToast("رد المضيف: " + (resp.error || "خطأ في تنفيذ الأمر"), "warning");
-                return;
-            }
-            const data = resp.data || {};
-            const cmd = data.cmd || resp.cmd;
-
-            // 1) DEVICE_INFO Response
-            if (cmd === 'device_info' || data.deviceName || data.batteryLevel !== undefined) {
-                updateDashboardCards(data);
-                showToast("تم جلب وقراءة بيانات الهاتف المضيف الحية بنجاح!", "success");
-                return;
-            }
-
-            // 2) Items array responses (Contacts, SMS, Calls, Notifications, Files)
-            if (data.items !== undefined && Array.isArray(data.items)) {
-                let targetType = activeTab;
-
-                if (cmd === 'contacts_list') {
-                    targetType = 'contacts';
-                } else if (cmd === 'sms_list') {
-                    targetType = 'sms';
-                } else if (cmd === 'calls_list') {
-                    targetType = 'calls';
-                } else if (cmd === 'notifications_list') {
-                    targetType = 'notifications';
-                } else if (cmd === 'file_list' || cmd === 'storage_explore') {
-                    targetType = 'files';
-                } else if (data.items.length > 0) {
-                    const sample = data.items[0];
-                    if (sample.phoneNumber !== undefined || sample.displayName !== undefined || sample.phoneNumbers !== undefined) {
-                        targetType = 'contacts';
-                    } else if (sample.body !== undefined || sample.address !== undefined) {
-                        targetType = 'sms';
-                    } else if (sample.number !== undefined || sample.durationSec !== undefined || (sample.type !== undefined && sample.date !== undefined && sample.id !== undefined)) {
-                        targetType = 'calls';
-                    } else if (sample.packageName !== undefined || sample.postTime !== undefined) {
-                        targetType = 'notifications';
-                    } else if (sample.mimeType !== undefined || sample.isDir !== undefined || data.currentPath !== undefined) {
-                        targetType = 'files';
-                    }
-                } else if (data.currentPath !== undefined) {
-                    targetType = 'files';
-                }
-
-                if (targetType === 'files') {
-                    filesData = data.items;
-                    if (data.currentPath) currentExplorerPath = data.currentPath;
-                    if (activeTab === 'files') applyFilesFilterAndSort();
-                } else if (targetType === 'contacts') {
-                    contactsData = data.items;
-                    if (activeTab === 'contacts') applyContactsFilterAndSort();
-                } else if (targetType === 'sms') {
-                    smsData = data.items;
-                    if (activeTab === 'sms') applySmsFilterAndSort();
-                } else if (targetType === 'calls') {
-                    callsData = data.items;
-                    if (activeTab === 'calls') applyCallFilters();
-                } else if (targetType === 'notifications') {
-                    notificationsData = data.items;
-                    if (activeTab === 'notifications') applyNotifFilters();
-                }
-                const countMsg = data.items.length > 0 ? ` (${data.items.length} عنصر)` : " (القائمة فارغة أو بانتظار إذن الوصول)";
-                showToast("تم جلب وتحديث القائمة الحية بنجاح!" + countMsg, "success");
-                return;
-            }
-
-            // 3) Streaming Responses
-            if (data.started !== undefined || data.stopped !== undefined || data.switched !== undefined || data.audioEnabled !== undefined || (cmd && cmd.includes('stream'))) {
-                if (data.started) {
-                    streamState.active = true;
-                    if (data.mode === 'audio') {
-                        streamState.audioOnly = true;
-                        streamState.mode = 'audio';
-                        showToast("تم بدء بث الصوت الحي (الميكروفون)!", "success");
-                    } else if (data.mode === 'screen') {
-                        streamState.audioOnly = false;
-                        streamState.mode = 'screen';
-                        showToast("تم بدء بث شاشة الهاتف الحية!", "success");
-                    } else {
-                        streamState.audioOnly = false;
-                        streamState.mode = 'camera';
-                        showToast("تم بدء بث الكاميرا والصوت المباشر!", "success");
-                    }
-
-                    setTimeout(() => {
-                        const targetInput = document.getElementById("target-device-id");
-                        const targetId = (targetInput && targetInput.value.trim()) || appConfig.targetDeviceId;
-                        if (targetId) createWebRTCOffer(targetId);
-                    }, 400);
-                } else if (data.stopped) {
-                    streamState.active = false;
-                    streamState.audioOnly = false;
-                    streamState.mode = 'none';
-                    showToast("تم إيقاف كافة وسائل البث المباشر", "info");
-                }
-
-                if (data.isFront !== undefined) streamState.isFront = data.isFront;
-                if (data.audioEnabled !== undefined) streamState.audioEnabled = data.audioEnabled;
-                if (activeTab === 'camera') renderCameraStreamView();
-            }
-        }
-
-        function handleRPCResponse(resp) {
-            if (!resp) {
-                showToast("لا توجد استجابة من المضيف", "warning");
-                return;
-            }
-            if (!resp.ok) {
-                showToast("رد المضيف: " + (resp.error || "خطأ في تنفيذ الأمر"), "warning");
-                return;
-            }
-            const data = resp.data || {};
-            const cmd = data.cmd || resp.cmd;
 
             // 1) DEVICE_INFO Response
             if (cmd === 'device_info' || data.deviceName || data.batteryLevel !== undefined) {
@@ -1347,6 +1973,8 @@
                 if (deviceInfoResolver) {
                     try { deviceInfoResolver(data); } catch (_) {}
                 }
+                // حفظ تلقائي: المضيف والمتحكم متصلان بنفس الجلسة
+                try { autoSaveSessionSnapshot(activeTargetDeviceId || appConfig.targetDeviceId, data); } catch (_) {}
                 showToast("تم جلب وقراءة بيانات الهاتف المضيف الحية بنجاح!", "success");
                 return;
             }
@@ -1463,6 +2091,658 @@
             }
         }
 
+        // =====================================================================
+        // تبويب «الأوامر والتحكم البعيد» + مشغّل البث الحي الاحترافي + التسجيلات
+        // =====================================================================
+
+        // ——— حالة القوائم الجانبية ———
+        let recCamFront = true;      // تبديل تسجيلات الكاميرا: أمامية/خلفية
+        let recScreenMode = 'shots'; // تبديل تسجيلات الشاشة: shots (لقطات) أو video (فيديو)
+        let remoteRecorder = null;   // مسجّل بث المتحكم من الفيديو المعروض
+        let remoteRecorderChunks = [];
+
+        function fmtKb(n) {
+            if (!n && n !== 0) return '';
+            n = Number(n);
+            if (n >= 1073741824) return (n / 1073741824).toFixed(1) + ' GB';
+            if (n >= 1048576) return (n / 1048576).toFixed(1) + ' MB';
+            if (n >= 1024) return Math.round(n / 1024) + ' KB';
+            return n + ' B';
+        }
+
+        function fmtWhen(ms) {
+            if (!ms) return '';
+            const d = new Date(Number(ms));
+            return d.toLocaleDateString('ar-EG') + ' ' + d.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+        }
+
+        /** انتظار الرد الأول من المضيف (يدعمه وعد مع مهلة خارجية). */
+        async function rpcWait(command, params, timeoutMs = 12000) {
+            const p = sendRPCCommand(command, params, { timeout: timeoutMs, retries: 1 });
+            return await Promise.race([
+                p,
+                new Promise(res => setTimeout(() => res({ ok: false, error: 'انتهت مهلة الرد من المضيف' }), timeoutMs + 500))
+            ]);
+        }
+
+        /** حفظ ملف ناتج من المتحكم (لقطة/تسجيل) عبر الجسر الأصلي أو التنزيل في المتصفح. */
+        function saveArtifact(name, mimeType, base64) {
+            try {
+                if (window.RBNative && window.RBNative.canSave && window.RBNative.canSave()) {
+                    const mid = Math.floor(Math.random() * 90000) + 1;
+                    window.RBNative.saveStart(mid, name);
+                    for (let i = 0; i < base64.length; i += 16384) {
+                        window.RBNative.saveChunk(mid, base64.substring(i, i + 16384));
+                    }
+                    const where = window.RBNative.saveComplete(mid);
+                    showToast(where ? 'حُفظ تلقائياً في: ' + where : 'حُفظ الملف بنجاح', 'success');
+                } else {
+                    const bin = atob(base64);
+                    const arr = new Uint8Array(bin.length);
+                    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+                    const blob = new Blob([arr], { type: mimeType });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url; a.download = name; a.click();
+                    setTimeout(() => URL.revokeObjectURL(url), 4000);
+                    showToast('بدأ تنزيل الملف: ' + name, 'success');
+                }
+            } catch (e) {
+                showToast('تعذر حفظ الملف: ' + e.message, 'error');
+            }
+        }
+
+        function blobToBase64(blob) {
+            return new Promise((resolve) => {
+                const fr = new FileReader();
+                fr.onload = () => resolve(String(fr.result).split(',')[1] || '');
+                fr.readAsDataURL(blob);
+            });
+        }
+
+        // ——— مشغّل البث الحي: تكبير الشاشة + لقطة + تسجيل آلي ———
+
+        function openStageFullscreen() {
+            const stage = document.getElementById('stream-stage');
+            if (!stage) return;
+            try {
+                if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                    if (stage.requestFullscreen) stage.requestFullscreen();
+                    else if (stage.webkitRequestFullscreen) stage.webkitRequestFullscreen();
+                } else if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                }
+            } catch (_) {}
+        }
+
+        function captureStreamSnapshot() {
+            const v = document.getElementById('remote-video');
+            if (!v || !v.srcObject || v.videoWidth === 0 || v.classList.contains('hidden')) {
+                showToast('لا يوجد بث مرئي نشط لالتقاط صورة منه — شغّل بث الكاميرا أو الشاشة أولاً', 'warning');
+                return;
+            }
+            try {
+                const c = document.createElement('canvas');
+                c.width = v.videoWidth; c.height = v.videoHeight;
+                const ctx = c.getContext('2d');
+                ctx.drawImage(v, 0, 0, c.width, c.height);
+                const dataUrl = c.toDataURL('image/jpeg', 0.92);
+                const base64 = dataUrl.split(',')[1];
+                const name = 'RBCamShot_' + new Date().toISOString().replace(/[:.]/g, '-') + '.jpg';
+                saveArtifact(name, 'image/jpeg', base64);
+            } catch (e) {
+                showToast('فشلت اللقطة: ' + e.message, 'error');
+            }
+        }
+
+        function toggleRecordStream() {
+            const btn = document.getElementById('rec-record-btn');
+            if (remoteRecorder) {
+                try { remoteRecorder.stop(); } catch (_) {}
+                showToast('جارٍ إنهاء التسجيل وحفظه…', 'info');
+                return;
+            }
+            let tracks = [];
+            try {
+                if (window.remoteMediaStream && remoteMediaStream.getTracks) {
+                    tracks = remoteMediaStream.getTracks().filter(t => t.readyState === 'live');
+                }
+                if (!tracks.length) {
+                    const vEl = document.getElementById('remote-video');
+                    if (vEl && vEl.srcObject) tracks = vEl.srcObject.getTracks().filter(t => t.readyState === 'live');
+                }
+            } catch (_) {}
+            if (!tracks.length) {
+                showToast('لا يوجد تدفق نشط للتسجيل — شغّل البث أولاً', 'warning');
+                return;
+            }
+            const stream = new MediaStream(tracks);
+            const isAudioOnly = tracks.every(t => t.kind === 'audio');
+            const mime = isAudioOnly ? 'audio/webm;codecs=opus' : 'video/webm;codecs=vp8,opus';
+            try {
+                remoteRecorderChunks = [];
+                remoteRecorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 2500000 });
+                remoteRecorder.ondataavailable = (e) => { if (e.data && e.data.size) remoteRecorderChunks.push(e.data); };
+                remoteRecorder.onstop = async () => {
+                    remoteRecorder = null;
+                    const btn2 = document.getElementById('rec-record-btn');
+                    if (btn2) { const sp = btn2.querySelector('span'); if (sp) sp.textContent = 'تسجيل آلي'; }
+                    if (!remoteRecorderChunks.length) { showToast('لم يُسجَّل أي محتوى', 'warning'); return; }
+                    try {
+                        const blob = new Blob(remoteRecorderChunks, { type: mime });
+                        const base64 = await blobToBase64(blob);
+                        const name = (isAudioOnly ? 'RBAudRec_' : 'RBVidRec_') + new Date().toISOString().replace(/[:.]/g, '-') + (isAudioOnly ? '.weba' : '.webm');
+                        saveArtifact(name, blob.type, base64);
+                    } finally {
+                        remoteRecorderChunks = [];
+                    }
+                };
+                remoteRecorder.onerror = () => { showToast('تعذر التسجيل من قناة البث', 'error'); };
+                remoteRecorder.start(1000);
+                if (btn) { const sp = btn.querySelector('span'); if (sp) sp.textContent = 'إنهاء التسجيل ⏺'; }
+                showToast('بدأ التسجيل الآلي للبث عليه الآن — يُحفظ في مجلدات الأرشيف عند الإنهاء', 'success');
+            } catch (e) {
+                remoteRecorder = null;
+                showToast('تعذر بدء التسجيل: ' + e.message, 'error');
+            }
+        }
+
+        // ——— حقن أدوات المشغّل وقوائم التسجيلات داخل تبويب البث ———
+
+        function enhanceCameraTab() {
+            const panel = document.getElementById('panel-content');
+            if (!panel || activeTab !== 'camera') return;
+            const stage = panel.querySelector('.aspect-video');
+            if (stage) {
+                if (!stage.id) stage.id = 'stream-stage';
+                if (!stage.querySelector('#stream-stage-tools')) {
+                    stage.insertAdjacentHTML('beforeend', `
+                        <div id="stream-stage-tools" class="absolute top-2 right-2 z-20 flex items-center gap-1.5">
+                            <button onclick="captureStreamSnapshot()" title="التقاط صورة من الفيديو المعروض الآن (تُحفظ في مجلدات الأرشيف)" class="stream-btn flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-bold backdrop-blur bg-black/50 border border-slate-700">
+                                <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="18" height="14" rx="2"/><path d="M12 10a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM9 6l1.2-2h3.6L15 6"/></svg>
+                                <span>لقطة</span>
+                            </button>
+                            <button onclick="toggleRecordStream()" id="rec-record-btn" title="تسجيل آلي مستمر للفيديو المعروض — يُحفظ تلقائياً عند الإنهاء" class="stream-btn flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-bold backdrop-blur bg-black/50 border border-slate-700">
+                                <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4" fill="currentColor"/></svg>
+                                <span>تسجيل آلي</span>
+                            </button>
+                            <button onclick="openStageFullscreen()" title="تكبير العرض لملء الشاشة" class="stream-btn flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-bold backdrop-blur bg-black/50 border border-slate-700">
+                                <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+                                <span>ملء الشاشة</span>
+                            </button>
+                        </div>
+                    `);
+                }
+            }
+
+            // قوائم التسجيلات أسفل شبكة أزرار البث مباشرة
+            if (!panel.querySelector('#recordings-anchor')) {
+                panel.insertAdjacentHTML('beforeend', `
+                    <div id="recordings-anchor">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs mt-2">
+                            <!-- تسجيلات الكاميرا: النقر على العنوان يبدّل بين العدسات -->
+                            <div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-3">
+                                <button onclick="cycleCameraRecords()" title="انقر للتبديل بين ملفات العدسة الأمامية والخلفية" class="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-xl stream-btn font-bold cursor-pointer">
+                                    <span class="flex items-center gap-2">🎥 تسجيلات الكاميرا (${recCamFront ? 'أمامية' : 'خلفية'})</span>
+                                    <span class="flex items-center gap-1 text-[10px] text-amber-300 font-mono">⟲ تبديل</span>
+                                </button>
+                                <div id="records-cam-box" class="mt-2 text-[11px] text-slate-300">بانتظار الجلب…</div>
+                            </div>
+                            <!-- تسجيلات الشاشة: النقر على العنوان يبدّل بين لقطات الصور وفيديوهات التسجيل -->
+                            <div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-3">
+                                <button onclick="cycleScreenRecords()" title="انقر للتبديل بين لقطات الصور وتسجيلات الفيديو للشاشة" class="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-xl stream-btn font-bold cursor-pointer">
+                                    <span class="flex items-center gap-2">${recScreenMode === 'shots' ? '🖼️ لقطات الشاشة (صور)' : '🖥️ تسجيلات الشاشة (فيديو)'}</span>
+                                    <span class="flex items-center gap-1 text-[10px] text-amber-300 font-mono">⟲ تبديل</span>
+                                </button>
+                                <div id="records-scr-box" class="mt-2 text-[11px] text-slate-300">بانتظار الجلب…</div>
+                            </div>
+                        </div>
+                        <p class="text-[10px] text-slate-500 mt-1.5">تُملأ القوائم من مجلدات أرشيف الهاتف المضيف (Pictures و Movies و Music داخل RemoteBridge) بعد تنفيذ اللقطات والتسجيلات من تبويب الأوامر.</p>
+                    </div>
+                `);
+                refreshCameraRecordsBox();
+                refreshScreenRecordsBox();
+            }
+        }
+
+        function cycleCameraRecords() {
+            recCamFront = !recCamFront;
+            enhanceCameraTabForced();
+        }
+
+        function cycleScreenRecords() {
+            recScreenMode = recScreenMode === 'shots' ? 'video' : 'shots';
+            enhanceCameraTabForced();
+        }
+
+        function enhanceCameraTabForced() {
+            const anchor = document.getElementById('recordings-anchor');
+            if (anchor) anchor.remove();
+            enhanceCameraTab();
+        }
+
+        function recordItemHtml(f) {
+            return `<div class="flex items-center justify-between gap-2 py-1 border-b border-slate-800/60 last:border-0">
+                <span class="truncate font-mono text-slate-200" title="${f.name}">${f.name}</span>
+                <span class="shrink-0 text-[10px] text-slate-400">${fmtKb(f.size)} • ${fmtWhen(f.dateAdded)}</span>
+            </div>`;
+        }
+
+        async function refreshCameraRecordsBox() {
+            const box = document.getElementById('records-cam-box');
+            if (!box) return;
+            const leaf = recCamFront ? 'Front' : 'Back';
+            const resp = await rpcWait('storage_explore', { path: 'Pictures/RemoteBridge/' + leaf }, 15000);
+            const resp2 = await rpcWait('storage_explore', { path: 'Movies/RemoteBridge/' + leaf }, 15000);
+            const items = [].concat(
+                (resp && resp.ok && resp.data && resp.data.items) || [],
+                (resp2 && resp2.ok && resp2.data && resp2.data.items) || []
+            );
+            if (!items.length) {
+                box.innerHTML = `<div class="text-slate-500 py-2">لا توجد تسجيلات للعدسة ${leaf === 'Front' ? 'الأمامية' : 'الخلفية'} بعد — نفّذ لقطات أو فيديو من تبويب الأوامر</div>`;
+                return;
+            }
+            const sorted = items.sort((a, b) => (b.dateAdded || 0) - (a.dateAdded || 0)).slice(0, 12);
+            box.innerHTML = sorted.map(recordItemHtml).join('');
+        }
+
+        async function refreshScreenRecordsBox() {
+            const box = document.getElementById('records-scr-box');
+            if (!box) return;
+            const path = recScreenMode === 'shots' ? 'Pictures/RemoteBridge/Screen' : 'Movies/RemoteBridge/Screen';
+            const resp = await rpcWait('storage_explore', { path: path }, 15000);
+            const items = (resp && resp.ok && resp.data && resp.data.items) || [];
+            if (!items.length) {
+                box.innerHTML = `<div class="text-slate-500 py-2">${recScreenMode === 'shots' ? 'لا توجد لقطات شاشة بعد — نفّذ «لقطة شاشة» من تبويب الأوامر' : 'لا توجد تسجيلات شاشة بعد — نفّذ «تسجيل شاشة» من تبويب الأوامر'}</div>`;
+                return;
+            }
+            const sorted = items.sort((a, b) => (b.dateAdded || 0) - (a.dateAdded || 0)).slice(0, 12);
+            box.innerHTML = sorted.map(recordItemHtml).join('');
+        }
+
+        // ——— قسم تسجيلات المكالمات في تبويب سجل المكالمات ———
+
+        function addCallRecordingsSection() {
+            const panel = document.getElementById('panel-content');
+            if (!panel || activeTab !== 'calls' || panel.querySelector('#call-records-anchor')) return;
+            panel.insertAdjacentHTML('beforeend', `
+                <div id="call-records-anchor" class="mt-3 bg-slate-900/70 border border-slate-800 rounded-2xl p-3">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="flex items-center gap-2 text-sm font-bold text-emerald-300">🎙️ تسجيلات صوتية مرتبطة بالمكالمات</span>
+                        <button onclick="loadCallRecordings()" class="stream-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold">
+                            <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>
+                            <span>جلب التسجيلات</span>
+                        </button>
+                    </div>
+                    <p class="text-[10px] text-slate-500 mt-1">تُجلب من مجلد Music/RemoteBridge/Calls على الهاتف المضيف.</p>
+                    <div id="call-records-box" class="mt-2 text-[11px] text-slate-300"></div>
+                </div>
+            `);
+        }
+
+        async function loadCallRecordings() {
+            const box = document.getElementById('call-records-box');
+            if (!box) return;
+            box.innerHTML = '<span class="text-slate-500">جارٍ الجلب…</span>';
+            const resp = await rpcWait('storage_explore', { path: 'Music/RemoteBridge/Calls' }, 15000);
+            const items = (resp && resp.ok && resp.data && resp.data.items) || [];
+            if (!items.length) {
+                box.innerHTML = '<div class="text-slate-500 py-2">لا توجد تسجيلات مكالمات محفوظة بعد على المضيف</div>';
+                return;
+            }
+            const sorted = items.sort((a, b) => (b.dateAdded || 0) - (a.dateAdded || 0)).slice(0, 20);
+            box.innerHTML = sorted.map(recordItemHtml).join('');
+        }
+
+        // ——— تبويب الأوامر والتحكم البعيد ———
+
+        function commandsBadge() {
+            const dcReady = dataChannel && dataChannel.readyState === 'open';
+            const wsReady = ws && ws.readyState === WebSocket.OPEN;
+            return dcReady || wsReady
+                ? '<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-500/40"><span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>متصّل بالمضيف</span>'
+                : '<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-950/80 text-rose-300 border border-rose-500/40"><span class="w-2 h-2 rounded-full bg-rose-400"></span>غير متصل</span>';
+        }
+
+        function cmdCard(title, iconSvg, bodyHtml, tag = '', tagColor = '') {
+            return `
+                <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-3.5 shadow-xl flex flex-col gap-2.5">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="flex items-center gap-2 font-bold text-sm text-slate-100">${iconSvg}${title}</span>
+                        ${tag ? `<span class="px-2 py-0.5 rounded-full text-[9px] font-bold border ${tagColor}">${tag}</span>` : ''}
+                    </div>
+                    ${bodyHtml}
+                </div>
+            `;
+        }
+
+        const SVG_ICON = {
+            sms: '<svg viewBox="0 0 24 24" class="w-4 h-4 text-emerald-300" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v14H8l-4 4z"/></svg>',
+            call: '<svg viewBox="0 0 24 24" class="w-4 h-4 text-sky-300" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5a2 2 0 0 1 2-2h2l2 5-2 1a12 12 0 0 0 6 6l1-2 5 2v2a2 2 0 0 1-2 2A16 16 0 0 1 3 5z"/></svg>',
+            text: '<svg viewBox="0 0 24 24" class="w-4 h-4 text-amber-300" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9h10M7 13h10"/></svg>',
+            contact: '<svg viewBox="0 0 24 24" class="w-4 h-4 text-violet-300" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="8" r="3"/><path d="M4 20c0-3 3-5 6-5s6 2 6 5M16 4a3 3 0 0 1 0 8M15 15c3 0 5 2 5 5"/></svg>',
+            media: '<svg viewBox="0 0 24 24" class="w-4 h-4 text-teal-300" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>',
+            photo: '<svg viewBox="0 0 24 24" class="w-4 h-4 text-fuchsia-300" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="6" width="18" height="14" rx="2"/><circle cx="12" cy="13" r="3"/><path d="M9 6l1-2h4l1 2"/></svg>',
+            video: '<svg viewBox="0 0 24 24" class="w-4 h-4 text-rose-300" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="M22 8.5v7L16 12z"/></svg>',
+            mic: '<svg viewBox="0 0 24 24" class="w-4 h-4 text-lime-300" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 19v3"/></svg>',
+            shot: '<svg viewBox="0 0 24 24" class="w-4 h-4 text-cyan-300" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 4V2h8v2"/></svg>',
+            power: '<svg viewBox="0 0 24 24" class="w-4 h-4 text-red-300" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v9"/><path d="M6.5 7a8 8 0 1 0 11 0"/></svg>',
+            clock: '<svg viewBox="0 0 24 24" class="w-4 h-4 text-orange-300" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>'
+        };
+
+        const INTERVAL_OPTIONS = [
+            ['5', 'كل 5 ثوان'], ['10', 'كل 10 ثوان'], ['30', 'كل 30 ثانية'],
+            ['60', 'كل دقيقة'], ['300', 'كل 5 دقائق'], ['600', 'كل 10 دقائق'], ['3600', 'كل ساعة']
+        ];
+
+        function setIntervalOptions(sel) {
+            return INTERVAL_OPTIONS.map(([v2, l]) => `<option value="${v2}" ${String(sel) === v2 ? 'selected' : ''}>${l}</option>`).join('');
+        }
+
+        function genericBtn(label, fn) {
+            return `<button onclick="${fn}" class="stream-btn flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl font-bold text-xs active:scale-95">${label}</button>`;
+        }
+
+        function scheduleRowHtml(prefix, cmdKey, paramInputIdsJson) {
+            return `
+                <div class="border-t border-slate-800 pt-2 mt-1">
+                    <label class="flex items-center gap-2 text-[11px] text-slate-300 font-bold cursor-pointer">
+                        <input type="checkbox" id="${prefix}-sched-on" onchange="toggleSchedInputs('${prefix}', [${paramInputIdsJson}])" class="w-3.5 h-3.5 accent-amber-400">
+                        <span>⏰ تنفيذ مجدول لاحقاً (ينفّذ تلقائياً في وقته على المضيف)</span>
+                    </label>
+                    <div id="${prefix}-sched" class="hidden grid gap-1.5 mt-1.5">
+                        <p class="text-[10px] text-amber-300/80">تُستخدم نفس قيم البطاقة أعلاه (العدسة أو المدة أو العدد والفاصل) عند الوصول إلى وقت التنفيذ.</p>
+                        <input type="datetime-local" id="${prefix}-sched-time" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-slate-100 text-[11px]">
+                        <input type="text" id="${prefix}-sched-note" placeholder="وصف قصير اختياري" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-slate-100 text-[11px]">
+                        <button onclick="submitScheduledCommand('${prefix}', '${cmdKey}')" class="stream-btn w-full py-1.5 rounded-lg font-bold text-[11px]">تأكيد الجدولة</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function toggleSchedInputs(prefix, ids) {
+            const box = document.getElementById(prefix + '-sched');
+            if (!box) return;
+            box.classList.toggle('hidden');
+            if (Array.isArray(ids)) ids.forEach(id => { const el = document.getElementById(id); if (el) el.classList.toggle('opacity-40'); });
+        }
+
+        function collectFace() {
+            const el = document.querySelector('input[name="capture-face"]:checked');
+            return el ? el.value === 'front' : false;
+        }
+
+        // ——— قراءة آمنة للقيم ———
+        function v(id) { const el = document.getElementById(id); return el ? String(el.value || '').trim() : ''; }
+        function intOf(id, def) { const n = parseInt(v(id), 10); return Number.isFinite(n) ? n : def; }
+
+        function buildCaptureParams(prefix, cmdKey) {
+            const p = { front: collectFace() };
+            if (cmdKey === 'capture_photo') {
+                p.count = Math.max(1, Math.min(120, intOf('cmd-photo-count', 1)));
+                p.interval = Math.max(0, Math.min(3600, intOf('cmd-photo-interval', 0)));
+            } else if (cmdKey === 'capture_video') {
+                p.duration = Math.max(1, Math.min(600, intOf('cmd-video-duration', 15)));
+            }
+            return p;
+        }
+
+        /** تنفيذ أمر الالتقاط فوراً. */
+        async function executeCapture(cmdKey) {
+            showToast('جارٍ إرسال أمر الالتقاط…', 'info');
+            const resp = await rpcWait(cmdKey, buildCaptureParams('x', cmdKey), 60000);
+            const d = (resp && resp.data) || {};
+            if (resp && resp.ok && !d.error) {
+                if (d.captured !== undefined) showToast('اكتمل الالتقاط: ' + (d.captured === true ? 'نجح' : (d.captured + ' لقطة')), 'success');
+                else if (d.recorded !== undefined) showToast(d.recorded ? 'اكتمل التسجيل: ' + (d.name || '') : 'لم يتم التسجيل', 'success');
+                else showToast('تم التنفيذ بنجاح', 'success');
+                return true;
+            }
+            showToast('فشل الأمر: ' + ((resp && (resp.error || d.error)) || 'انتهت المهلة'), 'error');
+            return false;
+        }
+
+        function renderCommandsView() {
+            const panel = document.getElementById('panel-content');
+            const cards = [];
+
+            // 1) إرسال رسالة نصية
+            cards.push(cmdCard('إرسال رسالة نصية من المضيف', SVG_ICON.sms, `
+                <input type="text" id="cmd-sms-number" placeholder="رقم المستقبل (مثال: 05xxxxxxxx)" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-slate-100 text-xs">
+                <textarea id="cmd-sms-text" rows="2" placeholder="نص الرسالة" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-slate-100 text-xs"></textarea>
+                ${genericBtn('إرسال الآن', "directCommand('sms_send',{'number':v('cmd-sms-number'),'text':v('cmd-sms-text')},'sent')")}
+            `, 'إذن SEND_SMS', 'bg-emerald-950/60 text-emerald-300 border-emerald-500/30'));
+
+            // 2) إجراء مكالمة
+            cards.push(cmdCard('إجراء مكالمة من المضيف', SVG_ICON.call, `
+                <input type="text" id="cmd-call-number" placeholder="رقم المكالمة" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-slate-100 text-xs">
+                ${genericBtn('اتصال فوري', "directCommand('call_make',{'number':v('cmd-call-number')},'dialed')")}
+            `, 'إذن CALL_PHONE', 'bg-sky-950/60 text-sky-300 border-sky-500/30'));
+
+            // 3) إظهار نص على الشاشة
+            cards.push(cmdCard('إظهار نص فوق شاشة المضيف', SVG_ICON.text, `
+                <input type="text" id="cmd-ov-text" placeholder="النص الظاهر" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-slate-100 text-xs">
+                <input type="number" id="cmd-ov-sec" min="1" max="3600" value="10" placeholder="المدة بالثواني" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-slate-100 text-xs">
+                ${genericBtn('إظهار الآن', "directCommand('screen_show',{'text':v('cmd-ov-text'),'seconds':String(intOf('cmd-ov-sec',10))},'shown')")}
+            `, 'إذن عرض فوق التطبيقات', 'bg-amber-950/60 text-amber-300 border-amber-500/30'));
+
+            // 4) إضافة اسم
+            cards.push(cmdCard('إضافة اسم وجهة اتصال', SVG_ICON.contact, `
+                <input type="text" id="cmd-ct-name" placeholder="الاسم الظاهر" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-slate-100 text-xs">
+                <input type="text" id="cmd-ct-number" placeholder="الرقم" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-slate-100 text-xs">
+                ${genericBtn('أضف الاسم', "directCommand('contact_add',{'name':v('cmd-ct-name'),'number':v('cmd-ct-number')},'added')")}
+            `, 'إذن WRITE_CONTACTS', 'bg-violet-950/60 text-violet-300 border-violet-500/30'));
+
+            // 5) رفع وسائط
+            cards.push(cmdCard('رفع وسائط إلى المضيف', SVG_ICON.media, `
+                <select id="cmd-media-kind" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-slate-100 text-xs">
+                    <option value="image">صورة</option><option value="video">فيديو</option><option value="audio">صوت</option>
+                </select>
+                <input type="file" id="cmd-media-file" onchange="prepMediaUpload()" accept="image/*,video/*,audio/*" class="w-full text-[10px] text-slate-300">
+                <div id="cmd-media-status" class="text-[10px] text-slate-400">لم يُحدد ملف (الحد داخل 4MB)</div>
+                ${genericBtn('رفع الملف', "sendMediaAdd()")}
+            `, 'حد داخل 4MB', 'bg-teal-950/60 text-teal-300 border-teal-500/30'));
+
+            // 6) الالتقاط الآلي للصور بفاصل زمني محدد
+            cards.push(cmdCard('الالتقاط الآلي للصور', SVG_ICON.photo, `
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <input type="number" id="cmd-photo-count" min="1" max="120" value="1" placeholder="عدد الصور" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-slate-100">
+                    <select id="cmd-photo-interval" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-slate-100">${setIntervalOptions(5)}<option value="0">فوراً (بلا فاصل)</option></select>
+                </div>
+                ${genericBtn('لقطات فورية الآن', "executeCapture('capture_photo')")}
+                ${scheduleRowHtml('sched-photo', 'capture_photo', "['cmd-photo-count','cmd-photo-interval']")}
+            `, 'كل الفواصل الزمنية', 'bg-fuchsia-950/60 text-fuchsia-300 border-fuchsia-500/30'));
+
+            // 7) تسجيل فيديو من الكاميرا بمدة محددة
+            cards.push(cmdCard('تسجيل فيديو من الكاميرا', SVG_ICON.video, `
+                <input type="number" id="cmd-video-duration" min="1" max="600" value="15" placeholder="مدة الفيديو بالثواني" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-slate-100 text-xs">
+                ${genericBtn('سجّل فيديو الآن', "executeCapture('capture_video')")}
+                ${scheduleRowHtml('sched-video', 'capture_video', "['cmd-video-duration']")}
+            `, 'مدة محددة', 'bg-rose-950/60 text-rose-300 border-rose-500/30'));
+
+            // 8) تسجيل صوت الميكروفون (بلا مكالمة)
+            cards.push(cmdCard('تسجيل صوت الميكروفون', SVG_ICON.mic, `
+                <input type="number" id="cmd-aud-duration" min="1" max="3600" value="30" placeholder="مدة التسجيل بالثواني" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-slate-100 text-xs">
+                ${genericBtn('سجّل الصوت الآن', "directCommand('record_audio',{'duration':String(intOf('cmd-aud-duration',30))},'recorded')")}
+            `, 'بلا مكالمة', 'bg-lime-950/60 text-lime-300 border-lime-500/30'));
+
+            // 9) لقطة شاشة وتسجيل الشاشة
+            cards.push(cmdCard('لقطة الشاشة وتسجيلها', SVG_ICON.shot, `
+                <div class="grid grid-cols-1 gap-2 text-xs">
+                    ${genericBtn('لقطة شاشة واحدة', "directCommand('screen_shot', {}, 'captured')")}
+                </div>
+                <div class="grid grid-cols-3 gap-2 text-xs">
+                    <input type="number" id="cmd-srec-duration" min="1" max="600" value="15" placeholder="مدة التسجيل" class="bg-slate-950 border border-slate-700 rounded-lg px-2 py-1.5 text-slate-100 col-span-2">
+                    ${genericBtn('سجّل الشاشة', "directCommand('screen_record',{'duration':String(intOf('cmd-srec-duration',15))},'captured')")}
+                </div>
+            `, 'إذن إسقاط الوسائط', 'bg-cyan-950/60 text-cyan-300 border-cyan-500/30'));
+
+            // 10) إطفاء/تصفير (صلاحية الجذر فقط)
+            cards.push(cmdCard('إطفاء الهاتف / تصفير المصنع', SVG_ICON.power, `
+                <p class="text-[10px] text-rose-300/90">يتطلّب الهاتف المضيف صلاحية جذر (root). بدونها يرد المضيف برسالة توضح ذلك بوضوح.</p>
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    ${genericBtn('إطفاء الهاتف', "dangerConfirm('device_shutdown')")}
+                    ${genericBtn('تصفير المصنع', "dangerConfirm('device_reset')")}
+                </div>
+            `, 'خطر — بصلاحية جذر', 'bg-rose-950/60 text-rose-300 border-rose-500/30'));
+
+            panel.innerHTML = `
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-3 mb-3 border-b border-slate-800 gap-2">
+                    <div class="flex items-start gap-2.5">
+                        <span class="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-300 shrink-0">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-5 h-5"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg>
+                        </span>
+                        <div>
+                            <h2 class="text-lg md:text-xl font-bold text-slate-100">الأوامر والتحكم البعيد</h2>
+                            <p class="text-xs text-slate-400 mt-0.5">رسائل ومكالمات وأسماء ووسائط ولاقطات وتسجيلات فورية أو مجدولة وقوة إطفاء الهاتف</p>
+                        </div>
+                    </div>
+                    ${commandsBadge()}
+                </div>
+
+                <!-- اختيار العدسة المشتركة لكل أوامر الكاميرا (فورية ومجدولة) -->
+                <div class="bg-slate-900/60 border border-slate-800 rounded-xl p-2.5 mb-2.5 flex items-center flex-wrap gap-3 text-xs">
+                    <span class="font-bold text-slate-200">عدسة الالتقاط المشتركة:</span>
+                    <label class="flex items-center gap-1.5 cursor-pointer"><input type="radio" name="capture-face" value="front" class="w-3.5 h-3.5 accent-emerald-500"><span>أمامية</span></label>
+                    <label class="flex items-center gap-1.5 cursor-pointer"><input type="radio" name="capture-face" value="back" checked class="w-3.5 h-3.5 accent-emerald-500"><span>خلفية</span></label>
+                    <span class="text-[10px] text-slate-500">تنطبق على اللقطات والفيديو الفوري والمجدول معاً.</span>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                    ${cards.join('')}
+                </div>
+
+                <div class="mt-3 bg-slate-900/70 border border-slate-800 rounded-2xl p-3">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="flex items-center gap-2 text-sm font-bold text-orange-300">${SVG_ICON.clock}الأوامر المجدولة المتبقية على المضيف</span>
+                        <button onclick="refreshSchedules()" class="stream-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold">
+                            <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>
+                            <span>تحديث القائمة</span>
+                        </button>
+                    </div>
+                    <div id="schedules-box" class="mt-2 text-[11px] text-slate-300">انقر «تحديث القائمة» للجلب</div>
+                </div>
+            `;
+        }
+
+        /** قراءة قيمة عنصر بأمان. */
+        function v(id) { const el = document.getElementById(id); return el ? String(el.value || '').trim() : ''; }
+
+        /** تنفيذ أمر مباشر مع رسالة نتيجة واضحة. */
+        async function directCommand(cmd, params, successKey) {
+            showToast('جارٍ إرسال الأمر إلى المضيف…', 'info');
+            const resp = await rpcWait(cmd, params, 30000);
+            const d = (resp && resp.data) || {};
+            if (resp && resp.ok && (successKey ? !!d[successKey] : true) && !d.error) {
+                showToast('نجح الأمر: ' + describeCmdResult(cmd, d), 'success');
+                if (cmd === 'capture_photo' || cmd === 'capture_video' || cmd === 'screen_shot' || cmd === 'screen_record' || cmd === 'record_audio') {
+                    // تحديث قوائم التسجيلات إذا كانت شاشة البث مفتوحة لاحقاً
+                    if (activeTab === 'camera') refreshCameraRecordsBox();
+                }
+                return true;
+            }
+            showToast('فشل الأمر: ' + ((resp && (resp.error || d.error)) || 'انتهت المهلة'), 'error');
+            return false;
+        }
+
+        function describeCmdResult(cmd, d) {
+            if (cmd === 'sms_send') return 'أُرسلت الرسالة من شريحة المضيف';
+            if (cmd === 'call_make') return 'بدأت المكالمة على المضيف';
+            if (cmd === 'screen_show') return 'يظهر النص على شاشة المضيف الآن';
+            if (cmd === 'contact_add') return 'أُضيف الاسم في دفتر الأسماء';
+            if (cmd === 'media_add') return 'الملف: ' + (d.path || d.name || '—');
+            if (cmd === 'capture_photo') return (d.captured || 0) + ' لقطة محفوظة في الأرشيف';
+            if (cmd === 'capture_video') return (d.name || 'فيديو') + ' محفوظ في الأرشيف';
+            if (cmd === 'record_audio') return (d.name || 'ملف صوتي') + ' محفوظ في تسجيلات الصوت';
+            if (cmd === 'screen_shot') return (d.name || 'لقطة الشاشة') + ' محفوظة';
+            if (cmd === 'screen_record') return (d.name || 'تسجيل الشاشة') + ' محفوظ';
+            return 'تم';
+        }
+
+        async function dangerConfirm(cmd) {
+            const label = cmd === 'device_shutdown' ? 'إطفاء هاتف المضيف' : 'تصفير المصنع على المضيف';
+            if (!confirm('متأكد من: ' + label + '؟ هذه العملية مخاطرة ولا يمكن التراجع عنها.')) return;
+            await directCommand(cmd, {}, 'executed');
+        }
+
+        // ——— رفع الوسائط ———
+        let pendingMediaBase64 = null;
+        let pendingMediaName = null;
+
+        function prepMediaUpload() {
+            const input = document.getElementById('cmd-media-file');
+            const status = document.getElementById('cmd-media-status');
+            if (!input || !input.files || !input.files.length) return;
+            const file = input.files[0];
+            if (file.size > 4 * 1024 * 1024) {
+                status.textContent = 'الملف أكبر من 4MB — اختر ملفاً أصغر لضمان وصوله';
+                pendingMediaBase64 = null;
+                return;
+            }
+            const fr = new FileReader();
+            fr.onload = () => {
+                pendingMediaBase64 = String(fr.result).split(',')[1] || '';
+                pendingMediaName = file.name;
+                status.textContent = 'جاهز: ' + file.name + ' (' + fmtKb(file.size) + ')';
+            };
+            fr.readAsDataURL(file);
+        }
+
+        async function sendMediaAdd() {
+            if (!pendingMediaBase64) { showToast('اختر ملفاً أولاً', 'warning'); return; }
+            const kind = v('cmd-media-kind') || 'image';
+            await directCommand('media_add', { kind: kind, name: pendingMediaName, base64: pendingMediaBase64 }, 'added');
+        }
+
+        // ——— الجدولة ———
+
+        async function submitScheduledCommand(prefix, cmd) {
+            const atEl = document.getElementById(prefix + '-sched-time');
+            if (!atEl || !atEl.value) { showToast('حدد وقت التنفيذ أولاً', 'warning'); return; }
+            const at = new Date(atEl.value).getTime();
+            if (!at || at < Date.now() - 5000) { showToast('حدد وقتاً مستقبلياً صحيحاً', 'warning'); return; }
+            const params = buildCaptureParams(prefix, cmd);
+            const note = v(prefix + '-sched-note') || 'أمر مجدول من اللوحة';
+            const p = { schedule: cmd, at: String(at), note: note, params: params };
+            showToast('جارٍ تسجيل الجدولة…', 'info');
+            const resp = await rpcWait('command_schedule', p, 15000);
+            const d = (resp && resp.data) || {};
+            if (resp && resp.ok && d.scheduled) {
+                showToast('حُدّول: سينفّذ على المضيف في ' + new Date(at).toLocaleString('ar-EG'), 'success');
+                refreshSchedules();
+            } else {
+                showToast('فشل الجدولة: ' + ((resp && (resp.error || d.error)) || 'انتهت المهلة'), 'error');
+            }
+        }
+
+        async function refreshSchedules() {
+            const box = document.getElementById('schedules-box');
+            if (!box) return;
+            box.innerHTML = '<span class="text-slate-500">جارٍ الجلب…</span>';
+            const resp = await rpcWait('schedule_list', {}, 15000);
+            const d = (resp && resp.data) || {};
+            const items = d.items;
+            if (!Array.isArray(items)) { box.innerHTML = '<span class="text-rose-300">تعذر الجلب</span>'; return; }
+            if (!items.length) { box.innerHTML = '<div class="text-slate-500 py-2">لا توجد أوامر مجدولة حالياً</div>'; return; }
+            box.innerHTML = items.map(j => `
+                <div class="flex items-center justify-between gap-2 py-1.5 border-b border-slate-800/60 last:border-0">
+                    <div class="min-w-0">
+                        <span class="font-mono text-emerald-300 text-[11px]">${j.cmd}</span>
+                        <span class="text-slate-400"> • ${j.atText || ''} ${j.note ? ' • ' + j.note : ''}</span>
+                    </div>
+                    <button onclick="cancelSchedule(${j.id})" class="stream-stop shrink-0 px-2.5 py-1 rounded-lg text-[10px] font-bold">إلغاء</button>
+                </div>
+            `).join('');
+        }
+
+        async function cancelSchedule(id) {
+            const resp = await rpcWait('schedule_cancel', { id: String(id) }, 12000);
+            const d = (resp && resp.data) || {};
+            if (resp && resp.ok && d.cancelled) { showToast('أُلغيت الجدولة', 'success'); refreshSchedules(); }
+            else showToast('فشل إلغاء الجدولة', 'warning');
+        }
         // Tab Switching
         function switchTab(tab) {
             activeTab = tab;
@@ -1489,6 +2769,9 @@
                 sendRPCCommand('storage_explore', { path: currentExplorerPath });
             } else if (tab === 'camera') {
                 renderCameraStreamView();
+                setTimeout(enhanceCameraTab, 60);
+            } else if (tab === 'commands') {
+                renderCommandsView();
             } else if (tab === 'contacts') {
                 renderContactsListView();
                 sendRPCCommand('contacts_list');
@@ -1498,6 +2781,7 @@
             } else if (tab === 'calls') {
                 renderCallsListView();
                 sendRPCCommand('calls_list');
+                setTimeout(addCallRecordingsSection, 80);
             } else if (tab === 'notifications') {
                 renderNotificationsListView();
                 sendRPCCommand('notifications_list');
@@ -1866,12 +3150,40 @@
             applyFilesFilterAndSort();
         }
 
-        function downloadSelectedFilesZip() {
+        /**
+         * تنزيل المحدَّد: بدلاً من وهم الـ ZIP ننفّذ تنزيلات حقيقية
+         * تسلسلية عبر قناة البيانات P2P (بدون ضغط مؤقت ثقيل).
+         */
+        async function downloadSelectedFilesZip() {
             if (selectedFileIds.size === 0) {
-                showToast("يرجى تحديد ملف أو عدة ملفات أولاً لتنزيل أرشيف ZIP", "warning");
+                showToast("يرجى تحديد ملف أو عدة ملفات أولاً للتنزيل", "warning");
                 return;
             }
-            showToast(`جارٍ تجميع وتنسيق الأرشيف المضغوط (ZIP) لـ ${selectedFileIds.size} ملف...`, "success");
+            const indexes = [];
+            filesRenderedList.forEach((f, i) => {
+                if (selectedFileIds.has(f.id) && !f.isDir && f.bucket !== 'folder') indexes.push(i);
+            });
+            if (indexes.length === 0) {
+                showToast("العناصر المحددة مجلدات فقط — لا تنزيل", "warning");
+                return;
+            }
+            showToast(`جارٍ تنزيل ${indexes.length} ملف تسلسلياً عبر قناة البيانات المباشرة...`, "info");
+            let failures = 0;
+            for (const idx of indexes) {
+                const started = startFileDownloadByIndex(idx);
+                if (!started) {
+                    const itemStillListable = filesRenderedList[idx];
+                    if (itemStillListable) failures++;
+                    if (!(dataChannel && dataChannel.readyState === 'open')) {
+                        showToast("انقطعت قناة البيانات P2P — أُوقف التنزيل التسلسلي", "error");
+                        break;
+                    }
+                    continue;
+                }
+                // فاصل قصير بين الطلبات لتخفيف الضغط عن القناة
+                await new Promise(r => setTimeout(r, 1400));
+            }
+            if (failures > 0) showToast(`تعذّر بدء ${failures} تنزيل من المحدد`, "warning");
         }
 
         function applyFilesFilterAndSort() {
@@ -1916,7 +3228,10 @@
                 return;
             }
 
-            container.innerHTML = filtered.map(f => {
+            // حفظ الترتيب المعروض لربط أزرار التنزيل بالعناصر الحقيقية
+            filesRenderedList = filtered;
+
+            container.innerHTML = filtered.map((f, itemIndex) => {
                 const isSelected = selectedFileIds.has(f.id);
                 const isImage = f.mimeType && f.mimeType.startsWith('image/');
                 const isVideo = f.mimeType && f.mimeType.startsWith('video/');
@@ -1951,11 +3266,11 @@
                                 </button>
                             ` : ''}
                             ${!f.isDir ? `
-                                <button onclick="showToast('جارٍ تحميل ${f.name}...', 'info')" class="bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 border border-emerald-500/30 px-2.5 py-1 rounded-lg text-[11px] font-bold transition">
+                                <button onclick="startFileDownloadByIndex(${itemIndex})" class="bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 border border-emerald-500/30 px-2.5 py-1 rounded-lg text-[11px] font-bold transition">
                                     تنزيل ⬇️
                                 </button>
                             ` : `
-                                <button onclick="currentExplorerPath += '${f.name}/'; renderFilesExplorerView();" class="bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 border border-blue-500/30 px-2.5 py-1 rounded-lg text-[11px] font-bold transition">
+                                <button onclick="currentExplorerPath += '${f.name.replace(/'/g, "\\'")}/'; renderFilesExplorerView();" class="bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 border border-blue-500/30 px-2.5 py-1 rounded-lg text-[11px] font-bold transition">
                                     فتح 📂
                                 </button>
                             `}
@@ -1965,41 +3280,70 @@
             }).join('');
         }
 
-        // View 3: Live Camera, Screen & Microphone Streaming View
+        // View 3: Live Streaming View (Screen / Camera / Microphone)
         function renderCameraStreamView() {
             const panel = document.getElementById("panel-content");
-            
+
             const isCamActive = streamState.active && streamState.mode === 'camera';
             const isAudioActive = streamState.active && streamState.mode === 'audio';
             const isScreenActive = streamState.active && streamState.mode === 'screen';
+            // هل يوجد فيديو WebRTC حقيقي معروض الآن؟ (يُحفظ من الإخفاء عند إعادة رسم اللوحة)
+            const hasWebRtcVideo = (() => {
+                try {
+                    const v = document.getElementById("remote-video");
+                    return !!(v && v.srcObject && v.srcObject.getVideoTracks && v.srcObject.getVideoTracks().some(t => t.readyState !== 'ended'));
+                } catch (_) { return false; }
+            })();
+
+            const svgScreen = '<svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>';
+            const svgCamera = '<svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="M22 8.5v7L16 12z"/></svg>';
+            const svgMic = '<svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 19v3"/></svg>';
+            const svgFlip = '<svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7M21 12a9 9 0 0 1-15 6.7"/><path d="M18 2v4h-4M6 22v-4h4"/></svg>';
+            const svgSoundOn = '<svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg>';
+            const svgSoundOff = '<svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="m22 9-6 6M16 9l6 6"/></svg>';
+            const svgStop = '<svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><rect x="9" y="9" width="6" height="6" rx="1" fill="currentColor"/></svg>';
+            const svgBroadcast = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.5"/><path d="M4.9 4.9a10 10 0 0 0 0 14.2M19.1 4.9a10 10 0 0 1 0 14.2M8 8a5.7 5.7 0 0 0 0 8M16 8a5.7 5.7 0 0 1 0 8"/></svg>';
+
+            // شريط حالة النشاط: شارة مباشرة متحركة أو شارة سكون
+            const liveDot = '<span class="relative flex w-2.5 h-2.5"><span class="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60 animate-ping"></span><span class="relative inline-flex w-2.5 h-2.5 rounded-full bg-emerald-400"></span></span>';
+            const relayLive = streamState.active || relayStreamActive;
+            const statusPill = relayLive
+                ? `<span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold bg-emerald-950/90 text-emerald-300 border border-emerald-500/50 shadow-lg shadow-emerald-950/40">${liveDot}${isScreenActive ? 'بث الشاشة نشط' : isAudioActive ? 'بث الميكروفون نشط' : isCamActive ? 'بث الكاميرا نشط' : relayStreamActive ? 'بث الترحيل نشط (عبر خادم الإشارات)' : 'البث نشط'}</span>`
+                : `<span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold bg-slate-950/80 text-rose-400 border border-rose-500/30"><span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>البث متوقف</span>`;
+
+            // شارة المصدر أعلى المساحة: من دون أرقام وهمية
+            const srcLabel = isScreenActive ? 'SCREEN' : isAudioActive ? 'AUDIO' : isCamActive ? (streamState.isFront ? 'CAM FRONT' : 'CAM BACK') : relayStreamActive ? 'RELAY' : 'IDLE';
+            const srcChip = `<div class="absolute top-2 left-2 z-10 flex items-center gap-1.5 bg-black/60 backdrop-blur px-2.5 py-1 rounded-lg border border-slate-700/70 text-[10px] font-mono font-bold tracking-wide ${relayLive ? 'text-emerald-300' : 'text-slate-400'}">
+                    <span class="w-1.5 h-1.5 rounded-full ${relayLive ? 'bg-emerald-400' : 'bg-slate-500'}"></span>
+                    <span>${srcLabel}</span>
+                </div>`;
 
             panel.innerHTML = `
                 <audio id="remote-audio" autoplay class="hidden"></audio>
-                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-2.5 mb-2.5 border-b border-slate-800 gap-2">
-                    <div>
-                        <h2 class="text-lg md:text-xl font-bold text-emerald-300 flex items-center gap-2">
-                            <span>📡 البث الحي المباشر (شاشة، كاميرا، مايك)</span>
-                        </h2>
-                        <p class="text-xs text-slate-400">بث شاشة الجوال المباشرة، الكاميرا، أو الميكروفون المباشر عبر WebRTC</p>
+
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-3 mb-3 border-b border-slate-800 gap-2">
+                    <div class="flex items-start gap-2.5">
+                        <span class="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-300 shrink-0">${svgBroadcast}</span>
+                        <div>
+                            <h2 class="text-lg md:text-xl font-bold text-slate-100">البث الحي المباشر</h2>
+                            <p class="text-xs text-slate-400 mt-0.5">شاشة الجهاز أو الكاميرا أو الميكروفون عبر قناة WebRTC المشفرة مباشرة</p>
+                        </div>
                     </div>
-                    <div class="flex items-center gap-2">
-                        <span class="text-xs px-2.5 py-1 rounded-full font-bold flex items-center gap-1.5 transition-all duration-300 ${streamState.active ? 'bg-emerald-950/90 text-emerald-300 border border-emerald-500/50 shadow-lg shadow-emerald-900/40 animate-pulse' : 'bg-slate-900/80 text-rose-400 border border-rose-500/30'}">
-                            <span class="w-2.5 h-2.5 rounded-full ${streamState.active ? 'bg-emerald-400' : 'bg-rose-500'}"></span>
-                            ${streamState.active ? (isScreenActive ? 'بث الشاشة الحية نشط 🖥️' : isAudioActive ? 'بث الصوت الحي نشط 🎙️' : 'بث الكاميرا نشط 🎥') : 'البث الحي متوقف 🛑'}
-                        </span>
-                    </div>
+                    ${statusPill}
                 </div>
 
-                <!-- Video / Screen / Audio Display Window -->
-                <div class="bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden relative aspect-video max-h-[340px] flex items-center justify-center mb-3 shadow-2xl transition-all">
-                    <video id="remote-video" autoplay playsinline class="w-full h-full object-contain ${streamState.active && !isAudioActive ? '' : 'hidden'}"></video>
-                    
-                    <!-- Audio-Only Visualizer Placeholder -->
+                <div class="relative bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden aspect-video max-h-[360px] flex items-center justify-center mb-3 shadow-2xl transition-all duration-300 ${streamState.active ? 'stream-stage-live' : ''}">
+                    <div class="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 pointer-events-none"></div>
+                    <div class="scanline absolute inset-x-0 top-0 pointer-events-none"></div>
+                    <video id="remote-video" autoplay playsinline class="w-full h-full object-contain ${(streamState.active && !isAudioActive) || hasWebRtcVideo ? '' : 'hidden'}"></video>
+
+                    <img id="relay-frame" alt="البث الحي عبر خادم الإشارات (وضع الترحيل)" class="w-full h-full object-contain ${relayStreamActive && !hasWebRtcVideo ? '' : 'hidden'}">
+
                     ${isAudioActive ? `
-                        <div class="text-center p-6 flex flex-col items-center justify-center gap-3">
-                            <div class="w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-3xl animate-bounce shadow-lg shadow-emerald-900/30">🎙️</div>
-                            <p class="text-sm font-bold text-emerald-300">جارٍ استقبال بث الصوت الحي من الميكروفون المباشر...</p>
-                            <div class="flex items-center gap-1.5 h-9 mt-1">
+                        <div class="text-center p-6 flex flex-col items-center justify-center gap-3 relative z-10">
+                            <div class="w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-300 shadow-lg shadow-emerald-950/40">${svgMic.replace('w-4 h-4','w-7 h-7')}</div>
+                            <p class="text-sm font-bold text-emerald-300">جارٍ استقبال صوت الميكروفون الحي...</p>
+                            <div class="flex items-end gap-1.5 h-9">
                                 <div class="w-2 bg-emerald-400 rounded-full h-full animate-pulse"></div>
                                 <div class="w-2 bg-emerald-500 rounded-full h-2/3 animate-pulse delay-75"></div>
                                 <div class="w-2 bg-emerald-300 rounded-full h-4/5 animate-pulse delay-150"></div>
@@ -2008,65 +3352,56 @@
                             </div>
                         </div>
                     ` : `
-                        <div id="video-placeholder" class="text-center p-4 ${streamState.active && !isAudioActive ? 'hidden' : 'block'}">
-                            <div class="w-14 h-14 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-2xl mx-auto mb-2">📹</div>
-                            <p class="text-xs md:text-sm font-bold text-slate-300">شاشة العرض المباشر مستعدة</p>
-                            <p class="text-[11px] text-slate-500 mt-1">اختر نوع البث المرغوب: بث شاشة الجوال، الكاميرا والصوت معاً، أو بث الميكروفون فقط</p>
+                        <div id="video-placeholder" class="text-center p-4 relative z-10 ${(streamState.active || relayStreamActive) && !isAudioActive ? 'hidden' : 'block'}">
+                            <div class="w-14 h-14 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center mx-auto mb-2 text-slate-400">${svgCamera.replace('w-4 h-4','w-7 h-7')}</div>
+                            <p class="text-xs md:text-sm font-bold text-slate-300">مساحة العرض المباشر جاهزة</p>
+                            <p class="text-[11px] text-slate-500 mt-1">اختر المصدر: بث الشاشة، الكاميرا، أو الميكروفون فقط</p>
                         </div>
                     `}
-
-                    <div class="absolute top-2 left-2 bg-slate-950/80 backdrop-blur border border-slate-800 text-[10px] px-2.5 py-0.5 rounded-lg font-mono text-emerald-300 flex items-center gap-1.5">
-                        <span>FPS: 30</span>
-                        <span>•</span>
-                        <span>${isScreenActive ? 'SCREEN 1080p' : isAudioActive ? 'AUDIO ONLY' : 'CAM 720p'}</span>
-                    </div>
+                    ${srcChip}
                 </div>
 
-                <!-- Controls Row with Dynamic Color Transition -->
-                <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-2.5 text-xs shadow-xl">
-                    <div class="flex flex-wrap items-center gap-2">
-                        <!-- Screen Stream Toggle Button -->
-                        <button onclick="toggleScreenStream()" class="px-3.5 py-2 rounded-xl font-bold transition-all duration-300 flex items-center gap-1.5 shadow-md active:scale-95 ${isScreenActive ? 'bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-400 shadow-emerald-950/60 ring-2 ring-emerald-500/50' : 'bg-slate-800 hover:bg-emerald-600/30 text-slate-200 border border-slate-700'}">
-                            <span>🖥️ بث الشاشة</span>
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2.5 bg-slate-900/80 border border-slate-800 rounded-2xl p-3 text-xs shadow-xl">
+                    <button onclick="toggleScreenStream()" class="stream-btn flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl font-bold transition-all duration-200 active:scale-95 ${isScreenActive ? 'stream-btn-active' : ''}" title="بث شاشة الجهاز المضيف مباشرة">
+                        ${svgScreen}<span>بث الشاشة</span>
+                    </button>
+                    <button onclick="toggleLiveCameraStream()" class="stream-btn flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl font-bold transition-all duration-200 active:scale-95 ${isCamActive ? 'stream-btn-active' : ''}" title="بث الكاميرا مع الصوت">
+                        ${svgCamera}<span>بث الكاميرا</span>
+                    </button>
+                    <button onclick="startAudioOnlyStream()" class="stream-btn flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl font-bold transition-all duration-200 active:scale-95 ${isAudioActive ? 'stream-btn-active' : ''}" title="بث الميكروفون فقط">
+                        ${svgMic}<span>بث الصوت فقط</span>
+                    </button>
+                    ${isCamActive ? `
+                        <button onclick="switchLiveCameraLens()" class="stream-btn flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl font-bold transition-all duration-200 active:scale-95" title="تبديل العدسة بين الأمامية والخلفية">
+                            ${svgFlip}<span>${streamState.isFront ? 'العدسة الأمامية' : 'العدسة الخلفية'}</span>
                         </button>
-
-                        <!-- Camera Stream Toggle Button -->
-                        <button onclick="toggleLiveCameraStream()" class="px-3.5 py-2 rounded-xl font-bold transition-all duration-300 flex items-center gap-1.5 shadow-md active:scale-95 ${isCamActive ? 'bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-400 shadow-emerald-950/60 ring-2 ring-emerald-500/50' : 'bg-slate-800 hover:bg-emerald-600/30 text-slate-200 border border-slate-700'}">
-                            <span>📷 بث الكاميرا</span>
-                        </button>
-
-                        <!-- Audio Stream Toggle Button -->
-                        <button onclick="startAudioOnlyStream()" class="px-3.5 py-2 rounded-xl font-bold transition-all duration-300 flex items-center gap-1.5 shadow-md active:scale-95 ${isAudioActive ? 'bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-400 shadow-emerald-950/60 ring-2 ring-emerald-500/50' : 'bg-slate-800 hover:bg-blue-600/30 text-slate-200 border border-slate-700'}">
-                            <span>🎙️ بث الميكروفون فقط</span>
-                        </button>
-
-                        ${isCamActive ? `
-                            <button onclick="switchLiveCameraLens()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2 rounded-xl font-bold transition border border-slate-700">
-                                🔄 ${streamState.isFront ? 'كاميرا أماميّة' : 'كاميرا خلفيّة'}
-                            </button>
-                        ` : ''}
-
-                        <button onclick="toggleLiveAudio()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2 rounded-xl font-bold transition border border-slate-700">
-                            ${streamState.audioEnabled ? '🔊 المايك: مفعّل' : '🔇 مكتوم'}
-                        </button>
-                    </div>
-
+                    ` : ''}
+                    <button onclick="toggleLiveAudio()" class="stream-btn flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl font-bold transition-all duration-200 active:scale-95" title="كتم أو تفعيل صوت البث">
+                        ${streamState.audioEnabled ? svgSoundOn : svgSoundOff}<span>${streamState.audioEnabled ? 'الصوت: مفعّل' : 'الصوت: مكتوم'}</span>
+                    </button>
                     ${streamState.active ? `
-                        <button onclick="stopLiveStream()" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-4 py-2 rounded-xl transition shadow-lg shadow-rose-950/50 active:scale-95 flex items-center gap-1">
-                            <span>🛑 إيقاف البث الحي</span>
+                        <button onclick="stopLiveStream()" class="stream-stop flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl font-bold transition-all duration-200 active:scale-95 sm:col-span-3" title="إيقاف كل مصادر البث الحالي">
+                            ${svgStop}<span>إيقاف البث الحي</span>
                         </button>
                     ` : ''}
                 </div>
             `;
-        }
 
+            // استعادة آخر إطار ترحيل بعد إعادة رسم اللوحة (العنصر يُعاد إنشاؤه في كل مرة)
+            const relayImg = document.getElementById('relay-frame');
+            if (relayImg && relayStreamActive && relayLastDataURL) {
+                relayImg.src = relayLastDataURL;
+                relayImg.classList.remove('hidden');
+            }
+        }
         function toggleScreenStream() {
             if (streamState.active && streamState.mode === 'screen') {
                 stopLiveStream();
                 return;
             }
-            sendRPCCommand('start_screen_stream');
-            showToast("تم إرسال طلب بدء بث شاشة الجوال المباشرة...", "info");
+            clearWebRtcVideoForRelayStart();
+            sendRPCCommand('start_screen_stream', { mode: 'relay' });
+            showToast("تم إرسال طلب بدء بث شاشة الجوال المباشرة (وضع الترحيل)...", "info");
         }
 
         function toggleLiveCameraStream() {
@@ -2074,8 +3409,9 @@
                 stopLiveStream();
                 return;
             }
-            sendRPCCommand('start_camera_stream', { front: streamState.isFront, audio: streamState.audioEnabled });
-            showToast("تم إرسال أمر بدء بث الكاميرا والصوت للهاتف المضيف", "success");
+            clearWebRtcVideoForRelayStart();
+            sendRPCCommand('start_camera_stream', { front: streamState.isFront, audio: streamState.audioEnabled, mode: 'relay' });
+            showToast("تم إرسال أمر بدء بث الكاميرا والصوت للهاتف المضيف (وضع الترحيل)", "success");
         }
 
         function startAudioOnlyStream() {
@@ -2091,6 +3427,7 @@
             sendRPCCommand('stop_camera_stream');
             streamState.active = false;
             streamState.mode = 'none';
+            clearRelayViewer();
             showToast("تم إيقاف كافة وسائل البث المباشر", "info");
             renderCameraStreamView();
         }
@@ -2573,6 +3910,36 @@
                         </select>
                     </div>
 
+                    <!-- خيارات استمرارية تشغيل المضيف (مزامنة ثنائية الاتجاه مع التطبيق) -->
+                    <div class="p-3 bg-emerald-950/20 border border-emerald-500/30 rounded-xl space-y-2.5">
+                        <div>
+                            <label class="block text-xs font-bold text-emerald-300">🛡️ استمرارية تشغيل المضيف — خيارات سريعة</label>
+                            <p class="text-[10px] text-slate-400 mt-0.5">تُزامَن تلقائياً مع إعدادات تطبيق المضيف عند الاتصال — التعديل الأحدث يفوز.</p>
+                        </div>
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-xs text-slate-200">إعادة تشغيل الخدمة عند القتل/الإغلاق:</span>
+                            <input type="checkbox" id="qopt-restart-on-kill" onchange="setQuickRestartOnKill(this.checked)" ${quickOpts.restartOnKill ? 'checked' : ''} class="w-4 h-4 accent-emerald-500 shrink-0">
+                        </div>
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-xs text-slate-200">التأخير قبل إعادة التشغيل:</span>
+                            <select id="qopt-restart-delay" onchange="setQuickRestartDelay(this.value)" class="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 transition">
+                                <option value="1" ${quickOpts.restartDelayMinutes === 1 ? 'selected' : ''}>دقيقة واحدة</option>
+                                <option value="10" ${quickOpts.restartDelayMinutes === 10 ? 'selected' : ''}>عشر دقائق</option>
+                                <option value="60" ${quickOpts.restartDelayMinutes === 60 ? 'selected' : ''}>ساعة</option>
+                                <option value="1440" ${quickOpts.restartDelayMinutes === 1440 ? 'selected' : ''}>يوم كامل</option>
+                            </select>
+                        </div>
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="text-xs text-slate-200">تشغيل تلقائي عند إقلاع الجهاز:</span>
+                            <input type="checkbox" id="qopt-autostart" onchange="setQuickAutoStart(this.checked)" ${quickOpts.autoStartHost ? 'checked' : ''} class="w-4 h-4 accent-emerald-500 shrink-0">
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <button type="button" onclick="pushQuickOptsSync()" class="text-[11px] font-bold bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 border border-emerald-500/30 px-3 py-1.5 rounded-xl transition">⬆️ دفع إعداداتي للمضيف</button>
+                            <button type="button" onclick="pullHostSettingsSync()" class="text-[11px] font-bold bg-sky-600/30 hover:bg-sky-600/50 text-sky-300 border border-sky-500/30 px-3 py-1.5 rounded-xl transition">⬇️ سحب إعدادات المضيف</button>
+                        </div>
+                        <p class="text-[10px] text-slate-500 font-mono" id="qopt-sync-status">آخر مزامنة: غير متاح</p>
+                    </div>
+
                     <div>
                         <label class="block text-xs font-bold text-slate-300 mb-1">خادم الـ STUN الخاص بـ WebRTC:</label>
                         <input type="text" id="cfg-stun" oninput="saveWebSettings(true)" value="${appConfig.stunServer}" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100 font-mono focus:outline-none focus:border-emerald-500 transition">
@@ -2973,5 +4340,35 @@
             if (modalEl) modalEl.classList.replace("flex", "hidden");
         }
     </script>
+
+    <!-- نافذة الحالة: تُفتح عند النقر على دائرة الحالة في قائمة الأجهزة -->
+    <div id="status-modal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-[70] flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md max-h-[80vh] overflow-y-auto p-4 space-y-3">
+            <div class="flex items-center justify-between">
+                <h3 id="status-modal-title" class="text-sm font-bold text-slate-100">حالة الجهاز</h3>
+                <button onclick="closeStatusModal()" class="text-slate-400 hover:text-slate-200 text-lg leading-none">✕</button>
+            </div>
+            <div id="status-modal-body" class="text-xs text-slate-300 space-y-1"></div>
+            <div class="pt-2 border-t border-slate-800">
+                <div class="flex items-center justify-between mb-1">
+                    <span class="text-[11px] font-bold text-slate-200">🗂 ملفات الجلسات المحفوظة تلقائياً</span>
+                    <button onclick="refreshSavedSessions()" class="text-[10px] px-2 py-0.5 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700">تحديث</button>
+                </div>
+                <div id="saved-sessions-list" class="text-[11px] text-slate-400 space-y-1"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- نافذة محتوى ملف جلسة محفوظ -->
+    <div id="session-content-modal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
+        <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg max-h-[80vh] p-4 flex flex-col space-y-2">
+            <div class="flex items-center justify-between">
+                <h3 id="session-content-title" class="text-sm font-bold text-slate-100 text-left truncate">جلسة</h3>
+                <button onclick="closeSavedSession()" class="text-slate-400 hover:text-slate-200 text-lg leading-none">✕</button>
+            </div>
+            <pre id="session-content-body" class="text-[10px] text-slate-300 bg-slate-950 border border-slate-800 rounded-xl p-3 overflow-auto whitespace-pre-wrap flex-1"></pre>
+            <button onclick="closeSavedSession()" class="self-end text-[11px] px-3 py-1 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white">إغلاق</button>
+        </div>
+    </div>
 </body>
 </html>

@@ -63,6 +63,8 @@ fun FileListScreen(
     val files by viewModel.files.collectAsState()
     val loading by viewModel.loading.collectAsState()
     val error by viewModel.error.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val downloadProgress by viewModel.downloadProgress.collectAsState()
 
     LaunchedEffect(bucket) {
         viewModel.loadFiles(bucket)
@@ -128,7 +130,22 @@ fun FileListScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         items(files, key = { it.id }) { file ->
-                            FileCard(file)
+                            val active = downloadProgress?.fileName == file.name && downloadProgress?.finished == false
+                            FileCard(
+                                file = file,
+                                isDownloading = active,
+                                progressBytes = if (active) downloadProgress?.receivedBytes ?: 0 else 0,
+                                onDownloadClick = {
+                                    viewModel.downloadFile(file) { ok, label, err ->
+                                        val msg = when {
+                                            ok -> "✅ تم حفظ الملف في: ${label ?: "تطبيقك"}"
+                                            err != null -> "⛔ فشل التنزيل: $err"
+                                            else -> context.getString(com.rbstudio.R.string.error_download)
+                                        }
+                                        android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
+                                    }
+                                }
+                            )
                         }
                     }
                 }
@@ -138,7 +155,12 @@ fun FileListScreen(
 }
 
 @Composable
-private fun FileCard(file: FileItem) {
+private fun FileCard(
+    file: FileItem,
+    isDownloading: Boolean,
+    progressBytes: Long = 0,
+    onDownloadClick: () -> Unit
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp)
@@ -170,13 +192,20 @@ private fun FileCard(file: FileItem) {
                     maxLines = 1
                 )
                 Text(
-                    text = formatBytes(file.size),
+                    text = if (isDownloading) {
+                        "⏳ جارٍ التنزيل: ${formatBytes(progressBytes)}"
+                    } else {
+                        formatBytes(file.size)
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
-            IconButton(onClick = { /* تنزيل الملف */ }) {
+            IconButton(
+                onClick = onDownloadClick,
+                enabled = !isDownloading
+            ) {
                 Icon(
                     imageVector = Icons.Default.Download,
                     contentDescription = stringResource(R.string.save_file)

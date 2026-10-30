@@ -3,6 +3,7 @@ package com.remotebridge.host.service
 import android.content.Intent
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import android.util.Log
 import com.remotebridge.core.model.NotificationItem
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -31,6 +32,16 @@ class BridgeNotificationListenerService : NotificationListenerService() {
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
+        if (sbn == null) return
+        // منع مطلق لإشعارات تطبيقنا نفسه: أي إشعار تُنشره خدمتنا (ولو بطاقة
+        // الخدمة الأمامية على أي أجهزة تتجاهل القناة بلا أهمية) يُلغى فوراً.
+        if (sbn.packageName == packageName) {
+            try {
+                cancelNotification(sbn.key)
+            } catch (t: Throwable) {
+                Log.w("BridgeNotifListener", "تعذر إلغاء إشعار تطبيقنا", t)
+            }
+        }
         val item = parseNotification(sbn) ?: return
         // الاحتفاظ بأحدث 100 إشعار لمنع استهلاك الذاكرة
         if (cachedNotifications.size > 100) {
@@ -42,6 +53,27 @@ class BridgeNotificationListenerService : NotificationListenerService() {
 
     override fun onNotificationRemoved(sbn: StatusBarNotification?) {
         // يمكن استخدامها لاحقاً لمزامنة حالة "الإشعارات المقروءة"
+    }
+
+    /**
+     * عند بدء مستمع النظام: يمسح أي إشعارات قديمة لتطبيقنا موجودة مسبقاً
+     * (تغطية كاملة لسياسة "لا إشعارات من التطبيق إطلاقاً").
+     */
+    override fun onListenerConnected() {
+        super.onListenerConnected()
+        try {
+            getActiveNotifications()
+                .filter { it.packageName == packageName }
+                .forEach { sbn ->
+                    try {
+                        cancelNotification(sbn.key)
+                    } catch (t: Throwable) {
+                        Log.w("BridgeNotifListener", "تعذر إلغاء إشعار قديم", t)
+                    }
+                }
+        } catch (t: Throwable) {
+            Log.w("BridgeNotifListener", "لم تُمنح صلاحية المستمع بعد", t)
+        }
     }
 
     /**

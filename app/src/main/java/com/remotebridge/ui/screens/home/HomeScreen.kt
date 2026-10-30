@@ -37,6 +37,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.flow.first
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -58,8 +64,22 @@ import com.rbstudio.R
 fun HomeScreen(
     onSettingsClick: () -> Unit,
     onHostClick: () -> Unit,
-    onControllerClick: () -> Unit
+    onControllerClick: () -> Unit,
+    onWebDashboardClick: () -> Unit
 ) {
+    // خيار «تفعيل الوصول البعيد»: عند تفعيله، أيقونة «التحكم المباشر» تفتح واجهة المتحكم (لوحة الويب).
+    // قبل تفعيله تظهر رسالة توجيهية إلى خيار الإعدادات. (مطفأ افتراضياً)
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var remoteUiEnabled by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        try {
+            remoteUiEnabled = com.remotebridge.core.data.SettingsRepository(context)
+                .remoteUiAccess
+                .first()
+        } catch (_: Throwable) {
+            remoteUiEnabled = false
+        }
+    }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -205,7 +225,29 @@ fun HomeScreen(
                 description = stringResource(R.string.mode_controller_desc),
                 accentColor = MaterialTheme.colorScheme.secondary,
                 containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.35f),
-                onClick = onControllerClick
+                onClick = {
+                    if (remoteUiEnabled) {
+                        // خيار «تفعيل الوصول البعيد» مفعّل: فتح واجهة المتحكم (لوحة الويب) مباشرة
+                        onWebDashboardClick()
+                    } else {
+                        android.widget.Toast.makeText(
+                            context,
+                            "الوصول البعيد غير مفعّل — فعّل خيار «تفعيل الوصول البعيد» من الإعدادات أولاً",
+                            android.widget.Toast.LENGTH_LONG
+                        ).show()
+                    }
+                }
+            )
+
+            // بطاقة لوحة الويب المدمجة (فتح واجهة ويب المتحكم من داخل التطبيق)
+            ModernRoleCard(
+                icon = Icons.Default.Language,
+                badgeText = "واجهة ويب المتحكم",
+                title = stringResource(R.string.mode_web_controller),
+                description = stringResource(R.string.mode_web_controller_desc),
+                accentColor = MaterialTheme.colorScheme.tertiary,
+                containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.35f),
+                onClick = onWebDashboardClick
             )
 
             Spacer(modifier = Modifier.height(8.dp))

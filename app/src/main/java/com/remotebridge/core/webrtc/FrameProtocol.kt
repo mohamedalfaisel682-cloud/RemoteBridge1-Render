@@ -6,7 +6,7 @@ import java.nio.ByteOrder
 /**
  * بروتوكول تأطير الرسائل فوق قناة بيانات WebRTC مع دعم الموثوقية (ACK/NACK/Checksum).
  *
- * تنسيق الإطار المحدث (21 بايت رأس + حمولة):
+ * تنسيق الإطار المحدث (22 بايت رأس + حمولة):
  *   [1 بايت]   type       : 0=JSON، 1=Binary، 2=ACK، 3=NACK، 4=Ping، 5=Pong
  *   [4 بايت]   messageId  : معرّف الرسالة (لمطابقة الردود والملفات)
  *   [4 بايت]   seq        : رقم القطعة (يبدأ من 0)
@@ -16,6 +16,7 @@ import java.nio.ByteOrder
  *   [4 بايت]   payloadLen : طول الحمولة
  *   [N بايت]   payload
  *
+ * رأس فعلي = 1+4+4+4+1+4+4 = 22 بايت، الحمولة تبدأ عند الإزاحة 22.
  * القناة مرتبة (ordered = true) لذا تصل القطع بالترتيب نفسه المُرسل.
  */
 object FrameProtocol {
@@ -29,7 +30,7 @@ object FrameProtocol {
     const val FLAG_NEEDS_ACK: Byte = 0x01
     const val FLAG_COMPRESSED: Byte = 0x02
 
-    const val HEADER_SIZE = 21
+    const val HEADER_SIZE = 22
 
     /** حجم القطعة الواحدة — أقل من حد SCTP لضمان الوصول الموثوق. */
     const val MAX_PAYLOAD = 16 * 1024

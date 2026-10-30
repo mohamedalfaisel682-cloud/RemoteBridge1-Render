@@ -66,7 +66,15 @@ android {
   buildTypes {
     release {
       isCrunchPngs = false
-      isMinifyEnabled = false
+      // ================================================================
+      // تصغير حجم APK بشكل احترافي (2026):
+      // 1) تفعيل R8 لتقليم الكود غير المستخدم (material-icons-extended
+      //    وحده كان يضيف ملايين البايتات من كلسات DEX غير المستخدمة).
+      // 2) تقليم الموارد غير المستخدمة (shrinkResources).
+      // النتيجة: انخفاض DEX من عشرات الميغابايتات إلى بضعة ميجابايت فقط.
+      // ================================================================
+      isMinifyEnabled = true
+      isShrinkResources = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       // Do not remove or modify this signingConfig assignment. It is necessary for Android apps in
       // AI Studio.
@@ -79,6 +87,20 @@ android {
       }
     }
   }
+
+  // ================================================================
+  // تقسيم APK حسب معمارية المعالج (ABI Splits):
+  // مكتبات WebRTC الأصلية (.so) تأتي لأربع معماريات وتشكل العامل الأكبر
+  // في حجم الحزمة. التوزيع المنفصل يجعل APK الجهاز يحمل معماريته فقط
+  // (universalApk يبقى متاحاً كحل شامل واحد).
+  // ملاحظة: عند النشر عبر Play استخدم AAB (assembleBundle) فتتولى Play
+  // التجزئة التلقائية نفسها.
+  // ================================================================
+  // ================================================================
+  // APK مفرد (أحدث سياسة 2026): لا تقسيم ABI بعد الآن —
+  // كل نسخة البناء تُخرج ملف APK واحد شامل يضم جميع المعماريات،
+  // بنسخة وإصدار واحد فقط (versionCode 1) دون تراكم ملفات متعددة.
+  // ================================================================
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_11
     targetCompatibility = JavaVersion.VERSION_11
@@ -108,7 +130,6 @@ googleServices { missingGoogleServicesStrategy = MissingGoogleServicesStrategy.W
 // This makes it easy to add them back in the future if needed.
 dependencies {
   implementation(platform(libs.androidx.compose.bom))
-  implementation(platform(libs.firebase.bom))
   implementation(libs.androidx.activity.compose)
   implementation(libs.androidx.compose.material.icons.core)
   implementation(libs.androidx.compose.material.icons.extended)
@@ -125,15 +146,15 @@ dependencies {
   implementation(libs.androidx.navigation.compose)
   implementation(libs.androidx.room.ktx)
   implementation(libs.androidx.room.runtime)
-  implementation(libs.coil.compose)
+  // WebGL/WebView + WorkManager + DocumentFile (لوحة الويب المدمجة ومنظومة الاستمرارية بالخلفية)
+  implementation(libs.androidx.webkit)
+  implementation(libs.androidx.work.runtime)
+  implementation(libs.androidx.documentfile)
   implementation(libs.kotlinx.coroutines.android)
   implementation(libs.kotlinx.coroutines.core)
   implementation(libs.kotlinx.serialization.json)
   implementation(libs.okhttp)
-  implementation(libs.java.websocket)
   implementation(libs.stream.webrtc.android)
-  implementation(libs.androidx.media3.exoplayer)
-  implementation(libs.androidx.media3.ui)
   testImplementation(libs.androidx.compose.ui.test.junit4)
   testImplementation(libs.androidx.core)
   testImplementation(libs.androidx.junit)

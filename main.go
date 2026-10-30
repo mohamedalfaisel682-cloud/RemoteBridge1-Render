@@ -33,6 +33,7 @@ type HostInfo struct {
 	DeviceID   string `json:"deviceId"`
 	DeviceName string `json:"deviceName"`
 	Online     bool   `json:"online"`
+	LastSeenMs int64  `json:"lastSeenMs,omitempty"`
 }
 
 type OfferState struct {
@@ -45,12 +46,14 @@ type Hub struct {
 	clients       map[string]*Client
 	clientTokens  map[string]string
 	pendingOffers map[string]*OfferState
+	lastSeen      map[string]int64 // deviceId -> أحدث ظهور (UnixMilli) يبقى بعد القطع
 }
 
 var hub = Hub{
 	clients:       make(map[string]*Client),
 	clientTokens:  make(map[string]string),
 	pendingOffers: make(map[string]*OfferState),
+	lastSeen:      make(map[string]int64),
 }
 
 // Prometheus metrics
@@ -168,6 +171,8 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			hub.mu.Lock()
 			delete(hub.clients, currentDeviceID)
 			delete(hub.clientTokens, currentDeviceID)
+			// تسجيل "آخر ظهور" ليبقى ذكره بعد قطع الاتصال (دائرة برتقالية)
+			hub.lastSeen[currentDeviceID] = time.Now().UnixMilli()
 			hub.mu.Unlock()
 			if currentRole == "host" {
 				broadcastHostOffline(currentDeviceID)
@@ -235,6 +240,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			hub.mu.Lock()
 			hub.clients[reg.DeviceID] = client
 			hub.clientTokens[reg.DeviceID] = authToken
+			hub.lastSeen[reg.DeviceID] = time.Now().UnixMilli()
 			hub.mu.Unlock()
 
 			resp, _ := json.Marshal(map[string]interface{}{
@@ -362,6 +368,35 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			})
 			conn.WriteMessage(websocket.TextMessage, resp)
 
+		case "get_last_seen":
+			// استعلام "آخر ظهور" من المتحكم: يرد الخادم مباشرة (ليس تحويل)
+			var q struct {
+				DeviceIds []string `json:"deviceIds,omitempty"`
+			}
+			_ = json.Unmarshal(msgBytes, &q)
+			out := map[string]interface{}{}
+			hub.mu.RLock()
+			for id, ms := range hub.lastSeen {
+				out[id] = ms
+			}
+			hub.mu.RUnlock()
+			if len(q.DeviceIds) > 0 {
+				filtered := map[string]interface{}{}
+				for _, id := range q.DeviceIds {
+					if ms, ok := out[id]; ok {
+						filtered[id] = ms
+					}
+				}
+				out = filtered
+			}
+			resp, _ := json.Marshal(map[string]interface{}{
+				"type":  "last_seen",
+				"items": out,
+				"ts":    time.Now().UnixMilli(),
+			})
+			conn.WriteMessage(websocket.TextMessage, resp)
+			messagesRelayed.WithLabelValues("get_last_seen", "success").Inc()
+
 		default:
 			// لا نُهدر رسائل مخصصة: كل نوع غير معروف لكنه منسوب لجهاز يُحوَّل كما هو
 			if meta.To != "" {
@@ -398,11 +433,15 @@ func sendHostList(conn *websocket.Conn) {
 	var hosts []HostInfo
 	for _, c := range hub.clients {
 		if c.Role == "host" {
-			hosts = append(hosts, HostInfo{
+			hi := HostInfo{
 				DeviceID:   c.ID,
 				DeviceName: c.Name,
 				Online:     true,
-			})
+			}
+			if ls, ok := hub.lastSeen[c.ID]; ok {
+				hi.LastSeenMs = ls
+			}
+			hosts = append(hosts, hi)
 		}
 	}
 	hub.mu.RUnlock()

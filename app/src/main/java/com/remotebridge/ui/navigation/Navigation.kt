@@ -10,6 +10,7 @@ import com.remotebridge.ui.screens.files.FileListScreen
 import com.remotebridge.ui.screens.home.HomeScreen
 import com.remotebridge.ui.screens.host.HostScreen
 import com.remotebridge.ui.screens.settings.SettingsScreen
+import com.remotebridge.ui.screens.web.WebDashboardScreen
 
 /**
  * مسارات التنقل بين الشاشات.
@@ -21,6 +22,7 @@ object Routes {
     const val CONTROLLER = "controller"
     const val DASHBOARD = "dashboard"
     const val FILES = "files/{bucket}"
+    const val WEB_DASHBOARD = "web_dashboard"
 
     /**
      * يبني مسار شاشة الملفات لصندوق محدد.
@@ -40,7 +42,8 @@ fun BridgeNavHost() {
             HomeScreen(
                 onSettingsClick = { navController.navigate(Routes.SETTINGS) },
                 onHostClick = { navController.navigate(Routes.HOST) },
-                onControllerClick = { navController.navigate(Routes.CONTROLLER) }
+                onControllerClick = { navController.navigate(Routes.CONTROLLER) },
+                onWebDashboardClick = { navController.navigate(Routes.WEB_DASHBOARD) }
             )
         }
 
@@ -53,7 +56,15 @@ fun BridgeNavHost() {
         composable(Routes.HOST) {
             HostScreen(
                 onBack = { navController.popBackStack() },
-                onSettingsClick = { navController.navigate(Routes.SETTINGS) }
+                onSettingsClick = { navController.navigate(Routes.SETTINGS) },
+                onWebDashboardClick = { navController.navigate(Routes.WEB_DASHBOARD) },
+                onConnectedToHost = { navController.navigate(Routes.DASHBOARD) }
+            )
+        }
+
+        composable(Routes.WEB_DASHBOARD) {
+            WebDashboardScreen(
+                onBack = { navController.popBackStack() }
             )
         }
 
@@ -82,6 +93,5 @@ fun BridgeNavHost() {
                 bucket = bucket,
                 onBack = { navController.popBackStack() }
             )
-        }
-    }
+        }    }
 }

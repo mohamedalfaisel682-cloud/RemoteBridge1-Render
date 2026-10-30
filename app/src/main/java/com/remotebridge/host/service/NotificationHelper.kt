@@ -3,12 +3,10 @@ package com.remotebridge.host.service
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.content.Context
-import android.content.Intent
 import android.os.Build
+import android.util.Log
 import androidx.core.app.NotificationCompat
-import com.remotebridge.MainActivity
 import com.rbstudio.R
 
 /**
@@ -16,48 +14,58 @@ import com.rbstudio.R
  */
 object NotificationHelper {
 
-    const val CHANNEL_ID = "bridge_host_channel"
+    /**
+     * معرّف القناة الاصدار الثاني: قناة بأهمية NONE (بلا إشعار ظاهر).
+     * أندرويد يمنع خفض أهمية قناة قائمة، لذا نستخدم معرفاً جديداً ونحذف القديم.
+     */
+    const val CHANNEL_ID = "bridge_host_channel_v2"
+    /** قناة الإصدارات الأقدم تُحذف عند أول تشغيل. */
+    private const val LEGACY_CHANNEL_ID = "bridge_host_channel"
     const val NOTIFICATION_ID = 1001
 
     /**
-     * ينشئ قناة الإشعارات (مطلوب على أندرويد 8+).
+     * ينشئ قناة بلا أهمية (IMPORTANCE_NONE) بحيث لا تُعرض بطاقة الإشعار
+     * في أثناء عمل الخدمة الأمامية (مسار مقصود للاستخدام الشخصي غير المنشور).
      */
     fun createChannel(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
-        if (manager.getNotificationChannel(CHANNEL_ID) != null) return
+        // حذف أي قناة أقدم (لكي لا تبقى إعداداتها القديمة تعرض الإشعار)
+        try {
+            if (manager.getNotificationChannel(LEGACY_CHANNEL_ID) != null) {
+                manager.deleteNotificationChannel(LEGACY_CHANNEL_ID)
+            }
+        } catch (_: Throwable) {
+        }
         val channel = NotificationChannel(
             CHANNEL_ID,
             context.getString(R.string.host_channel_name),
-            NotificationManager.IMPORTANCE_LOW
+            NotificationManager.IMPORTANCE_NONE
         ).apply {
             description = context.getString(R.string.host_notification_text)
             setShowBadge(false)
         }
-        manager.createNotificationChannel(channel)
+        try {
+            manager.createNotificationChannel(channel)
+        } catch (t: Throwable) {
+            Log.w("NotificationHelper", "تعذر إنشاء قناة NONE", t)
+        }
     }
 
     /**
-     * يبني إشعار الخدمة الأمامية.
+     * يبني إشعار الخدمة الأمامية بصيغة مخفية لا تحضّر بطاقة ظاهرة:
+     * قناة بلا أهمية + أولوية MIN + صامت + بدون وقت + بدون عنوان أو نص.
      */
     fun buildHostNotification(context: Context): Notification {
-        val intent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        }
-        val pendingIntent = PendingIntent.getActivity(
-            context,
-            0,
-            intent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
         return NotificationCompat.Builder(context, CHANNEL_ID)
-            .setContentTitle(context.getString(R.string.host_notification_title))
-            .setContentText(context.getString(R.string.host_notification_text))
             .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentTitle("")
+            .setContentText("")
             .setOngoing(true)
             .setSilent(true)
-            .setContentIntent(pendingIntent)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setShowWhen(false)
+            .setPriority(NotificationCompat.PRIORITY_MIN)
+            .setCategory(Notification.CATEGORY_SERVICE)
             .build()
     }
 }

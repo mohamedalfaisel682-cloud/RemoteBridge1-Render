@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>خريطة خط السير</title>
+<link rel="stylesheet" href="leaflet.css"/>
+<style>
+  html, body, #map {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      background: #0b0f14;
+  }
+  .leaflet-container { background: #0b0f14; font-family: sans-serif; }
+  #layer-switch {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 1000;
+      display: flex;
+      gap: 6px;
+  }
+  #layer-switch button {
+      padding: 6px 12px;
+      border: 1px solid #2c81ba;
+      border-radius: 10px;
+      background: rgba(10, 20, 32, 0.85);
+      color: #cfe8ff;
+      font-size: 13px;
+  }
+  #layer-switch button.active { background: #2c81ba; color: #ffffff; }
+  .start-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #22c55e;
+      border: 3px solid rgba(255,255,255,0.9);
+      box-shadow: 0 0 6px rgba(0,0,0,0.6);
+  }
+  .end-dot {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #ef4444;
+      border: 3px solid rgba(255,255,255,0.9);
+      box-shadow: 0 0 6px rgba(0,0,0,0.6);
+  }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="layer-switch">
+  <button id="btn-sat" class="active">قمر صناعي</button>
+  <button id="btn-street">شوارع</button>
+</div>
+<script src="leaflet.js"></script>
+<script>
+  var map = L.map('map', { zoomControl: true }).setView([24.7, 46.7], 12);
+
+  var satBase = L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      { maxZoom: 19, attribution: 'صور: Esri World Imagery' }
+  );
+  var labelsOverlay = L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+      { maxZoom: 19, opacity: 0.9 }
+  );
+  var streetBase = L.tileLayer(
+      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+      { maxZoom: 19, attribution: 'الخرائط: OpenStreetMap' }
+  );
+
+  var currentBase = 'sat';
+  satBase.addTo(map);
+  labelsOverlay.addTo(map);
+
+  function setBase(kind) {
+      if (kind === currentBase) return;
+      currentBase = kind;
+      if (kind === 'sat') {
+          streetBase.remove();
+          satBase.addTo(map);
+          labelsOverlay.addTo(map);
+      } else {
+          satBase.remove();
+          labelsOverlay.remove();
+          streetBase.addTo(map);
+      }
+      var satBtn = document.getElementById('btn-sat');
+      var streetBtn = document.getElementById('btn-street');
+      satBtn.className = (kind === 'sat') ? 'active' : '';
+      streetBtn.className = (kind === 'street') ? 'active' : '';
+  }
+  document.getElementById('btn-sat').onclick = function () { setBase('sat'); };
+  document.getElementById('btn-street').onclick = function () { setBase('street'); };
+
+  var trail = [];
+  var polyline = null;
+  var startMarker = null;
+  var endMarker = null;
+
+  function fmtTime(ts) {
+      if (!ts) return '';
+      try { return new Date(ts).toLocaleString(); } catch (e) { return ''; }
+  }
+
+  /**
+   * نادي هذه الدالة بتمرير مصفوفة النقاط:
+   * [{lat: 24.7, lng: 46.7, ts: 1234567890}, ...]
+   * أول نقطة = بداية الحركة (دائرة خضراء)، آخر نقطة = آخر موقع (دائرة حمراء)،
+   * وبينهما خط السير الأزرق. الإطار يتمدد ليشمل المسار كاملاً.
+   */
+  window.applyTrail = function (points) {
+      trail = Array.isArray(points)
+          ? points.filter(function (p) {
+              return p && typeof p.lat === 'number' && typeof p.lng === 'number';
+          })
+          : [];
+
+      if (polyline) { polyline.remove(); polyline = null; }
+      if (startMarker) { startMarker.remove(); startMarker = null; }
+      if (endMarker) { endMarker.remove(); endMarker = null; }
+
+      if (!trail.length) {
+          map.setView([24.7, 46.7], 12);
+          return;
+      }
+      var latlngs = trail.map(function (p) { return [p.lat, p.lng]; });
+      polyline = L.polyline(latlngs, { color: '#38bdf8', weight: 5, opacity: 0.85 }).addTo(map);
+
+      var first = trail[0];
+      var last = trail[trail.length - 1];
+      startMarker = L.marker([first.lat, first.lng], {
+          icon: L.divIcon({
+              className: '',
+              html: '<div class="start-dot"></div>',
+              iconSize: [20, 20],
+              iconAnchor: [10, 10]
+          })
+      }).addTo(map).bindPopup(
+          '<b>نقطة البداية</b>' + (first.ts ? '<br/>' + fmtTime(first.ts) : '')
+      );
+      endMarker = L.marker([last.lat, last.lng], {
+          icon: L.divIcon({
+              className: '',
+              html: '<div class="end-dot"></div>',
+              iconSize: [22, 22],
+              iconAnchor: [11, 11]
+          })
+      }).addTo(map).bindPopup(
+          '<b>آخر موقع</b>' + (last.ts ? '<br/>' + fmtTime(last.ts) : '')
+      );
+
+      map.fitBounds(polyline.getBounds(), { padding: [40, 40] });
+  };
+</script>
+</body>
+</html>

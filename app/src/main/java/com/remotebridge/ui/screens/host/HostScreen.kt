@@ -26,29 +26,27 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.CameraAlt
-import androidx.compose.material.icons.filled.Cameraswitch
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.MicOff
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.filled.Videocam
-import androidx.compose.material.icons.filled.VideocamOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -67,26 +65,92 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.rbstudio.R
+import com.remotebridge.ui.screens.controller.ControllerContent
+import com.remotebridge.ui.viewmodel.ControllerViewModel
 import com.remotebridge.ui.viewmodel.HostViewModel
 
 /**
- * شاشة الجهاز المضيف: إدارة خدمة المضيف، الأذونات الكاملة، وبث الكاميرا والميكروفون.
+ * الواجهة الرئيسية للمضيف: الآن تحمل المضيف والمتحكم ولوحة الويب المدمجة
+ * في نفس الشاشة عبر ثلاثة تبويبات، بحيث يمكن الدخول على واجهة ويب المتحكم
+ * من واجهة المضيف مباشرة إن تعذّر فتحها من جهاز آخر.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HostScreen(
     onBack: () -> Unit,
     onSettingsClick: () -> Unit,
+    onWebDashboardClick: () -> Unit,
+    onConnectedToHost: () -> Unit,
     viewModel: HostViewModel = viewModel(factory = HostViewModel.Factory)
+) {    // نموذج عرض المتحكم بنطاق حياة الشاشة (اتصاله يبقى عند تبديل التبويبات)
+    val controllerViewModel: ControllerViewModel = viewModel(factory = ControllerViewModel.Factory)
+    var tabIndex by remember { mutableStateOf(0) }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.host_title)) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = null
+                        )
+                    }
+                }
+            )
+        }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        ) {
+            TabRow(selectedTabIndex = tabIndex) {
+                Tab(
+                    selected = tabIndex == 0,
+                    onClick = { tabIndex = 0 },
+                    text = { Text("🖥 المضيف") }
+                )
+                Tab(
+                    selected = tabIndex == 1,
+                    onClick = { tabIndex = 1 },
+                    text = { Text("📱 المتحكم") }
+                )
+                Tab(
+                    selected = tabIndex == 2,
+                    onClick = { tabIndex = 2 },
+                    text = { Text("🌐 لوحة الويب") }
+                )
+            }
+
+            when (tabIndex) {
+                0 -> HostMainTab(
+                    viewModel = viewModel,
+                    onSettingsClick = onSettingsClick
+                )
+                1 -> HostControllerTab(
+                    controllerViewModel = controllerViewModel,
+                    onConnectedToHost = onConnectedToHost
+                )
+                else -> HostWebTab(onOpen = onWebDashboardClick)
+            }
+        }
+    }
+}
+
+/** تبويب المضيف: حالة الخدمة، الأزرار، ومركز الصلاحيات. */
+@Composable
+private fun HostMainTab(
+    viewModel: HostViewModel,
+    onSettingsClick: () -> Unit
 ) {
     val context = LocalContext.current
     val isRunning by viewModel.serviceRunning.collectAsState()
     val serverUrl by viewModel.serverUrl.collectAsState()
     val stunServer by viewModel.stunServer.collectAsState()
     val connectionProfile by viewModel.connectionProfile.collectAsState()
-    val deviceName by viewModel.deviceName.collectAsState()
     val deviceId by viewModel.deviceId.collectAsState()
-    val cameraState by viewModel.cameraState.collectAsState()
 
     var permissionTick by remember { mutableStateOf(0) }
 
@@ -101,6 +165,19 @@ fun HostScreen(
     val cameraMicLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) {
+        permissionTick++
+    }
+
+    // طالب إذن الموقع: عند المنح نعيد بدء التتبع فوراً إن كانت الخدمة تعمل
+    val locationLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            try {
+                com.remotebridge.host.service.HostForegroundService.restartLocationTracking()
+            } catch (_: Throwable) {
+            }
+        }
         permissionTick++
     }
 
@@ -127,6 +204,13 @@ fun HostScreen(
             hasPermission(Manifest.permission.READ_SMS)
     val hasCameraPerm = hasPermission(Manifest.permission.CAMERA)
     val hasMicPerm = hasPermission(Manifest.permission.RECORD_AUDIO)
+    var hasLocationPerm: Boolean by remember(permissionTick) {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(
+                context, Manifest.permission.ACCESS_FINE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
+        )
+    }
     val hasAllFiles = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
         Environment.isExternalStorageManager()
     } else {
@@ -136,229 +220,300 @@ fun HostScreen(
     val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
     val isIgnoringBattery = powerManager?.isIgnoringBatteryOptimizations(context.packageName) == true
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.host_title)) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = null
-                        )
-                    }
-                }
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // بطاقة حالة المضيف والمعرف المستهدف
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = if (isRunning)
+                    MaterialTheme.colorScheme.primaryContainer
+                else MaterialTheme.colorScheme.surfaceVariant
             )
-        }
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // بطاقة حالة المضيف والمعرف المستهدف
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = if (isRunning)
-                        MaterialTheme.colorScheme.primaryContainer
-                    else MaterialTheme.colorScheme.surfaceVariant
-                )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Text(
-                        text = if (isRunning)
-                            stringResource(R.string.host_running)
-                        else stringResource(R.string.host_stopped),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
+                Text(
+                    text = if (isRunning)
+                        stringResource(R.string.host_running)
+                    else stringResource(R.string.host_stopped),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
 
-                    if (deviceId.isNotBlank()) {
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f)),
-                            modifier = Modifier.fillMaxWidth()
+                if (deviceId.isNotBlank()) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            Column(
-                                modifier = Modifier.padding(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Text(
-                                    text = "رمز ومعرّف هذا الجهاز المضيف (Device ID):",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                Text(
-                                    text = deviceId,
-                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = "💡 اكتب هذا المعرّف في واجهة الويب في مربع 'المعرف المستهدف' (Target ID) للاتصال المباشر بهذه الكاميرا والبيانات.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
+                            Text(
+                                text = "رمز ومعرّف هذا الجهاز المضيف (Device ID):",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = deviceId,
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = "💡 اكتب هذا المعرّف في واجهة الويب في مربع 'المعرف المستهدف' (Target ID) للاتصال المباشر بهذه الكاميرا والبيانات.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
-
-                    Text(
-                        text = "🌐 خادم الإشارات (Signaling): ${serverUrl.ifBlank { "wss://remotebridge1.onrender.com/ws" }}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    Text(
-                        text = "⚡ خادم WebRTC STUN المعتمد: ${stunServer.ifBlank { "stun:stun.l.google.com:19302" }}",
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.tertiary
-                    )
-
-                    Text(
-                        text = "🔗 نمط وبروفايل نقل البيانات: ${when (connectionProfile) {
-                            "RENDER_ONLY" -> "خادم Render فقط"
-                            "FLY_ONLY" -> "خادم Fly.io فقط"
-                            "LOCAL_LAN" -> "شبكة محلية LAN فقط"
-                            else -> "هجين متكامل (WebRTC P2P + Cloud)"
-                        }}",
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
                 }
-            }
 
-            // أزرار بدء/إيقاف الخدمة
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                Text(
+                    text = "🌐 خادم الإشارات (Signaling): ${serverUrl.ifBlank { "wss://remotebridge1.onrender.com/ws" }}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Text(
+                    text = "⚡ خادم WebRTC STUN المعتمد: ${stunServer.ifBlank { "stun:stun.l.google.com:19302" }}",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.tertiary
+                )
+
+                Text(
+                    text = "🔗 نمط وبروفايل نقل البيانات: ${when (connectionProfile) {
+                        "RENDER_ONLY" -> "خادم Render فقط"
+                        "FLY_ONLY" -> "خادم Fly.io فقط"
+                        "LOCAL_LAN" -> "شبكة محلية LAN فقط"
+                        else -> "هجين متكامل (WebRTC P2P + Cloud)"
+                    }}",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+
+        // أزرار بدء/إيقاف الخدمة
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Button(
+                onClick = { viewModel.startHost() },
+                enabled = !isRunning,
+                modifier = Modifier.weight(1f)
             ) {
-                Button(
-                    onClick = { viewModel.startHost() },
-                    enabled = !isRunning,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.PlayArrow,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.size(8.dp))
-                    Text(stringResource(R.string.start_host))
-                }
-
-                Button(
-                    onClick = { viewModel.stopHost() },
-                    enabled = isRunning,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error
-                    ),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Stop,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.size(8.dp))
-                    Text(stringResource(R.string.stop_host))
-                }
+                Icon(
+                    imageVector = Icons.Default.PlayArrow,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.size(8.dp))
+                Text(stringResource(R.string.start_host))
             }
 
-            Text(
-                text = "مركز الصلاحيات والأذونات (Android 11+)",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
+            Button(
+                onClick = { viewModel.stopHost() },
+                enabled = isRunning,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.error
+                ),
+                modifier = Modifier.weight(1f)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Stop,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.size(8.dp))
+                Text(stringResource(R.string.stop_host))
+            }
+        }
 
-            // بطاقة أذونات البيانات
-            PermissionItemCard(
-                icon = Icons.Default.Security,
-                title = stringResource(R.string.grant_permissions),
-                description = stringResource(R.string.permissions_desc),
-                isGranted = hasDataPerms,
-                onClick = { dataPermissionsLauncher.launch(generalPermissions) }
-            )
+        Text(
+            text = "مركز الصلاحيات والأذونات (Android 11+)",
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
+        )
 
-            // بطاقة أذونات الكاميرا والميكروفون
-            PermissionItemCard(
-                icon = Icons.Default.CameraAlt,
-                title = stringResource(R.string.grant_camera_mic),
-                description = stringResource(R.string.camera_mic_desc),
-                isGranted = hasCameraPerm && hasMicPerm,
-                onClick = { cameraMicLauncher.launch(cameraMicPermissions) }
-            )
+        // بطاقة أذونات البيانات
+        PermissionItemCard(
+            icon = Icons.Default.Security,
+            title = stringResource(R.string.grant_permissions),
+            description = stringResource(R.string.permissions_desc),
+            isGranted = hasDataPerms,
+            onClick = { dataPermissionsLauncher.launch(generalPermissions) }
+        )
 
-            // بطاقة العمل بالخلفية وتجاوز تحسين البطارية
-            PermissionItemCard(
-                icon = Icons.Default.BatteryChargingFull,
-                title = stringResource(R.string.grant_battery_opt),
-                description = stringResource(R.string.battery_opt_desc),
-                isGranted = isIgnoringBattery,
-                onClick = {
+        // بطاقة أذونات الكاميرا والميكروفون
+        PermissionItemCard(
+            icon = Icons.Default.CameraAlt,
+            title = stringResource(R.string.grant_camera_mic),
+            description = stringResource(R.string.camera_mic_desc),
+            isGranted = hasCameraPerm && hasMicPerm,
+            onClick = { cameraMicLauncher.launch(cameraMicPermissions) }
+        )
+
+        // بطاقة إذن الموقع: تفعيل تتبع حركة المضيف وخط السير على الخريطة
+        PermissionItemCard(
+            icon = Icons.Default.LocationOn,
+            title = "الموقع وخط السير",
+            description = "منح إذن الموقع يُفعّل تتبع حركة المضيف وعرض نقطة البداية والنهاية ومسار السير على خريطة حقيقية (أقمار صناعية وشوارع) عند اتصال المتحكم.",
+            isGranted = hasLocationPerm,
+            onClick = {
+                locationLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+                hasLocationPerm = false // حتى يعيد التحقق بعد نتيجة النافذة
+            }
+        )
+
+        // بطاقة العمل بالخلفية وتجاوز تحسين البطارية
+        PermissionItemCard(
+            icon = Icons.Default.BatteryChargingFull,
+            title = stringResource(R.string.grant_battery_opt),
+            description = stringResource(R.string.battery_opt_desc),
+            isGranted = isIgnoringBattery,
+            onClick = {
+                try {
+                    val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                        data = Uri.parse("package:${context.packageName}")
+                    }
+                    context.startActivity(intent)
+                } catch (_: Throwable) {
+                    context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+                }
+            }
+        )
+
+        // بطاقة الوصول لكامل ذاكرة الجهاز والملفات
+        PermissionItemCard(
+            icon = Icons.Default.Folder,
+            title = stringResource(R.string.grant_all_files),
+            description = stringResource(R.string.all_files_desc),
+            isGranted = hasAllFiles,
+            onClick = {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                     try {
-                        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                        val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
                             data = Uri.parse("package:${context.packageName}")
                         }
                         context.startActivity(intent)
                     } catch (_: Throwable) {
-                        context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+                        context.startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
                     }
+                } else {
+                    dataPermissionsLauncher.launch(arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE))
                 }
-            )
-
-            // بطاقة الوصول لكامل ذاكرة الجهاز والملفات
-            PermissionItemCard(
-                icon = Icons.Default.Folder,
-                title = stringResource(R.string.grant_all_files),
-                description = stringResource(R.string.all_files_desc),
-                isGranted = hasAllFiles,
-                onClick = {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                        try {
-                            val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION).apply {
-                                data = Uri.parse("package:${context.packageName}")
-                            }
-                            context.startActivity(intent)
-                        } catch (_: Throwable) {
-                            context.startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
-                        }
-                    } else {
-                        dataPermissionsLauncher.launch(arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE))
-                    }
-                }
-            )
-
-            // بطاقة الوصول للإشعارات
-            PermissionItemCard(
-                icon = Icons.Default.Notifications,
-                title = stringResource(R.string.grant_notification_access),
-                description = stringResource(R.string.grant_notification_access_desc),
-                isGranted = false,
-                onClick = {
-                    context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
-                }
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            OutlinedButton(
-                onClick = onSettingsClick,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text(stringResource(R.string.settings))
             }
+        )
+
+        // بطاقة الوصول للإشعارات
+        PermissionItemCard(
+            icon = Icons.Default.Notifications,
+            title = stringResource(R.string.grant_notification_access),
+            description = stringResource(R.string.grant_notification_access_desc),
+            isGranted = false,
+            onClick = {
+                context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+            }
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedButton(
+            onClick = onSettingsClick,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(stringResource(R.string.settings))
+        }
+    }
+}
+
+@Composable
+private fun HostControllerTab(
+    controllerViewModel: ControllerViewModel,
+    onConnectedToHost: () -> Unit
+) {
+    ControllerContent(
+        onConnected = onConnectedToHost,
+        onDisconnectClick = { controllerViewModel.disconnect() },
+        viewModel = controllerViewModel
+    )
+}
+
+/** تبويب لوحة الويب: زر يشغل واجهة ويب المتحكم داخل التطبيق (WebView). */
+@Composable
+private fun HostWebTab(
+    onOpen: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.35f)
+            )
+        ) {
+            Column(
+                modifier = Modifier.padding(20.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Language,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier.size(32.dp)
+                )
+                Text(
+                    text = stringResource(R.string.mode_web_controller),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = stringResource(R.string.mode_web_controller_desc),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "📁 تُحفظ الملفات المنزّلة من لوحة الويب في مجلد التحميلات المختار من إعدادات التطبيق، وإن لم يحدد فهي في مجلد خاص للتطبيق.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        Button(
+            onClick = onOpen,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(54.dp)
+        ) {
+            Icon(imageVector = Icons.Default.Language, contentDescription = null)
+            Spacer(modifier = Modifier.size(8.dp))
+            Text(
+                text = "فتح لوحة الويب المدمجة",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
         }
     }
 }

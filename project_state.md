@@ -1,0 +1,54 @@
+# project_state.md — حالة المشروع المرجعية الحية
+
+> **آخر تحديث:** 2026-10-30
+> **الإصدار:** versionCode 1 / versionName 1.0.0 — `applicationId = com.rbstudio` — minSdk 26 / compile+target 36
+> **سلسلة التوثيق:** كل تقارير التنفيذ التفصيلية في مجلد `doc\` — هذا الملف هو بصمة الحالة التجميعية المحدثة بعد كل تعديل جوهري.
+
+---
+
+## 1) الوضع الهندسي الحالي (مستقر)
+
+| المكوّن | الحالة | المرجع |
+|---|---|---|
+| APK الجذر | `RBstudioPRO.apk` — واحد فقط في الشجرة، universal، مبني من المصدر الحالي (تحقق 2026-10-29: BUILD SUCCESSFUL، وتكراره 2026-10-29 مساءً بالكاش الدافئ) | طقس ما بعد البناء الثابت |
+| مجلدات build | 0 (تُحذف بعد كل بناء إلزامياً) | AGENTS/القواعد |
+| لوحة الويب | التوأمان متطابقان SHA256: `8B1D14FD…279C3E8` | web-dashboard ⇔ assets/dashboard |
+| الخادم | `main.go` / `remotebridge-server.exe` — لم يُعد بناؤه في جولات الإصلاح الأخيرة (براءة مقررة 20/20) | تقرير الاختبار في doc |
+
+## 2) ميزات البث الحي (المرحلة المنجزة 2026-10-27..29)
+
+- **الوضع الافتراضي:** الترحيل MJPEG عبر خادم الإشارات — كاميرا 720p/300ms، شاشة 640px ج50/320ms، إيقاف ذاتي بعد 5 فشل إرسال.
+- **البروتوكول:** `RpcRequest(cmd=..., mode:"relay")` → `live_frame(b64 JPEG)` → `stop_camera_stream` يوقف كل المصادر.
+- **العيوب A–F:** A توثيق (بلا TURN — أزيل الوهمي)، B–E–F مُصلَحة، C مُمتلئة (عارض Compose + عارض ويب)، D حد أندرويد (موثق).
+- ملفات التنفيذ: `LiveRelayServer.kt` (جديد) + ربط `HostForegroundService` + استقبال `ControllerManager` + عارض `ControllerViewModel/ControllerScreen` + `Signal.kt` + `PeerConnectionManager` (Transceiver الشاشة) + لوحة الويب (عارض `relay-frame` + إصلاح muted).
+- التقرير التفصيلي: `doc\تقرير_تنفيذ_البث_الحي_المرحلي_MJPEG_وإصلاحات_WebRTC.md`.
+
+## 3) ميزات الاستمرارية والخصوصية (منضمنات من قبل)
+
+- إقلاع واعٍ `autoStartHost` + مراقب WorkManager كل 15 دقيقة + إعادة مؤجلة (1د/10د/ساعة/يوم) + إلغاء عند التوقف الفرزي.
+- كود مزدوج: `*#*#82473#*#*` (نظامي) و`*82473#` (وصولية) + إخفاء الأيقونة `ComponentStateManager`.
+- مزامنة الإعدادات `settings_sync` خادم/ويب بنمط الأحدث-يفوز (طابع مشترك).
+
+## 4) أهم المقارنات والتحليلات (منجزة 2026-10-30)
+
+- `doc\تحليل_عميق_شامل_للتطبيق_وخدماته_وواجهاته_واقتراحات_التطوير.md` — جرد 56 ملف Kotlin + 33 أمر + 11 عرض ويب + A-F + مقترحات P0/P1/P2 (22 اقتراحاً) وخارطة v1.1.
+- `doc\مقارنة_مفصلة_الأصل_والمتقدمة.md` — مقابل `opencodeGLM5.3FLASHA` (v1.3.0، kit B4–B13): الدمج من B إلى A كوحدات قابلة للتعطيل.
+
+## 5) قائمة الديون والتوصيات النشطة (P0 أولاً)
+
+1. رمز اقتران الأجهزة (Pairing PIN) — الخادم يرفض غير المرتبط.
+2. `allowBackup=false` + قواعد نسخ صريحة.
+3. Room بلا `fallbackToDestructiveMigration`.
+4. `SetReadLimit` + رفع معدل في الخادم.
+5. إصلاح دوران كاميرا الترحيل (v2 — SENSOR_orientation).
+6. رسالة `live_stopped(reason)` + إحصاءات البث.
+
+## 6) المخزون الحي (وسائل التحقق السريع)
+
+| الفحص | الأمر/الموقع |
+|---|---|
+| بنية APK | `.\gradlew.bat :app:assembleDebug` → نسخ `app\build\outputs\apk\debug\app-debug.apk` → الجذر → حذف build |
+| تطابق اللوحتين | مقارنة SHA256 لملفي `web-dashboard\index.html` و`app\src\main\assets\dashboard\index.html` |
+| ملف APK واحد | `Get-ChildItem -Recurse -Filter *.apk` = 1 |
+| commit آلي | `git add -A` ثم conventional commit (الـ keystore و*.apk مُستثناة بـ .gitignore) |
+| التخزين الحساس | `debug.keystore` غير متتبع ومستبعد — لا ترقم محلي في .env.example فقط |

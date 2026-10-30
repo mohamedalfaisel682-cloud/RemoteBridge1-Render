@@ -131,8 +131,8 @@ class HostDataProvider(private val context: Context) {
 
                 while (cursor.moveToNext()) {
                     val name = cursor.getString(nameIdx) ?: continue
-                    val bucketName = if (bucketIdx >= 0)
-                        cursor.getString(bucketIdx) ?: bucket else bucket
+                    // نحمل نوع الصندوق المطلوب نفسه (images/videos/audio/...)
+                    // لأن فتح الملف للتنزيل يعتمد على هذا النوع لاختيار URI الصحيح
                     items.add(
                         FileItem(
                             id = cursor.getLong(idIdx),
@@ -140,7 +140,7 @@ class HostDataProvider(private val context: Context) {
                             size = cursor.getLong(sizeIdx),
                             mimeType = cursor.getString(mimeIdx) ?: "*/*",
                             dateAdded = cursor.getLong(dateIdx) * 1000L,
-                            bucket = bucketName,
+                            bucket = bucket,
                             width = if (widthIdx >= 0) cursor.getInt(widthIdx) else 0,
                             height = if (heightIdx >= 0) cursor.getInt(heightIdx) else 0,
                             durationMs = if (durationIdx >= 0) cursor.getLong(durationIdx) else 0
@@ -247,6 +247,25 @@ class HostDataProvider(private val context: Context) {
                 context.contentResolver.openInputStream(itemUri)
             } catch (t: Throwable) {
                 Log.e(TAG, "فشل فتح الملف $fileId", t)
+                null
+            }
+        }
+
+    /**
+     * يفتح ملفاً من مستكشف الذاكرة مباشرة بمساره النسبي (مجلد مستكشف الملفات
+     * دون معرّف MediaStore). يعيد null عند الفشل أو خارج جذر الذاكرة الخارجية.
+     */
+    suspend fun openFileByPath(relativePath: String): java.io.InputStream? =
+        withContext(Dispatchers.IO) {
+            try {
+                val root = Environment.getExternalStorageDirectory()
+                val clean = relativePath.trim('/').replace("..", "").trim()
+                if (clean.isEmpty()) return@withContext null
+                val file = java.io.File(root, clean)
+                if (!file.exists() || !file.isFile || !file.canRead()) return@withContext null
+                file.inputStream()
+            } catch (t: Throwable) {
+                Log.e(TAG, "فشل فتح الملف بالمسار $relativePath", t)
                 null
             }
         }

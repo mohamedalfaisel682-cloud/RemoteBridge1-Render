@@ -328,7 +328,18 @@ class PeerConnectionManager(
             videoCapturer?.startCapture(1280, 720, 30)
 
             videoTrack = factory.createVideoTrack("ARDAMSv0", videoSource!!)
-            connection.addTrack(videoTrack, listOf("screenStream"))
+            // تصليح العيب E: الإرفاق عبر الـ transceiver الفيديو القائم (تم تفاوضه
+            // sendonly ضمن الإجابة الأصلية) بدل addTrack الذي يطلق حدث إعادة
+            // تفاوض لا أحد يعالجه في المضيف، فتبقى الوسائط بلا جريان.
+            val screenTransceiver = connection.transceivers.firstOrNull {
+                it.mediaType == MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO
+            }
+            if (screenTransceiver != null) {
+                screenTransceiver.direction = RtpTransceiver.RtpTransceiverDirection.SEND_ONLY
+                screenTransceiver.sender.setTrack(videoTrack, true)
+            } else {
+                connection.addTrack(videoTrack, listOf("screenStream"))
+            }
             return true
         } catch (t: Throwable) {
             Log.e(TAG, "فشل بدء بث الشاشة", t)
