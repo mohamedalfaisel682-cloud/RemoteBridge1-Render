@@ -762,14 +762,22 @@
 
             <!-- Desktop Host Selection -->
             <div class="glass-panel rounded-2xl p-3.5 shadow-xl border border-slate-800">
-                <h3 class="text-xs font-bold text-slate-300 mb-2 flex items-center justify-between">
+                <h3 class="text-xs font-bold text-slate-300 mb-2 flex items-center justify-between flex-wrap gap-1.5">
                     <span>📱 الأجهزة المتاحة (Hosts)</span>
-                    <button id="auto-scan-toggle" onclick="toggleAutoScan()" title="البحث التلقائي يعمل كل 3 ثوانٍ — انقر للإيقاف أو التفعيل" class="auto-scan-on flex items-center gap-1.5 text-[10px] font-bold px-2 py-1 rounded-lg transition">
-                        <span>📡</span>
-                        <span>فحص تلقائي</span>
-                        <span id="auto-scan-pulse" class="scan-pulse-dot"></span>
-                        <span class="text-[9px] opacity-70 font-normal">كل 3 ثوانٍ</span>
-                    </button>
+                    <span class="flex items-center gap-1.5 flex-wrap justify-end">
+                        <button id="auto-scan-toggle" onclick="toggleAutoScan()" title="البحث التلقائي يعمل كل 3 ثوانٍ قبل الاتصال، ويصبح كل دقيقة أثناء اتصال المضيف — انقر للإيقاف أو التفعيل" class="auto-scan-on flex items-center gap-1.5 text-[10px] font-bold px-2 py-1 rounded-lg transition">
+                            <span>📡</span>
+                            <span>فحص تلقائي</span>
+                            <span id="auto-scan-pulse" class="scan-pulse-dot"></span>
+                            <span id="scan-cadence-label" class="text-[9px] opacity-70 font-normal">كل 3 ثوانٍ</span>
+                        </button>
+                        <button id="auto-connect-toggle" onclick="toggleAutoConnect()" title="الاتصال التلقائي: أي جهاز مضيف نشط يُربط فور اكتشافه دون الحاجة للنقر — انقر للإيقاف أو التفعيل" class="auto-scan-on flex items-center gap-1.5 text-[10px] font-bold px-2 py-1 rounded-lg transition">
+                            <span>🔌</span>
+                            <span>اتصال تلقائي</span>
+                            <span id="auto-connect-pulse" class="scan-pulse-dot"></span>
+                            <span id="auto-connect-state" class="text-[9px] opacity-70 font-normal">مفعّل</span>
+                        </button>
+                    </span>
                 </h3>
                 
                 <div class="space-y-1 mb-2.5 max-h-32 overflow-y-auto custom-scrollbar" id="hosts-list">
@@ -1201,20 +1209,88 @@
         }
 
         let autoDiscoveryIntervalId = null;
+        let lastScanAt = 0;
+
+        // B15 — إيقاع الفحص الديناميكي: كل 3 ثوانٍ قبل الاتصال (اكتشاف سريع)، وكل دقيقة أثناء الاتصال (تخفيف الحمل)
+        function currentScanInterval() { return isP2pAlive() ? 60000 : 3000; }
+
+        function updateScanCadenceLabel() {
+            const label = currentScanInterval() >= 60000 ? 'كل دقيقة (بعد الاتصال)' : 'كل 3 ثوانٍ';
+            try {
+                const el = document.getElementById('scan-cadence-label');
+                if (el && el.textContent !== label) el.textContent = label;
+            } catch (_) {}
+        }
 
         function autoDiscoverAndConnectHosts() {
             // تلميح واحد فقط في الجلسة — النقر المتكرر على «فحص تلقائي» لا يعرض تلميحاً جديداً
-            showHintOnce("auto-discovery", "تم تفعيل الفحص التلقائي للهواتف المضيفة (كل 3 ثوانٍ)");
+            showHintOnce("auto-discovery", "تم تفعيل الفحص التلقائي للهواتف المضيفة (كل 3 ثوانٍ قبل الاتصال، وكل دقيقة أثناء الاتصال)");
 
-            // Execute scan immediately
+            // تنفيذ أول فحص فوراً ثم جدولة ذكية حسب إيقاع الاتصال
+            lastScanAt = Date.now();
             performHostScan();
 
-            // Set up 3-second polling interval
             if (!autoDiscoveryIntervalId) {
                 autoDiscoveryIntervalId = setInterval(() => {
-                    performHostScan();
+                    try {
+                        updateScanCadenceLabel();
+                        if ((Date.now() - lastScanAt) >= currentScanInterval()) {
+                            lastScanAt = Date.now();
+                            performHostScan();
+                        }
+                    } catch (_) {}
                 }, 3000);
             }
+        }
+
+        // B15 — الاتصال التلقائي بالمضيف النشط: عند اكتشاف جهاز أونلاين يُربط فوراً دون نقرة (قابل للتبديل والمحفوظ)
+        let rbAutoConnectOn = true; // الافتراضي: مفعّل
+        let rbAutoConnectLastAt = 0; // خنق عام بين المحاولات (15 ثانية)
+        const rbAutoConnectTried = {}; // deviceId -> آخر زمن محاولة (خنق 60 ثانية لكل جهاز)
+        try { rbAutoConnectOn = (localStorage.getItem('rb_autoconnect_v1') || '1') !== '0'; } catch (_) {}
+
+        function applyAutoConnectVisual() {
+            const btn = document.getElementById("auto-connect-toggle");
+            const pulse = document.getElementById("auto-connect-pulse");
+            const state = document.getElementById("auto-connect-state");
+            if (btn) {
+                btn.classList.toggle("auto-scan-on", rbAutoConnectOn);
+                btn.classList.toggle("auto-scan-off", !rbAutoConnectOn);
+                btn.classList.toggle("host-flash", rbAutoConnectOn);
+            }
+            if (pulse) pulse.classList.toggle("off", !rbAutoConnectOn);
+            if (state) state.textContent = rbAutoConnectOn ? 'مفعّل' : 'متوقف';
+        }
+
+        function toggleAutoConnect() {
+            rbAutoConnectOn = !rbAutoConnectOn;
+            try { localStorage.setItem('rb_autoconnect_v1', rbAutoConnectOn ? '1' : '0'); } catch (_) {}
+            applyAutoConnectVisual();
+            if (rbAutoConnectOn) {
+                showHintOnce("auto-connect-on", "تم تفعيل الاتصال التلقائي — يُربط أي جهاز مضيف نشط فور اكتشافه دون نقر");
+                autoConnectBestHost();
+            } else {
+                showHintOnce("auto-connect-off", "تم إيقاف الاتصال التلقائي — الربط أصبح بالنقر على الجهاز أو زر الربط");
+            }
+        }
+
+        function autoConnectBestHost() {
+            if (!rbAutoConnectOn) return;
+            if (!autoScanGloballyEnabled) return;
+            if (isP2pAlive()) return; // متصل فعلاً — لا حاجة لأي محاولة
+            try { if (pc && pc.connectionState === 'connecting') return; } catch (_) {} // عرض قائم في الطريق — انتظر نتيجته
+            const hosts = (onlineHosts || []).filter(h => h && h.deviceId);
+            if (hosts.length === 0) return;
+            const target = activeTargetDeviceId || appConfig.targetDeviceId;
+            const pick = (target && hosts.some(h => h.deviceId === target)) ? target : hosts[0].deviceId;
+            const now = Date.now();
+            if (now - rbAutoConnectLastAt < 15000) return;
+            if (rbAutoConnectTried[pick] && (now - rbAutoConnectTried[pick]) < 60000) return;
+            rbAutoConnectLastAt = now;
+            rbAutoConnectTried[pick] = now;
+            const rec = hosts.find(h => h.deviceId === pick) || {};
+            showHintOnce("auto-link::" + pick, `الاتصال التلقائي: جارٍ الربط بالمضيف النشط [${rec.deviceName || pick}]...`);
+            selectAndConnectHost(pick);
         }
 
         let lastAutoReconnectAt = 0;
@@ -1246,6 +1322,8 @@
                     renderHostList();
                 }
             }
+            // B15 — الاتصال التلقائي بالمضيف النشط دون الحاجة للنقر
+            try { autoConnectBestHost(); } catch (_) {}
         }
 
         function renderHostList() {
@@ -1474,7 +1552,7 @@
             autoScanGloballyEnabled = !autoScanGloballyEnabled;
             applyAutoScanVisual();
             if (autoScanGloballyEnabled) {
-                showHintOnce("auto-scan-on", "تم تفعيل الفحص التلقائي — يبحث عن الهواتف كل 3 ثوانٍ");
+                showHintOnce("auto-scan-on", "تم تفعيل الفحص التلقائي — كل 3 ثوانٍ قبل الاتصال، وكل دقيقة أثناء الاتصال");
                 autoDiscoverAndConnectHosts();
             } else {
                 if (autoDiscoveryIntervalId) {
@@ -4562,6 +4640,8 @@
                         autoDiscoverAndConnectHosts();
                     }
                     if (typeof applyAutoScanVisual === "function") applyAutoScanVisual();
+                    if (typeof applyAutoConnectVisual === "function") applyAutoConnectVisual();
+                    try { updateScanCadenceLabel(); } catch (_) {}
                 }, 1200);
             } catch (_) {}
         });
