@@ -409,6 +409,17 @@
         .rb-lightwin[data-cat="recordings"] .lwh { background: #fde8f3; }      /* تسجيلات — وردي فاتح */
         .rb-lightwin[data-cat="media"] .lwh { background: #e8f4fd; }           /* استوديو — سماوي فاتح */
         .rb-lightwin[data-cat="locations"] .lwh { background: #e6f7f5; }       /* مواقع — تنّ فاتح */
+        /* B14 — صفوف النقرة الموحدة + أيقونة نسخ الرقم */
+        .rb-lightwin .lw-row.lw-click { cursor: pointer; }
+        .rb-lightwin .lw-row.lw-click:hover { background: rgba(15, 23, 42, 0.06); }
+        .rb-lightwin .lw-copy-btn { border: 1px solid #94a3b8; background: #f1f5f9; border-radius: 8px; padding: 1px 7px; font-size: 10px; line-height: 1.5; cursor: pointer; color: #0f172a; transition: all .15s; }
+        .rb-lightwin .lw-copy-btn:hover { background: #0284c7; color: #fff; border-color: #0284c7; }
+        .rb-copy-btn { background: rgba(15, 23, 42, 0.25); border: 1px solid #334155; border-radius: 8px; padding: 2px 7px; font-size: 10px; cursor: pointer; color: #cbd5e1; transition: all .15s; line-height: 1.5; }
+        .rb-copy-btn:hover { background: #0e9488; color: #fff; border-color: #0e9488; }
+        .rb-chat-copy-btn { background: rgba(15, 23, 42, 0.5); border: 1px solid #334155; border-radius: 9999px; width: 26px; height: 26px; font-size: 12px; cursor: pointer; color: #94a3b8; transition: all .15s; }
+        .rb-chat-copy-btn:hover { background: #0e9488; color: #fff; border-color: #0e9488; }
+        .rb-loc-row-click { cursor: pointer; transition: background .15s; }
+        .rb-loc-row-click:hover { background: rgba(56, 189, 248, 0.08); }
     </style>
     <style id="bridge-host-studio-css">
         /* ===== الإطار الوامض للجهاز المضيف المختار والمتصل (أخضر فاتح ↔ أبيض) ===== */
@@ -2953,6 +2964,34 @@
                 for (const k in map) { if (k.endsWith(tail)) return map[k]; }
             }
             return null;
+        }
+
+        // B14 — نسخ نص إلى الحافظة بنقرة واحدة مع مسار بديل تلقائي (لأن WebView قد يمنع Clipboard)
+        function rbCopyText(text) {
+            const val = String(text === undefined || text === null ? '' : text);
+            if (!val) { showToast('لا يوجد رقم لنسخه', 'warning'); return; }
+            const done = () => showToast('تم نسخ الرقم: ' + val, 'success');
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(val).then(() => done()).catch(() => rbCopyTextFallback(val, done));
+                    return;
+                }
+            } catch (_) {}
+            rbCopyTextFallback(val, done);
+        }
+        function rbCopyTextFallback(val, done) {
+            try {
+                const ta = document.createElement('textarea');
+                ta.value = val;
+                ta.setAttribute('readonly', '');
+                ta.style.position = 'fixed';
+                ta.style.opacity = '0';
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+                done();
+            } catch (_) { showToast('تعذر النسخ الآلي — الرقم: ' + val, 'error'); }
         }
 
         // 4) الاسم الصياغي للتطبيقات في الإشعارات
@@ -5749,11 +5788,11 @@
                     </div>
                     <div class="flex-1 min-w-0">
                         <p class="${nameSize} font-bold text-slate-100 truncate">${escHtml(c.displayName || '')}</p>
-                        <div class="mt-1 space-y-0.5">
+                        <div class="mt-1 space-y-1">
                             ${c.phoneNumbers ? c.phoneNumbers.map(p => `
-                                <div class="flex items-center justify-between text-[11px] font-mono text-slate-400">
-                                    <span>${escHtml(p)}</span>
-                                    <button onclick="navigator.clipboard.writeText('${p}'); showToast('تم نسخ الرقم: ${p}', 'info');" class="text-emerald-400 hover:text-emerald-300 text-[10px]">نسخ 📋</button>
+                                <div class="flex items-center justify-between gap-1.5 text-[11px] text-slate-400">
+                                    <span class="font-mono" style="direction:ltr">📞 ${escHtml(p)}</span>
+                                    <button onclick="rbCopyText('${String(p).replace(/['"\\]/g, '')}')" title="نسخ هذا الرقم بنقرة واحدة" class="rb-copy-btn shrink-0">📋</button>
                                 </div>
                             `).join('') : ''}
                         </div>
@@ -5777,19 +5816,26 @@
                 .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         }
 
-        function buildSmsThreads() {
+        // B14 — بناء المحادثات: ربط كل رقم بجهة الاتصال المحفوظة ثم دمج رسائل نفس الجهة في خيط واحد
+        // (يستوعب اختلاف صيغ الرقم: مع رمز الدولة أو بدونه أو بصفر البداية)، ويقبل أي مصدر بيانات
+        function buildSmsThreads(list) {
+            const arr = Array.isArray(list) ? list : (smsData || []);
             const threads = {};
-            smsData.forEach(s => {
-                const key = normNum(s.address) || ('mid' + s.id);
-                if (!threads[key]) threads[key] = { key: key, address: s.address || '', messages: [] };
+            arr.forEach((s, idx) => {
+                const nm = resolveContactName(s.address);
+                const key = nm ? ('cn:' + nm) : (normNum(s.address) || ('mid' + (s.id !== undefined && s.id !== null ? s.id : ('row' + idx))));
+                if (!threads[key]) threads[key] = { key: key, address: '', name: null, messages: [] };
+                if (s.address && String(s.address).length > String(threads[key].address || '').length) threads[key].address = String(s.address);
+                if (!threads[key].name && s.contactName) threads[key].name = s.contactName;
+                if (!threads[key].name) threads[key].name = nm;
                 threads[key].messages.push(s);
             });
             return Object.values(threads).map(t => {
-                t.name = ((t.messages.find(m => m.contactName) || {}).contactName) || resolveContactName(t.address);
-                t.messages.sort((a, b) => (a.date || 0) - (b.date || 0));
+                if (!t.name) t.name = ((t.messages.find(m => m.contactName) || {}).contactName) || resolveContactName(t.address);
+                t.messages.sort((a, b) => (Number(a.date) || 0) - (Number(b.date) || 0));
                 const last = t.messages[t.messages.length - 1] || {};
                 t.last = last.body || '';
-                t.lastDate = last.date || 0;
+                t.lastDate = Number(last.date) || 0;
                 t.count = t.messages.length;
                 t.lastIncoming = last.type !== 2;
                 return t;
@@ -5939,7 +5985,10 @@
                             ${sub ? `<p class="text-[10px] font-mono text-slate-500 truncate">${escHtml(sub)}</p>` : ''}
                         </div>
                     </div>
-                    <button onclick="closeWindowOverlay()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-rose-600/80 border border-slate-700 text-slate-300 hover:text-white flex items-center justify-center text-sm font-bold transition">✕</button>
+                    <div class="flex items-center gap-1.5 shrink-0">
+                        ${thread.address ? `<button onclick="rbCopyText('${String(thread.address).replace(/['"\\]/g, '')}')" title="نسخ رقم جهة الاتصال بنقرة واحدة" class="rb-chat-copy-btn">📋</button>` : ''}
+                        <button onclick="closeWindowOverlay()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-rose-600/80 border border-slate-700 text-slate-300 hover:text-white flex items-center justify-center text-sm font-bold transition">✕</button>
+                    </div>
                 </div>
                 <div class="chat-body custom-scrollbar" id="chat-body-scroll">${bubbles || '<p class="text-center text-xs text-slate-500">لا توجد رسائل في هذه المحادثة</p>'}</div>
                 <div class="chat-input-row">
@@ -6034,7 +6083,7 @@
                     return;
                 }
                 container.innerHTML = window.__smsThreads.map((t, idx) => `
-                    <div onclick="openSmsChatWindow('${t.key.replace(/'/g, "")}')" class="p-3 bg-slate-900/80 hover:bg-slate-800/80 border border-slate-800 rounded-xl transition cursor-pointer group">
+                    <div onclick="openSmsChatWindow('${String(t.key).replace(/[\\'"]/g, '')}')" class="p-3 bg-slate-900/80 hover:bg-slate-800/80 border border-slate-800 rounded-xl transition cursor-pointer group">
                         <div class="flex items-center gap-2.5">
                             <div class="w-9 h-9 rounded-full bg-emerald-600/25 border border-emerald-500/40 flex items-center justify-center text-xs font-bold text-emerald-300 shrink-0">${escHtml((t.name || t.address || '؟').charAt(0))}</div>
                             <div class="flex-1 min-w-0">
@@ -6090,8 +6139,12 @@
                                     ${isIncoming ? '📩 واردة' : '📤 صادرة'}
                                 </span>
                                 <span class="text-xs font-bold text-slate-200 truncate">${escHtml(contactName || s.address || 'غير معروف')}</span>
+                                ${s.address ? `<span class="text-[10px] font-mono text-slate-500 truncate hidden sm:inline" style="direction:ltr">${escHtml(normNum(s.address))}</span>` : ''}
                             </div>
-                            <span class="text-[10px] shrink-0"><span class="ts-en">${dateStr}</span></span>
+                            <div class="flex items-center gap-1 shrink-0">
+                                <span class="text-[10px]"><span class="ts-en">${dateStr}</span></span>
+                                ${s.address ? `<button onclick="rbCopyText('${String(s.address).replace(/['"\\]/g, '')}')" title="نسخ رقم المرسل بنقرة واحدة" class="rb-copy-btn">📋</button>` : ''}
+                            </div>
                         </div>
                         <div class="flex items-start justify-between gap-2">
                             <p class="${textSize} text-slate-300 leading-relaxed bg-slate-950/40 p-2 rounded-lg border border-slate-800/60 flex-1 min-w-0">${escHtml(s.body || '')}</p>
@@ -7453,9 +7506,9 @@
                     ${pts.length === 0 ? '<div class="text-center text-slate-500 text-xs py-6">لا نقاط بعد — سجلى تُحفظ تلقائياً كل 3 دقائق.</div>' : `
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-1.5">
                             ${pts.slice(0, 60).map(p => `
-                                <div class="bg-slate-900 border border-slate-800 rounded-xl p-2 flex items-center justify-between text-[10px] font-mono text-slate-300">
-                                    <span>${Number(p.lat).toFixed(5)}, ${Number(p.lng).toFixed(5)}</span>
-                                    <span class="text-slate-500">${recFmtDate(p.ts)}</span>
+                                <div onclick="rbLocFocusPoint(${Number(p.lat)}, ${Number(p.lng)})" title="انقر للانتقال إلى هذه النقطة على الخريطة" class="rb-loc-row-click bg-slate-900 border border-slate-800 rounded-xl p-2 flex items-center justify-between text-[10px] font-mono text-slate-300">
+                                    <span>📍 ${Number(p.lat).toFixed(5)}, ${Number(p.lng).toFixed(5)}</span>
+                                    <span class="text-slate-500">${recFmtDate(p.ts)} <span class="text-teal-400">🗺️</span></span>
                                 </div>`).join('')}
                         </div>`}
                 </div>`;
@@ -7664,15 +7717,31 @@
             if (tab === 'archive') renderLocArchivePane();
         }
 
+        // B14 — قفزة لنقطة محفوظة: تفتح نافذة الخريطة إن كانت مغلقة ثم تركّز الكاميرا على النقطة بعلامة بروز.
+        // آلية محاولات ذكية لأن مكتبة الخريطة تُحمَّل من الشبكة وقد تتأخر عن 150 ملّي ثانية (خاصة في أول فتح).
         function rbLocFocusPoint(lat, lng) {
-            rbLocSwitchTab('map');
+            try {
+                const m = document.getElementById('rb-location-modal');
+                if (!m || m.classList.contains('hidden')) openLocationMapView();
+                rbLocSwitchTab('map');
+            } catch (_) {}
             setTimeout(() => {
-                try {
-                    if (rbLocMap && window.L) {
-                        rbLocMap.setView([lat, lng], 17);
-                        window.L.circleMarker([lat, lng], { radius: 9, color: '#f59e0b', weight: 2.4, fillOpacity: 0.35 }).addTo(rbLocMap);
-                    }
-                } catch (_) {}
+                let tries = 0;
+                const tick = () => {
+                    tries += 1;
+                    try {
+                        if (rbLocMap && window.L) {
+                            rbLocMap.setView([lat, lng], 17);
+                            window.L.circleMarker([lat, lng], { radius: 9, color: '#f59e0b', weight: 2.4, fillOpacity: 0.35 })
+                                .addTo(rbLocMap)
+                                .bindPopup('📍 ' + Number(lat).toFixed(5) + ', ' + Number(lng).toFixed(5))
+                                .openPopup();
+                        } else if (tries < 40) {
+                            setTimeout(tick, 150);
+                        }
+                    } catch (_) { if (tries < 40) setTimeout(tick, 150); }
+                };
+                tick();
             }, 150);
         }
 
@@ -7818,7 +7887,7 @@
             const opts = [['all', 'كل الأوقات'], ['10', 'آخر 10 دقائق'], ['60', 'آخر ساعة'], ['1440', 'آخر 24 ساعة'], ['10080', 'آخر أسبوع'], ['43200', 'آخر 30 يوماً']];
             const rowsHtml = pts.map((p, i) => {
                 const lat = Number(p.lat), lng = Number(p.lng);
-                return `<tr class="text-slate-300 hover:bg-slate-800/60">
+                return `<tr onclick="rbLocFocusPoint(${lat}, ${lng})" title="انقر للانتقال إلى هذه النقطة على الخريطة" class="rb-loc-row-click text-slate-300">
                     <td class="px-2 py-1.5 text-slate-500">${pts.length - i}</td>
                     <td class="px-2 py-1.5">${recFmtDate(Number(p.ts) || 0)}</td>
                     <td class="px-2 py-1.5 font-mono" style="direction:ltr">${lat.toFixed(5)}, ${lng.toFixed(5)}</td>
@@ -7942,7 +8011,7 @@
             const sorted = pts.slice().sort((a, b) => (Number(a.ts) || 0) - (Number(b.ts) || 0)); // نقطة البداية → نهاية
             const rowsHtml = sorted.map((p, i) => {
                 const lat = Number(p.lat), lng = Number(p.lng);
-                return `<tr class="text-slate-300 hover:bg-slate-800/60">
+                return `<tr onclick="rbLocFocusPoint(${lat}, ${lng})" title="انقر للانتقال إلى هذه النقطة على الخريطة" class="rb-loc-row-click text-slate-300">
                     <td class="px-2 py-1.5 font-bold text-teal-300">${i + 1}</td>
                     <td class="px-2 py-1.5">${recFmtDate(Number(p.ts) || 0)}</td>
                     <td class="px-2 py-1.5 font-mono" style="direction:ltr">${lat.toFixed(5)}, ${lng.toFixed(5)}</td>
@@ -8245,8 +8314,11 @@
                     const lt = rec.lists && rec.lists[kind];
                     if (!lt || !Array.isArray(lt.items) || !lt.items.length) return '';
                     const [icon, label] = ARCH_LIST_LABELS[kind];
-                    const prev = lt.items.slice(0, 8).map(it => `
-                        <div class="text-[9px] text-slate-400 bg-slate-950/50 border border-slate-800 rounded-lg px-2 py-1 truncate" style="direction:ltr">${escHtml(archItemSummary(kind, it))}</div>`).join('');
+                    const prev = lt.items.slice(0, 8).map(it => {
+                        const locClick = kind === 'location' && it && it.lat !== undefined ? ` onclick="rbLocFocusPoint(${Number(it.lat)}, ${Number(it.lng)})" title="انقر للانتقال إلى هذه النقطة على الخريطة"` : '';
+                        const extraCls = (kind === 'location' && it && it.lat !== undefined) ? ' rb-loc-row-click' : '';
+                        return `<div${locClick} class="text-[9px] text-slate-400 bg-slate-950/50 border border-slate-800 rounded-lg px-2 py-1 truncate${extraCls}" style="direction:ltr">${escHtml(archItemSummary(kind, it))}</div>`;
+                    }).join('');
                     return `
                     <div class="rounded-xl border border-slate-800 bg-slate-900/60 p-2.5">
                         <div class="flex items-center justify-between gap-2">
@@ -8479,11 +8551,16 @@
         function srvCatRow(item, cmd) {
             const it = item || {};
             if (cmd === 'contacts_list') {
-                const phones = (it.phoneNumbers || []).join(' • ');
+                // B14 — الاسم في الأعلى، وكل رقم في سطر مستقل تحته مع أيقونة نسخ بنقرة واحدة
+                const nums = (it.phoneNumbers || []).filter(Boolean);
                 const mails = (it.emails || []).filter(Boolean).join(' • ');
                 return `<div class="lw-row">
                     <div class="lw-title">👥 ${escapeHtml2(it.displayName || '—')}</div>
-                    <div class="lw-sub">${escapeHtml2(phones || 'لا أرقام')}</div>
+                    ${nums.length ? nums.map(p => `
+                        <div class="lw-sub" style="display:flex;align-items:center;justify-content:space-between;gap:6px">
+                            <span style="display:inline-flex;align-items:center;gap:4px">📞 <span style="direction:ltr">${escapeHtml2(p)}</span></span>
+                            <button onclick="rbCopyText('${String(p).replace(/['"\\]/g, '')}')" title="نسخ هذا الرقم بنقرة واحدة" class="lw-copy-btn">📋</button>
+                        </div>`).join('') : '<div class="lw-sub">لا أرقام</div>'}
                     ${mails ? `<div class="lw-sub" style="direction:ltr">${escapeHtml2(mails)}</div>` : ''}
                 </div>`;
             }
@@ -8534,9 +8611,10 @@
                 </div>`;
             }
             if (cmd === 'locations_get') {
+                // B14 — النقر على أي نقطة محفوظة يفتب الخريطة عليها مباشرة (التتبع: الخريطة ← النقطة)
                 const lat = Number(it.lat), lng = Number(it.lng);
-                return `<div class="lw-row">
-                    <div class="lw-title">📍 ${recFmtDate(Number(it.ts || 0))}</div>
+                return `<div class="lw-row lw-click" onclick="rbLocFocusPoint(${lat}, ${lng})" title="انقر للانتقال إلى هذه النقطة على الخريطة">
+                    <div class="lw-title">📍 ${recFmtDate(Number(it.ts || 0))} <span style="color:#0e7490">🗺️</span></div>
                     <div class="lw-sub">${lat.toFixed(5)}, ${lng.toFixed(5)}${it.acc !== undefined ? ' • دقة ±' + Number(it.acc).toFixed(0) + ' م' : ''}</div>
                 </div>`;
             }
@@ -8568,6 +8646,22 @@
             }
             const items = srvCatItems(srvCacheCat, entry.data);
             const stamp = entry.ts ? 'آخر حفظ على الخادم: ' + recFmtDate(Number(entry.ts)) + ' • ' : '';
+            if (srvCacheCat === 'sms_list') {
+                // B14 — رسائل تخزين الخادم: ربط كل رقم بجهة الاتصال المحفوظة، ودمج رسائل الجهة الواحدة
+                // في محادثة واحدة مرتبة بالوقت والتاريخ، والنقر يفتح نافذة الدردشة المدمجة
+                const threads = buildSmsThreads(items);
+                threads.sort((a, b) => (b.lastDate || 0) - (a.lastDate || 0));
+                window.__smsThreads = threads;
+                const msgsTotal = threads.reduce((n, t) => n + t.count, 0);
+                const listHtml = threads.length ? threads.map(t => `
+                    <div class="lw-row lw-click" onclick="openSmsChatWindow('${String(t.key).replace(/[\\'"]/g, '')}')" title="انقر لفتح نافذة الدردشة المدمجة لهذه الجهة">
+                        <div class="lw-title">💬 ${escapeHtml2(t.name || t.address || 'غير معروف')}</div>
+                        <div class="lw-sub" style="direction:rtl">${escapeHtml2(String(t.last || '')).slice(0, 160)}</div>
+                        <div class="lw-meta">${recFmtDate(t.lastDate || 0)}${t.address ? ' • <span style="direction:ltr">' + escapeHtml2(t.address) + '</span>' : ''} • <b>${t.count} رسالة</b></div>
+                    </div>`).join('') : '<div class="lw-meta">لا رسائل مخزنة بعد.</div>';
+                body.innerHTML = `<div class="lw-meta mb-2">${stamp}${threads.length} محادثة تجمع ${msgsTotal} رسالة • انقر محادثة لفتح نافذة الدردشة المدمجة</div>` + listHtml;
+                return;
+            }
             body.innerHTML = `<div class="lw-meta mb-2">${stamp}${items.length} عنصر</div>` +
                 items.slice(0, 300).map(it => srvCatRow(it, srvCacheCat)).join('') +
                 (items.length > 300 ? `<div class="lw-meta">يُعرض أول 300 من ${items.length}</div>` : '');
