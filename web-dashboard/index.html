@@ -3547,6 +3547,7 @@
                         showToast("تم بدء بث الكاميرا — الصوت مكتوم افتراضياً (انقر مكبر الصوت لتشغيله)", "info");
                     }
                     applyStreamMuteToElements();
+                    rbStreamRecoveryEnsure(); // 🔧 B17 — بدء البث يؤكد حرس التعافي
 
                     // Trigger WebRTC renegotiation offer so active tracks stream immediately
                     setTimeout(() => {
@@ -3559,6 +3560,7 @@
                     streamState.active = false;
                     streamState.audioOnly = false;
                     streamState.mode = 'none';
+                    rbStreamRecoveryCancel(); // 🔧 B17 — الإيقاف يؤكد تسكين الحرس
                     showToast("تم إيقاف كافة وسائل البث المباشر", "info");
                 } else if (data.pendingPermission === true) {
                     // بانتظار منح الإذن على الهاتف — عند التسليم يصل نبض stream_started
@@ -5784,6 +5786,68 @@
             } catch (e) { console.warn('mute apply failed', e); }
         }
 
+        // ============================================================
+        // 🔧 B17 — درع تعافٍ تلقائي للبث الحي (المسار الكلاسيكي لكل الأوضاع):
+        // • يعمل فقط أثناء streamState.active — صفر تأثير في وضع السكون
+        // • عند سقوط القنوات: إعادة تشغيل ICE على الاتصال نفسه أولاً
+        //   (بلا إعادة بناء المشغّل أو الإطارات)، ثم تفاوض كامل عند اللازوم
+        // • عدّاد محاولات + رسائل واضحة، ويهدأ تلقائياً عند عودة الاتصال
+        // ============================================================
+        const rbStreamRec = { timer: null, strikes: 0, recovering: false };
+        function rbStreamRecoveryEnsure() {
+            try {
+                if (rbStreamRec.timer) return;
+                rbStreamRec.timer = setInterval(rbStreamRecoveryTick, 2500);
+            } catch (_) {}
+        }
+        function rbStreamRecoveryCancel() {
+            try { if (rbStreamRec.timer) clearInterval(rbStreamRec.timer); } catch (_) {}
+            rbStreamRec.timer = null;
+            rbStreamRec.strikes = 0;
+            rbStreamRec.recovering = false;
+        }
+        function rbStreamRecoveryTick() {
+            try {
+                if (!streamState.active) { rbStreamRecoveryCancel(); return; }
+                if (rbStreamRec.recovering) return;
+                const p2pOk = pc && pc.connectionState === 'connected';
+                const dcOk = dataChannel && dataChannel.readyState === 'open';
+                if (p2pOk && dcOk) { rbStreamRec.strikes = 0; return; }
+                rbStreamRec.strikes++;
+                if (rbStreamRec.strikes > 6) {
+                    rbStreamRec.strikes = 0;
+                    showToast('تعذّر استرداد اتصال البث تلقائياً — أعد الضغط على زر البث لبدء اتصال جديد', 'error');
+                    return;
+                }
+                rbStreamRec.recovering = true;
+                rbStreamIceRecover('حرس التعافي (محاولة ' + rbStreamRec.strikes + ')')
+                    .finally(() => { rbStreamRec.recovering = false; });
+            } catch (_) {}
+        }
+        async function rbStreamIceRecover(reason) {
+            try {
+                const targetId = activeTargetDeviceId || appConfig.targetDeviceId;
+                if (!targetId) { showToast('لا يوجد جهاز مضيف محدد لاسترداد الاتصال', 'warning'); return; }
+                if (!ws || ws.readyState !== WebSocket.OPEN) { showToast('قناة الإشارة غير متصلة — تعطّل الاسترداد مؤقتاً', 'error'); return; }
+                if (pc && pc.signalingState !== 'closed' && !offerInFlight &&
+                    (pc.connectionState === 'connected' || pc.connectionState === 'disconnected')) {
+                    // مستوى خفيف: إعادة تشغيل ICE على نفس الاتصال — لا يمس المشغّل والبث يمتد فور عودة الشبكة
+                    showToast('تعافٍ تلقائي للبث: إعادة تشغيل ICE (' + reason + ')', 'info');
+                    const o = await pc.createOffer({ iceRestart: true });
+                    await pc.setLocalDescription(o);
+                    pc.__expectingAnswer = true;
+                    ws.send(JSON.stringify({ type: 'offer', from: myDeviceId, to: targetId, sdp: pc.localDescription.sdp, sdpType: 'OFFER', iceRestart: true }));
+                } else {
+                    // مستوى أعمق: بناء عرض WebRTC كامل جديد بنفس بنية المسارات المعتادة
+                    showToast('تعافٍ تلقائي للبث: إعادة تفاوض كاملة (' + reason + ')', 'info');
+                    if (pc) { try { pc.close(); } catch (_) {} pc = null; }
+                    await createWebRTCOffer(targetId);
+                }
+            } catch (e) {
+                console.warn('rbStreamIceRecover failed', e);
+            }
+        }
+
         function toggleScreenStream() {
             if (streamState.active && streamState.mode === 'screen') {
                 stopLiveStream();
@@ -5795,6 +5859,7 @@
             streamState.audioEnabled = false;
             applyStreamMuteToElements();
             sendRPCCommand('start_screen_stream');
+            rbStreamRecoveryEnsure(); // 🔧 B17 — تشغيل حرس التعافي طوال البث
             showToast("تم إرسال طلب بدء بث شاشة الجوال المباشرة... (الصوت مكتوم افتراضياً)", "info");
             if (activeTab === 'camera') renderCameraStreamView();
         }
@@ -5810,6 +5875,7 @@
             streamState.audioEnabled = false;
             applyStreamMuteToElements();
             sendRPCCommand('start_camera_stream', { front: streamState.isFront, audio: true });
+            rbStreamRecoveryEnsure(); // 🔧 B17 — تشغيل حرس التعافي طوال البث
             showToast("تم إرسال أمر بدء بث الكاميرا — الصوت مكتوم افتراضياً (انقر مكبر الصوت للتفعيل)", "success");
             if (activeTab === 'camera') renderCameraStreamView();
         }
@@ -5819,11 +5885,24 @@
                 stopLiveStream();
                 return;
             }
+            // 🔧 B17 — إذا كان بث حي قائم (شاشة/كاميرا) والمطلوب «الصوت فقط»:
+            // نُفعّل الصوت على نفس البث بلا إيقاف الفيديو أو إعادة بناء المشغّل
+            // (للأسف الأقدم كان يوقف بث الكاميرا كلياً — وهذا سبب توقف الاتصال عن خبث التعاود)
+            if (streamState.active && (streamState.mode === 'camera' || streamState.mode === 'screen')) {
+                if (!streamState.audioEnabled) {
+                    toggleLiveAudio();
+                    showToast('تم تفعيل الصوت ضمن البث الحي القائم بلا إيقاف الفيديو — لإيقاف الفيديو استخدم زر الإيقاف الموحّد', 'success');
+                } else {
+                    showToast('الصوت مفعّل بالفعل على البث القائم', 'info');
+                }
+                return;
+            }
             streamState.mode = 'audio';
             streamState.active = false;
             streamState.audioEnabled = true;   // بث الصوت فقط يعمل مفعلاً بشكل طبيعي
             applyStreamMuteToElements();
             sendRPCCommand('start_audio_stream');
+            rbStreamRecoveryEnsure(); // 🔧 B17 — تشغيل حرس التعافي طوال البث
             showToast("تم إرسال أمر بدء بث الصوت فقط من الميكروفون", "success");
             if (activeTab === 'camera') renderCameraStreamView();
         }
@@ -6048,27 +6127,64 @@
             sendRPCCommand('stop_camera_stream');
             streamState.active = false;
             streamState.mode = 'none';
+            rbStreamRecoveryCancel(); // 🔧 B17 — إنهاء الحرس مع انتهاء البث
             showToast("تم إيقاف كافة وسائل البث المباشر", "info");
             if (activeTab === 'camera') renderCameraStreamView();
         }
 
+        let rbSwitchingLens = false;
         function switchLiveCameraLens() {
-            streamState.isFront = !streamState.isFront;
+            if (rbSwitchingLens) { showToast('تبديل العدسة قيد التنفيذ بالفعل — انتظر لحظة ثم أعد المحاولة', 'info'); return; }
             if (streamState.active && streamState.mode === 'camera') {
-                sendRPCCommand('switch_camera');
-                showToast(`جاري التبديل إلى الكاميرا: ${streamState.isFront ? 'الأمامية' : 'الخلفية'}...`, "info");
+                const dcOk = dataChannel && dataChannel.readyState === 'open';
+                if (!dcOk) {
+                    // 🔧 B17 — بلا قناة لا نبعث أمراً كاذباً: تعافٍ فوري ثم أعد الضغط
+                    showToast('قناة البيانات غير مفتوحة — بدأ التعافي التلقائي للاتصال؛ أعد الضغط على زر التبديل بعد نجاحه', 'warning');
+                    rbStreamIceRecover('قبل تبديل الكاميرا');
+                    return;
+                }
+                rbSwitchingLens = true;
+                streamState.isFront = !streamState.isFront;
+                // 🔧 B17 — تبديل متزامن حي: يبدّل المضيف التقاط الكاميرا داخلياً (Camera2 switch)
+                // مع استمرار البث نفسه والمشغّل — لا إيقاف ولا تفاوض ولا إعادة بناء إطارات
+                rbStreamRecoveryEnsure();
+                sendRPCCommand('switch_camera').catch(() => {
+                    // فشل الإرسال → نُعيد الحالة القديمة بدل تصديق حالة كاذبة في الواجهة
+                    streamState.isFront = !streamState.isFront;
+                    showToast('تعذر إرسال أمر تبديل الكاميرا — أُعيدت حالة العدسة كما كانت', 'error');
+                    if (activeTab === 'camera') renderCameraStreamView();
+                });
+                showToast(`جاري التبديل المتزامن إلى الكاميرا: ${streamState.isFront ? 'الأمامية' : 'الخلفية'}...`, "info");
+                setTimeout(() => { rbSwitchingLens = false; if (activeTab === 'camera') renderCameraStreamView(); }, 1200);
             } else {
+                streamState.isFront = !streamState.isFront;
                 showToast(`الكاميرا المختارة للبث القادم: ${streamState.isFront ? 'الأمامية' : 'الخلفية'}`, "info");
             }
             if (activeTab === 'camera') renderCameraStreamView();
         }
 
+        let rbAudioToggleBusy = false;
         function toggleLiveAudio() {
-            streamState.audioEnabled = !streamState.audioEnabled;
-            applyStreamMuteToElements();
-            sendRPCCommand('toggle_audio', { enable: streamState.audioEnabled });
-            showToast(`حالة الصوت: ${streamState.audioEnabled ? 'مفعّل' : 'مكتوم'}`, "info");
-            if (activeTab === 'camera') renderCameraStreamView();
+            if (rbAudioToggleBusy) { showToast('نقرة سابقة على الصوت قيد المعالجة — لحظة من فضلك', 'info'); return; }
+            rbAudioToggleBusy = true;
+            setTimeout(() => { rbAudioToggleBusy = false; }, 400);
+            try {
+                const dcOk = dataChannel && dataChannel.readyState === 'open';
+                if (!dcOk) {
+                    // 🔧 B17 — بلا قناة نُبقي الحالة صادقة ونطلق التعافي بدل فشل صامت
+                    showToast('قناة البيانات غير مفتوحة — بدأ التعافي التلقائي للاتصال؛ أعد الضغط لتفعيل الصوت بعد نجاحه', 'warning');
+                    rbStreamIceRecover('قبل تفعيل الصوت');
+                    return;
+                }
+                streamState.audioEnabled = !streamState.audioEnabled;
+                applyStreamMuteToElements();
+                sendRPCCommand('toggle_audio', { enable: streamState.audioEnabled }).catch(() => {
+                    showToast('تعذر إرسال أمر الصوت للمضيف — أعد المحاولة من الزر بعد ثوانٍ', 'error');
+                });
+                showToast(`حالة الصوت: ${streamState.audioEnabled ? 'مفعّل' : 'مكتوم'}`, "info");
+            } finally {
+                if (activeTab === 'camera') renderCameraStreamView();
+            }
         }
 
         // View 4: Contacts List View

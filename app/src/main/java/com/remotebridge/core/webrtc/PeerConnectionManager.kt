@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.Json
+import org.webrtc.AudioSource
+
 import org.webrtc.AudioTrack
 import org.webrtc.Camera2Enumerator
 import org.webrtc.CameraVideoCapturer
@@ -71,6 +73,11 @@ class PeerConnectionManager(
     private var isFrontFacingCamera: Boolean = false
     private var isAudioStreamingEnabled: Boolean = true
     private var iceRestartInProgress: Boolean = false
+    // 🔧 B17 — مرجع مصدر الصوت محفوظ حتى لا يُجَمَّع للقمامة أثناء البث الحي (كان ضائعاً)
+    private var audioSource: AudioSource? = null
+    // 🔧 B17 — قفل متزامن لتبديل الكاميرا: يمنع أوامر التبديل المتلاحقة من كسر الحركة
+    @Volatile
+    private var cameraSwitchBusy: Boolean = false
 
     private val _state = MutableStateFlow(PeerState.Idle)
     val state: StateFlow<PeerState> = _state.asStateFlow()
@@ -312,6 +319,15 @@ class PeerConnectionManager(
                 } else {
                     Log.w(TAG, "لا مسار مفاوض للفيديو في العرض — سيُرفق عند التفاوض القادم")
                 }
+            } else {
+                // 🔧 B17 — بعد إيقاف الفيديو نُنزع مسار الوقف (disposed) من المرسل
+                // حتى لا تستمر قناة الفيديو في إرسال مسارٍ ملغى فتُسقط التفاوض التالي
+                val videoTr = pc.transceivers.firstOrNull {
+                    it.mediaType == MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO
+                }
+                if (videoTr != null) {
+                    try { videoTr.sender.setTrack(null, true) } catch (_: Throwable) {}
+                }
             }
             val at = audioTrack
             if (at != null) {
@@ -324,6 +340,14 @@ class PeerConnectionManager(
                     attached++
                 } else {
                     Log.w(TAG, "لا مسار مفاوض للصوت في العرض — سيُرفق عند التفاوض القادم")
+                }
+            } else {
+                // 🔧 B17 — نفس التنظيف للصوت عبر المرسل حين تغيب قناة الصوت
+                val audioTr = pc.transceivers.firstOrNull {
+                    it.mediaType == MediaStreamTrack.MediaType.MEDIA_TYPE_AUDIO
+                }
+                if (audioTr != null) {
+                    try { audioTr.sender.setTrack(null, true) } catch (_: Throwable) {}
                 }
             }
             if (attached > 0) Log.d(TAG, "🔁 أُرفق $attached مساراً بمسارات التفاوض (بلا تفاوض إضافي)")
@@ -478,8 +502,9 @@ class PeerConnectionManager(
 
             if (withAudio) {
                 val audioConstraints = MediaConstraints()
-                val audioSource = factory.createAudioSource(audioConstraints)
-                audioTrack = factory.createAudioTrack("ARDAMSa0", audioSource)
+                val audioSourceNew = factory.createAudioSource(audioConstraints)
+                audioSource = audioSourceNew
+                audioTrack = factory.createAudioTrack("ARDAMSa0", audioSourceNew)
                 isAudioStreamingEnabled = true
                 attachOrPrepareTracks()
             }
@@ -501,8 +526,9 @@ class PeerConnectionManager(
 
         try {
             val audioConstraints = MediaConstraints()
-            val audioSource = factory.createAudioSource(audioConstraints)
-            audioTrack = factory.createAudioTrack("ARDAMSa0", audioSource)
+            val audioSourceNew = factory.createAudioSource(audioConstraints)
+            audioSource = audioSourceNew
+            audioTrack = factory.createAudioTrack("ARDAMSa0", audioSourceNew)
             isAudioStreamingEnabled = true
             attachOrPrepareTracks()
 
@@ -530,32 +556,79 @@ class PeerConnectionManager(
 
     /**
      * التبديل السريع بين الكاميرا الأمامية والخلفية أثناء البث الحي.
+     * 🔧 B17 — يعمل بالتبديل الداخلي (Camera2 switch) مع استمرار البث والمشغّل:
+     * •بلا أي إيقاف أو تفاوض، وقفل متزامن يمنع النقرات المتلاحقة من كسر الحركة.
      */
     fun switchCamera(onComplete: ((Boolean) -> Unit)? = null) {
         val capturer = videoCapturer
+        if (cameraSwitchBusy) {
+            Log.w(TAG, "تبديل الكاميرا قيد التنفيذ بالفعل — تجاهل الطلب المتزامن بأمان")
+            onComplete?.invoke(isFrontFacingCamera)
+            return
+        }
         if (capturer is CameraVideoCapturer) {
+            cameraSwitchBusy = true
             capturer.switchCamera(object : CameraVideoCapturer.CameraSwitchHandler {
                 override fun onCameraSwitchDone(isFront: Boolean) {
                     isFrontFacingCamera = isFront
+                    cameraSwitchBusy = false
                     Log.i(TAG, "تم تبديل الكاميرا بنجاح. أمامية: $isFront")
                     onComplete?.invoke(isFront)
                 }
 
                 override fun onCameraSwitchError(errorDescription: String?) {
                     Log.e(TAG, "فشل تبديل الكاميرا: $errorDescription")
+                    cameraSwitchBusy = false
                     onComplete?.invoke(isFrontFacingCamera)
                 }
             })
+        } else {
+            Log.w(TAG, "لا يوجد التقاط كاميرا نشط الآن — لا تبديل ممكن (بذون آمن مهما كان)")
+            onComplete?.invoke(isFrontFacingCamera)
         }
     }
 
     /**
      * التحكم بتشغيل أو كتم الميكروفون والصوت أثناء البث.
+     * 🔧 B17 — بلا أي إيقاف للاتصال: كتم/تفعيل المسار الفاعل فقط،
+     * وعند التفعيل مع غياب المسار يُنشأ مصدر صوت جديد ويُرفق عند الطلب.
      */
     fun setAudioEnabled(enabled: Boolean) {
-        isAudioStreamingEnabled = enabled
-        audioTrack?.setEnabled(enabled)
-        Log.i(TAG, "حالة الميكروفون الآن: $enabled")
+        try {
+            val track = audioTrack
+            if (track != null) {
+                isAudioStreamingEnabled = enabled
+                track.setEnabled(enabled)
+                Log.i(TAG, "حالة الميكروفون الآن: $enabled")
+                return
+            }
+            if (!enabled) {
+                isAudioStreamingEnabled = false
+                Log.i(TAG, "طلب كتم الصوت ولا مسار صوت فعلي — لا شيء يُغيَّر")
+                return
+            }
+            // 🔧 B17 — تفعيل الصوت مع غياب المسار: إنشاء مصدر صوت جديد وعالج بالرفاق
+            val factory = this.factory
+            if (factory != null) {
+                try {
+                    val audioSourceNew = factory.createAudioSource(MediaConstraints())
+                    audioSource = audioSourceNew
+                    audioTrack = factory.createAudioTrack("ARDAMSa0", audioSourceNew)
+                    isAudioStreamingEnabled = true
+                    attachOrPrepareTracks()
+                    audioTrack?.setEnabled(true)
+                    Log.i(TAG, "أُنشئ مسار الصوت عند الطلب وأُرفق بالبناء بلا تفاوض إضافي")
+                } catch (t: Throwable) {
+                    Log.e(TAG, "فشل إنشاء مسار الصوت عند الطلب", t)
+                    isAudioStreamingEnabled = false
+                }
+            } else {
+                isAudioStreamingEnabled = false
+                Log.w(TAG, "طلب تفعيل الصوت والاتصال غير مهيأ بعد — سيُلبي عند بدء البث")
+            }
+        } catch (t: Throwable) {
+            Log.e(TAG, "فشل ضبط حالة الصوت: ${t.message}")
+        }
     }
 
     fun isCameraStreaming(): Boolean = videoTrack != null
@@ -573,10 +646,13 @@ class PeerConnectionManager(
         videoSource = null
         videoTrack?.dispose()
         videoTrack = null
+        audioSource?.dispose()
+        audioSource = null
         audioTrack?.dispose()
         audioTrack = null
         surfaceTextureHelper?.dispose()
         surfaceTextureHelper = null
+        cameraSwitchBusy = false
     }
 
     fun sendRequest(request: BridgeRequest): Boolean {

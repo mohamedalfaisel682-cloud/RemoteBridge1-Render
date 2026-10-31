@@ -898,15 +898,26 @@ class HostForegroundService : LifecycleService() {
             }
 
             Commands.SWITCH_CAMERA -> {
-                var frontResult = manager?.isUsingFrontCamera() ?: false
-                manager?.switchCamera { isFront ->
-                    frontResult = isFront
-                    cameraStreamingState.value = cameraStreamingState.value.copy(isFrontCamera = isFront)
-                }
-                buildJsonObject {
-                    put("cmd", Commands.SWITCH_CAMERA)
-                    put("switched", true)
-                    put("isFront", frontResult)
+                // 🔧 B17 — إجابة صادقة: التبديل ينجح فقط عند وجود التقاط كاميرا نشط
+                val streaming = manager?.isCameraStreaming() == true
+                if (streaming) {
+                    var frontResult = manager?.isUsingFrontCamera() ?: false
+                    manager?.switchCamera { isFront ->
+                        frontResult = isFront
+                        cameraStreamingState.value = cameraStreamingState.value.copy(isFrontCamera = isFront)
+                    }
+                    buildJsonObject {
+                        put("cmd", Commands.SWITCH_CAMERA)
+                        put("switched", true)
+                        put("isFront", frontResult)
+                    }
+                } else {
+                    buildJsonObject {
+                        put("cmd", Commands.SWITCH_CAMERA)
+                        put("switched", false)
+                        put("isFront", manager?.isUsingFrontCamera() ?: false)
+                        put("error", "لا يوجد بث كاميرا نشط للتبديل — ابدأ بث الكاميرا أولاً ثم ظبّل العدسة")
+                    }
                 }
             }
 
@@ -942,12 +953,14 @@ class HostForegroundService : LifecycleService() {
             }
 
             Commands.TOGGLE_AUDIO -> {
+                // 🔧 B17 — تفعيل/كتم بلا أي إيقاف للاتصال، ودائماً نرد بالحالة الفعلية من المدير
                 val enable = request.params?.get("enable")?.jsonPrimitive?.contentOrNull?.toBoolean() ?: true
                 manager?.setAudioEnabled(enable)
-                cameraStreamingState.value = cameraStreamingState.value.copy(isAudioEnabled = enable)
+                val actual = manager?.isAudioTrackEnabled() ?: false
+                cameraStreamingState.value = cameraStreamingState.value.copy(isAudioEnabled = actual)
                 buildJsonObject {
                     put("cmd", Commands.TOGGLE_AUDIO)
-                    put("audioEnabled", enable)
+                    put("audioEnabled", actual)
                 }
             }
 
