@@ -671,6 +671,256 @@
             color: #6ee7b7;
             border-color: rgba(52, 211, 153, .55);
         }
+
+        /* ===== B18 — مشغّل الفيديو المطوّر (الواجهة الكلاسيكية) ===== */
+        .rb-mp-wrap {
+            position: relative; width: 100%;
+            border-radius: 18px; overflow: hidden;
+            background: radial-gradient(120% 120% at 50% 0%, #0b1226 0%, #020617 70%);
+            border: 1px solid rgba(51, 65, 85, .9);
+            box-shadow: 0 18px 50px rgba(0, 0, 0, .55);
+        }
+        .rb-mp-wrap.rb-mp-live {
+            border-color: rgba(16, 185, 129, .7);
+            box-shadow: 0 0 0 1px rgba(16, 185, 129, .3), 0 0 40px rgba(16, 185, 129, .16), 0 18px 50px rgba(0, 0, 0, .55);
+        }
+        .rb-mp-stage { position: relative; width: 100%; aspect-ratio: 16 / 9; max-height: 62vh; background: #010409; }
+        .rb-mp-stage video { width: 100%; height: 100%; object-fit: contain; background: transparent; transition: object-fit .25s ease; }
+        .rb-mp-stage.rb-mp-cover video { object-fit: cover; }
+        .rb-mp-fade-top {
+            position: absolute; inset: 0 0 auto 0; height: 64px; pointer-events: none;
+            background: linear-gradient(180deg, rgba(2, 6, 23, .85) 0%, rgba(2, 6, 23, .35) 45%, transparent 100%);
+        }
+        .rb-mp-fade-bottom {
+            position: absolute; inset: auto 0 0 0; height: 72px; pointer-events: none;
+            background: linear-gradient(0deg, rgba(2, 6, 23, .9) 0%, rgba(2, 6, 23, .4) 50%, transparent 100%);
+        }
+        .rb-mp-hud {
+            position: absolute; top: 8px; inset-inline: 8px; z-index: 12;
+            display: flex; align-items: center; justify-content: space-between; gap: 8px;
+            pointer-events: none;
+        }
+        .rb-mp-hud > * { pointer-events: auto; }
+        .rb-mp-chip {
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 3px 10px; border-radius: 999px;
+            font-size: 9.5px; font-weight: 800;
+            background: rgba(2, 6, 23, .82); border: 1px solid rgba(51, 65, 85, .95);
+            backdrop-filter: blur(6px);
+            font-family: "Consolas", ui-monospace, monospace;
+            letter-spacing: .3px; color: #cbd5e1;
+        }
+        .rb-mp-live-chip {
+            color: #fecaca; border-color: rgba(244, 63, 94, .55);
+            background: rgba(76, 5, 25, .55);
+        }
+        .rb-mp-live-dot {
+            width: 7px; height: 7px; border-radius: 999px; background: #f43f5e;
+            animation: rbv3-live-pulse 1.25s ease-in-out infinite;
+        }
+        .rb-mp-tools {
+            display: flex; gap: 5px;
+        }
+        .rb-mp-tool {
+            width: 30px; height: 30px; border-radius: 10px;
+            display: inline-flex; align-items: center; justify-content: center;
+            font-size: 13px; line-height: 1;
+            background: rgba(2, 6, 23, .8); border: 1px solid rgba(71, 85, 105, .8);
+            color: #cbd5e1; transition: transform .15s, border-color .15s, background .15s;
+        }
+        .rb-mp-tool:hover { border-color: rgba(45, 212, 191, .7); color: #5eead4; transform: translateY(-1px); }
+        .rb-mp-tool.on { border-color: rgba(16, 185, 129, .8); color: #6ee7b7; background: rgba(16, 185, 129, .18); }
+        .rb-mp-idle {
+            position: absolute; inset: 0; z-index: 5;
+            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+            text-align: center; padding: 16px;
+        }
+        .rb-mp-bar {
+            display: flex; align-items: center; justify-content: space-between; gap: 10px;
+            padding: 7px 10px;
+            background: linear-gradient(180deg, rgba(15, 23, 42, .96), rgba(2, 6, 23, .98));
+            border-top: 1px solid rgba(51, 65, 85, .8);
+        }
+        @keyframes rbv3-live-pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(244, 63, 94, .6); opacity: 1; }
+            50%      { box-shadow: 0 0 0 5px rgba(244, 63, 94, .08); opacity: .75; }
+        }
+
+        /* ===== B18 — الواجهة الثالثة الاحتياطية: «استوديو البث الحي» rbv3 ===== */
+        .rbv3-shell {
+            position: relative;
+            padding: 14px 12px 12px;
+            border-radius: 22px;
+            background:
+                radial-gradient(90% 60% at 50% -10%, rgba(56, 189, 248, .12) 0%, transparent 60%),
+                radial-gradient(120% 90% at 50% 110%, rgba(16, 185, 129, .1) 0%, transparent 55%),
+                linear-gradient(180deg, #030712 0%, #0b1226 100%);
+            border: 1px solid rgba(56, 189, 248, .28);
+            box-shadow: 0 24px 70px rgba(0, 0, 0, .6), inset 0 1px 0 rgba(148, 163, 184, .12);
+            overflow: hidden;
+        }
+        .rbv3-shell::before {
+            content: ""; position: absolute; inset: 0; pointer-events: none;
+            background-image: linear-gradient(rgba(148, 163, 184, .05) 1px, transparent 1px), linear-gradient(90deg, rgba(148, 163, 184, .05) 1px, transparent 1px);
+            background-size: 26px 26px;
+            mask-image: radial-gradient(80% 70% at 50% 30%, #000 20%, transparent 100%);
+        }
+        .rbv3-head {
+            position: relative; z-index: 2;
+            display: flex; align-items: center; justify-content: space-between; gap: 10px;
+            margin-bottom: 10px;
+        }
+        .rbv3-brand {
+            display: flex; align-items: center; gap: 9px;
+        }
+        .rbv3-badge {
+            width: 34px; height: 34px; border-radius: 12px;
+            display: inline-flex; align-items: center; justify-content: center; font-size: 17px;
+            background: linear-gradient(145deg, rgba(56, 189, 248, .22), rgba(16, 185, 129, .16));
+            border: 1px solid rgba(56, 189, 248, .5);
+            box-shadow: 0 0 18px rgba(56, 189, 248, .25);
+        }
+        .rbv3-title { font-size: 16px; font-weight: 900; color: #e0f2fe; letter-spacing: .4px; }
+        .rbv3-sub { font-size: 10px; color: #7dd3fc; opacity: .85; }
+        .rbv3-status { display: flex; flex-wrap: wrap; gap: 5px; justify-content: flex-end; }
+        .rbv3-tag {
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 3px 10px; border-radius: 999px;
+            font-size: 9.5px; font-weight: 800; letter-spacing: .4px;
+            font-family: "Consolas", ui-monospace, monospace;
+            color: #a5f3fc; background: rgba(8, 27, 45, .85);
+            border: 1px solid rgba(56, 189, 248, .3);
+            backdrop-filter: blur(6px);
+        }
+        .rbv3-tag.hot { color: #99f6e4; border-color: rgba(45, 212, 191, .45); }
+        .rbv3-live-tag {
+            color: #fff1f2; background: rgba(120, 12, 40, .6);
+            border-color: rgba(244, 63, 94, .65);
+        }
+        .rbv3-stage {
+            position: relative; z-index: 2;
+            border-radius: 16px; overflow: hidden;
+            border: 1px solid rgba(56, 189, 248, .35);
+            background: #010409;
+            aspect-ratio: 16 / 9; max-height: 58vh;
+            box-shadow: inset 0 0 60px rgba(0, 0, 0, .7), 0 10px 34px rgba(2, 6, 23, .8);
+        }
+        .rbv3-stage.rb-on-live {
+            border-color: rgba(45, 212, 191, .75);
+            box-shadow: 0 0 46px rgba(45, 212, 191, .16), inset 0 0 60px rgba(0, 0, 0, .6);
+        }
+        .rbv3-stage video { width: 100%; height: 100%; object-fit: cover; background: transparent; }
+        .rbv3-vault {
+            position: absolute; inset: 0; pointer-events: none; z-index: 4;
+            background:
+                radial-gradient(120% 85% at 50% 50%, transparent 55%, rgba(1, 4, 9, .55) 100%),
+                linear-gradient(0deg, rgba(1, 4, 9, .75) 0%, transparent 32%),
+                linear-gradient(180deg, rgba(1, 4, 9, .55) 0%, transparent 26%);
+        }
+        .rbv3-stage-badge {
+            position: absolute; top: 9px; inset-inline-start: 9px; z-index: 6;
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 3.5px 11px; border-radius: 999px;
+            font-size: 10px; font-weight: 900; letter-spacing: .6px;
+            color: #fecdd3;
+            background: rgba(120, 12, 40, .68);
+            border: 1px solid rgba(244, 63, 94, .6);
+            backdrop-filter: blur(8px);
+        }
+        .rbv3-stage-badge .rb-mp-live-dot { background: #fb7185; }
+        .rbv3-stage-clock {
+            position: absolute; top: 9px; inset-inline-end: 9px; z-index: 6;
+            padding: 3.5px 10px; border-radius: 999px;
+            font-size: 10.5px; font-weight: 800;
+            color: #a5f3fc; background: rgba(2, 6, 23, .8);
+            border: 1px solid rgba(56, 189, 248, .4);
+            font-family: "Consolas", ui-monospace, monospace;
+            backdrop-filter: blur(8px);
+        }
+        .rbv3-idle {
+            position: absolute; inset: 0; z-index: 5;
+            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+            text-align: center; padding: 18px;
+        }
+        .rbv3-ring {
+            width: 64px; height: 64px; border-radius: 999px;
+            display: inline-flex; align-items: center; justify-content: center; font-size: 26px;
+            background: radial-gradient(circle at 30% 25%, rgba(56, 189, 248, .3), rgba(2, 6, 23, .9) 70%);
+            border: 1px solid rgba(56, 189, 248, .55);
+            animation: rbv3-ring-pulse 2s ease-in-out infinite;
+        }
+        @keyframes rbv3-ring-pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(56, 189, 248, .35); }
+            50%      { box-shadow: 0 0 0 10px rgba(56, 189, 248, .05); }
+        }
+        .rbv3-console {
+            position: relative; z-index: 2;
+            margin-top: 11px;
+            display: flex; align-items: center; justify-content: center; gap: 9px;
+            padding: 10px 9px 12px;
+            border-radius: 18px;
+            background: linear-gradient(180deg, rgba(7, 15, 30, .82), rgba(3, 7, 18, .92));
+            border: 1px solid rgba(56, 189, 248, .26);
+            backdrop-filter: blur(14px);
+            box-shadow: 0 12px 34px rgba(0, 0, 0, .5), inset 0 1px 0 rgba(148, 163, 184, .1);
+            flex-wrap: wrap;
+        }
+        .rbv3-key {
+            width: 52px; height: 52px; border-radius: 999px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            font-size: 20px; line-height: 1;
+            color: #e2e8f0;
+            background: radial-gradient(circle at 30% 25%, rgba(56, 189, 248, .16), rgba(2, 6, 23, .95) 75%);
+            border: 1px solid rgba(71, 85, 105, .85);
+            transition: transform .16s, border-color .16s, box-shadow .16s, background .16s;
+            position: relative;
+        }
+        .rbv3-key:hover { transform: translateY(-2px); border-color: rgba(56, 189, 248, .8); box-shadow: 0 0 18px rgba(56, 189, 248, .3); }
+        .rbv3-key:active { transform: scale(.92); }
+        .rbv3-key.rb-on {
+            border-color: rgba(45, 212, 191, .95);
+            background: radial-gradient(circle at 30% 25%, rgba(45, 212, 191, .35), rgba(4, 47, 46, .9) 80%);
+            box-shadow: 0 0 0 3px rgba(45, 212, 191, .12), 0 0 24px rgba(45, 212, 191, .35);
+            animation: rbv3-key-pulse 1.3s ease-in-out infinite;
+        }
+        .rbv3-key.rb-mute { border-color: rgba(244, 63, 94, .8); color: #fecdd3; background: radial-gradient(circle at 30% 25%, rgba(244, 63, 94, .25), rgba(2, 6, 23, .95) 78%); }
+        .rbv3-key.rb-stop {
+            color: #fecdd3; border-color: rgba(244, 63, 94, .7);
+            background: radial-gradient(circle at 30% 25%, rgba(190, 18, 60, .5), rgba(2, 6, 23, .95) 76%);
+        }
+        .rbv3-key.rb-stop:hover { border-color: #fda4af; box-shadow: 0 0 22px rgba(244, 63, 94, .45); }
+        @keyframes rbv3-key-pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(45, 212, 191, .3), 0 0 18px rgba(45, 212, 191, .3); }
+            50%      { box-shadow: 0 0 0 6px rgba(45, 212, 191, .05), 0 0 30px rgba(45, 212, 191, .45); }
+        }
+        .rbv3-key-label {
+            position: absolute; top: calc(100% + 3px); inset-inline: -18px;
+            text-align: center; font-size: 8.5px; font-weight: 800; color: #7dd3fc;
+            letter-spacing: .2px; pointer-events: none; white-space: nowrap;
+        }
+        .rbv3-meter-row {
+            position: relative; z-index: 2;
+            margin-top: 12px;
+            display: flex; align-items: center; gap: 10px;
+            padding: 8px 12px;
+            border-radius: 14px;
+            background: rgba(3, 7, 18, .8);
+            border: 1px solid rgba(56, 189, 248, .2);
+        }
+        .rbv3-meter-title { font-size: 10px; font-weight: 800; color: #7dd3fc; white-space: nowrap; }
+        .rbv3-meter-track {
+            flex: 1; height: 10px; border-radius: 999px;
+            background: rgba(2, 6, 23, .9);
+            border: 1px solid rgba(51, 65, 85, .9);
+            overflow: hidden; position: relative;
+        }
+        .rbv3-meter-fill {
+            position: absolute; inset: 0 auto 0 0; width: 0%;
+            background: linear-gradient(90deg, #34d399 0%, #22d3ee 55%, #f43f5e 100%);
+            border-radius: 999px;
+            transition: width .12s linear;
+        }
+        .rbv3-meter-val { font-size: 10px; font-weight: 800; color: #67e8f9; font-family: "Consolas", ui-monospace, monospace; min-width: 44px; text-align: center; }
     </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col custom-scrollbar selection:bg-emerald-500 selection:text-slate-950 overflow-x-hidden">
@@ -919,13 +1169,13 @@
             audioEnabled: true
         };
 
-        // B16 — التبويب الفرعي للبث: «البث المباشر» (نمط برمجي احتياطي مستقل للتعافي والعرض والسجل)
+        // B16/B18 — التبويب الفرعي للبث: ثلاث واجهات — «main» كلاسيكية، «pro» محرك برمجي احتياطي، «studio» استوديو سينمائي
         let broadcastViewMode = 'main';
-        try { broadcastViewMode = localStorage.getItem('rb_bc_mode_v1') === 'pro' ? 'pro' : 'main'; } catch (_) {}
+        try { const _m = localStorage.getItem('rb_bc_mode_v1'); broadcastViewMode = (_m === 'pro' || _m === 'studio') ? _m : 'main'; } catch (_) { broadcastViewMode = 'main'; }
         function setBroadcastViewMode(m) {
-            broadcastViewMode = (m === 'pro') ? 'pro' : 'main';
+            broadcastViewMode = (m === 'pro' || m === 'studio') ? m : 'main';
             try { localStorage.setItem('rb_bc_mode_v1', broadcastViewMode); } catch (_) {}
-            if (activeTab === 'camera') renderCameraStreamView();
+            rbRefreshStreamPane();
         }
 
         // Current Directory for File Explorer
@@ -2032,8 +2282,8 @@
                 if (event.track.kind === 'video' && videoEl) {
                     videoEl.srcObject = remoteMediaStream;
                     videoEl.classList.remove('hidden');
-                    const placeholder = document.getElementById("video-placeholder");
-                    if (placeholder) placeholder.classList.add('hidden');
+                    // B18 — إخفاء طبقات الخمول في كل الواجهات الثلاث عند وصول أول إطار
+                    document.querySelectorAll('.rb-mp-idle, .rbv3-idle').forEach(el => { el.classList.add('hidden'); });
                     videoEl.play().catch(e => console.log("Video auto-play policy:", e));
                     showToast("تم استقبال وعرض بث الفيديو الحي بنجاح! 🎥", "success");
                 } else if (event.track.kind === 'audio') {
@@ -2044,12 +2294,16 @@
                     showToast("تم استقبال الصوت الحي من الميكروفون! 🎙️", "success");
                     try { attachLiveAudioMeter(); } catch (_) {}
                 }
-                // B16 — مرآة عرض المحرك البرمجي: عنصرا تبويب «البث المباشر» يمتلئان تلقائياً عند وجودهما
+                // B16/B18 — مرايا عرض المحرك البرمجي والاستوديو: تُملأ تلقائياً عند وجودها
                 try {
                     const pv = document.getElementById('bc-pro-video');
                     const pa = document.getElementById('bc-pro-audio');
                     if (event.track.kind === 'video' && pv) { pv.srcObject = remoteMediaStream; pv.classList.remove('hidden'); pv.play().catch(() => {}); }
                     if (event.track.kind === 'audio' && pa) { pa.srcObject = remoteMediaStream; pa.muted = !rbBc.speakerOn; pa.play().catch(() => {}); }
+                    const sv = document.getElementById('rb-studio-video');
+                    const sa = document.getElementById('rb-studio-audio');
+                    if (event.track.kind === 'video' && sv) { sv.srcObject = remoteMediaStream; sv.classList.remove('hidden'); sv.play().catch(() => {}); }
+                    if (event.track.kind === 'audio' && sa) { sa.srcObject = remoteMediaStream; sa.muted = !streamState.audioEnabled; sa.play().catch(() => {}); }
                 } catch (_) {}
                 updateWebRTCDiagnosticUI();
             };
@@ -2680,6 +2934,7 @@
                         let sum = 0;
                         for (let i = 0; i < buf.length; i++) { const dv = (buf[i] - 128) / 128; sum += dv * dv; }
                         const rms = Math.sqrt(sum / buf.length);
+                        window.__rbLiveRms = rms; // B18 — يغذّي شريط مستوى الاستوديو
                         hist[hIdx % 62] = rms; hIdx++;
                         ctx.clearRect(0, 0, canvas.width, canvas.height);
                         ctx.fillStyle = '#020617'; ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -3647,18 +3902,17 @@
                         streamState.audioEnabled = audioEnabled;
                         applyStreamMuteToElements();
                         ensureStreamRenegotiation();
+                        rbLiveClockEnsure();
                         showToast(`✅ البث الحي بدأ فعلياً على المضيف (${mode === 'audio' ? 'ميكروفون' : mode === 'camera' ? 'كاميرا' : 'شاشة'}) — جارٍ استلام الإطارات`, "success");
-                        if (activeTab === 'camera') renderCameraStreamView();
+                        rbRefreshStreamPane();
                     } catch (e) { console.warn('stream_started handler', e); }
                     return;
                 }
 
                 if (kind === 'stream_stopped') {
-                    streamState.active = false;
-                    streamState.mode = 'none';
-                    streamState.audioOnly = false;
+                    rbStopLocalStateOnly(); // B18 — تأكيد إيقاف من المضيف: تنظيف الحالة والحُرّاس بلا أمر إيقاف ثانٍ
                     showToast("تم إيقاف البث الحي على المضيف", "info");
-                    if (activeTab === 'camera') renderCameraStreamView();
+                    rbRefreshStreamPane();
                     return;
                 }
 
@@ -5654,8 +5908,9 @@
             const isAudioActive = streamState.active && streamState.mode === 'audio';
             const isScreenActive = streamState.active && streamState.mode === 'screen';
 
-            // B16 — التبويب الفرعي «البث المباشر»: يوجّه إلى لوحة المحرك البرمجي الاحتياطي
+            // B16/B18 — التبويب الفرعي: يوجّه إلى لوحة المحرك البرمجي أو الاستوديو السينمائي
             if (broadcastViewMode === 'pro') { renderBroadcastProPane(panel); return; }
+            if (broadcastViewMode === 'studio') { renderStudioLiveView(panel); return; }
 
             panel.innerHTML = `
                 <audio id="remote-audio" autoplay class="hidden"></audio>
@@ -5665,12 +5920,8 @@
                             <span>📡 البث الحي المباشر</span>
                             <span class="text-[10px] font-normal text-slate-500 hidden sm:inline">(شاشة • كاميرا • ميكروفون عبر WebRTC P2P)</span>
                         </h2>
-                        <p class="text-xs text-slate-400">بطاقات المصادر أدناه — انقر بطاقة لبدء بثها عبر الربط الحي، وانقرها مجدداً لإيقافه</p>
-                        <div class="flex flex-wrap items-center gap-1.5 mt-1.5">
-                            <span class="text-[10px] text-slate-500 font-bold">النمط:</span>
-                            <button onclick="setBroadcastViewMode('main')" title="الواجهة الاحترافية المعتادة لمنصة البث" class="text-[10px] font-bold px-2.5 py-1 rounded-lg border transition bg-emerald-600/25 text-emerald-300 border-emerald-500/40">🎛️ واجهة احترافية</button>
-                            <button onclick="setBroadcastViewMode('pro')" title="تبويب «البث المباشر»: محرك برمجي احتياطي بتعافٍ ذاتي وسجل حي" class="text-[10px] font-bold px-2.5 py-1 rounded-lg border transition bg-slate-900 text-slate-400 border-slate-700 hover:border-slate-500">🧩 البث المباشر (برمجي احتياطي)</button>
-                        </div>
+                        <p class="text-xs text-slate-400">نقرة 1 = بدء البث • نقرة 2 على الأيقونة نفسها = إيقاف • نقرة وسيلة أخرى = انتقال مباشر مع إيقاف السابقة</p>
+                        ${rbModeSwitchButtons()}
                     </div>
                     <div class="flex items-center gap-2">
                         <span class="text-xs px-2.5 py-1 rounded-full font-bold flex items-center gap-1.5 transition-all duration-300 ${streamState.active ? 'bg-emerald-950/90 text-emerald-300 border border-emerald-500/50 shadow-lg shadow-emerald-900/40 animate-pulse' : 'bg-slate-900/80 text-rose-400 border border-rose-500/30'}">
@@ -5680,43 +5931,49 @@
                     </div>
                 </div>
 
-                <!-- 🔯 B9 — منصة العرض: توهج نابض عند النشاط + شريحة حالة اتصال حقيقية (بلا مؤشرات مزيفة) -->
-                <div class="rb-stream-stage ${streamState.active ? 'rb-live-glow' : ''} border-0 rounded-2xl overflow-hidden relative aspect-video max-h-[340px] flex items-center justify-center mb-3">
-                    <video id="remote-video" autoplay playsinline class="w-full h-full object-contain ${streamState.active && !isAudioActive ? '' : 'hidden'}"></video>
+                <!-- 🔯 B18 — المشغّل المطوّر: منصة عريضة + حواف متدرجة + تراكب حالة + ملء شاشة + PiP محمي -->
+                <div class="rb-mp-wrap ${streamState.active ? 'rb-mp-live' : ''} mb-3">
+                    <div class="rb-mp-stage ${streamState.active && !isAudioActive ? 'rb-mp-cover' : ''}" id="rb-mp-stage">
+                        <video id="remote-video" autoplay playsinline class="${streamState.active && !isAudioActive ? '' : 'hidden'}"></video>
 
-                    <!-- Audio-Only Visualizer (تجسيم بصري) -->
-                    ${isAudioActive ? `
-                        <div class="text-center p-6 flex flex-col items-center justify-center gap-3">
-                            <div class="w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-3xl animate-bounce shadow-lg shadow-emerald-900/30">🎙️</div>
-                            <p class="text-sm font-bold text-emerald-300">جارٍ استقبال بث الصوت الحي من الميكروفون...</p>
-                            <p class="text-[10px] text-slate-500">مقياس المستوى الحي (AnalyserNode) يظهر تلقائياً أسفل يسار الشاشة</p>
-                            <div class="flex items-center gap-1.5 h-9 mt-1">
-                                <div class="w-2 bg-emerald-400 rounded-full h-full animate-pulse"></div>
-                                <div class="w-2 bg-emerald-500 rounded-full h-2/3 animate-pulse delay-75"></div>
-                                <div class="w-2 bg-emerald-300 rounded-full h-4/5 animate-pulse delay-150"></div>
-                                <div class="w-2 bg-emerald-400 rounded-full h-full animate-pulse delay-100"></div>
-                                <div class="w-2 bg-emerald-500 rounded-full h-1/2 animate-pulse delay-200"></div>
+                        <div class="rb-mp-fade-top"></div>
+                        <div class="rb-mp-fade-bottom"></div>
+
+                        <div class="rb-mp-hud">
+                            <div class="flex items-center gap-1.5">
+                                ${streamState.active ? `
+                                <span class="rb-mp-chip rb-mp-live-chip"><span class="rb-mp-live-dot"></span> LIVE</span>
+                                <span class="rb-mp-chip" data-rb-live-clock>00:00</span>
+                                ` : ''}
+                                <span class="rb-mp-chip"><span class="w-1.5 h-1.5 rounded-full ${(pc && pc.connectionState === 'connected') ? 'bg-emerald-400' : 'bg-slate-600'}"></span><span data-rb-p2p>P2P: ${(pc && pc.connectionState) ? pc.connectionState : 'غير مُنشأ'}</span></span>
+                                <span class="rb-mp-chip"><span data-rb-dc>DC: ${dataChannel && dataChannel.readyState === 'open' ? 'مفتوح' : 'مغلق'}</span></span>
+                            </div>
+                            <div class="rb-mp-tools">
+                                <button onclick="rbMpToggleFit()" id="rb-mp-fit-btn" title="ملء الإطار / حفظ النِّسَب (تبديل object-fit)" class="rb-mp-tool">◱</button>
+                                <button onclick="rbMpScreenshot()" title="لقطة محلية فورية من الإطار الحي المعروض" class="rb-mp-tool">📸</button>
+                                <button onclick="rbMpPiP()" id="rb-mp-pip-btn" title="شاشة مصغّرة عائمة (PiP)" class="rb-mp-tool">📺</button>
+                                <button onclick="rbMpFullscreen()" title="ملء الشاشة الكامل" class="rb-mp-tool">⛶</button>
                             </div>
                         </div>
-                    ` : `
-                        <div id="video-placeholder" class="text-center p-4 ${streamState.active && !isAudioActive ? 'hidden' : 'block'}">
-                            <div class="w-14 h-14 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-2xl mx-auto mb-2">📹</div>
-                            <p class="text-xs md:text-sm font-bold text-slate-300">شاشة العرض المباشر مستعدة</p>
-                            <p class="text-[11px] text-slate-500 mt-1">ابدأ من بطاقة «بث الشاشة» أو «بث الكاميرا» أو «ميكروفون فقط» — تُؤسَّس الإشارات تلقائياً لحظة بدء البث</p>
-                        </div>
-                    `}
 
-                    <div class="rb-state-chip text-emerald-300">
-                        <span class="w-2 h-2 rounded-full ${(pc && pc.connectionState === 'connected') ? 'bg-emerald-400' : 'bg-slate-600'}"></span>
-                        <span>P2P: ${(pc && pc.connectionState) ? pc.connectionState : 'غير مُنشأ'}</span>
-                        <span>•</span>
-                        <span>${dataChannel && dataChannel.readyState === 'open' ? 'DC مفتوح' : 'DC مغلق'}</span>
+                        ${isAudioActive ? `
+                            <div class="rb-mp-idle">
+                                <div class="rbv3-ring">🎙️</div>
+                                <p class="text-sm font-bold text-emerald-300">جارٍ استقبال بث الصوت الحي من الميكروفون...</p>
+                                <p class="text-[10px] text-slate-500">شريط المستوى الحي أسفل المشغّل يقرأ AnalyserNode الفعلي</p>
+                            </div>
+                        ` : !streamState.active ? `
+                            <div class="rb-mp-idle">
+                                <div class="rbv3-ring">📹</div>
+                                <p class="text-xs md:text-sm font-bold text-slate-300">شاشة العرض المباشر مستعدة</p>
+                                <p class="text-[11px] text-slate-500 mt-1">ابدأ من أيقونة بث الشاشة أو الكاميرا أو الميكروفون — تُؤسَّس الإشارات تلقائياً</p>
+                            </div>
+                        ` : ''}
                     </div>
-
-                    ${isScreenActive || (streamState.active && !isAudioActive && !isScreenActive) ? `
-                    <div class="absolute top-8 left-2 z-10 bg-slate-950/80 backdrop-blur border border-slate-800 rounded-xl p-1 flex flex-col gap-1">
-                        <button onclick="openLiveScreenshot()" title="لقطة محلية فورية من الإطار الحي المعروض" class="text-sm leading-none px-1.5 py-1 rounded-lg hover:bg-emerald-700/40 transition">📸</button>
-                    </div>` : ''}
+                    <div class="rb-mp-bar">
+                        <span class="rb-mp-chip">${streamState.active ? rbStreamModeLabel(streamState.mode) : 'الإيقاع: سكون — انتظر النقر'}</span>
+                        <span class="rb-mp-chip" data-rb-bitrate>معدل البت: —</span>
+                    </div>
                 </div>
 
                 <!-- 🧭 B9 — بطاقات مصادر البث (نقرة على بطاقة غير نشطة = بدء، ونقرة على نشطة = إيقاف) -->
@@ -5770,20 +6027,350 @@
                 </div>
                 ${renderStreamExtraToolbar()}
             `;
+            rbRebindMediaElements();
         }
 
-        // تطبيق سياسة الكتم على عناصر الوسائط في الصفحة
+        // تطبيق سياسة الكتم على عناصر الوسائط في الصفحة (B18 — كل مرايا الصوت عبر الواجهات الثلاث)
         function applyStreamMuteToElements() {
             try {
-                const audioEl = document.getElementById("remote-audio");
-                if (!audioEl) return;
                 const shouldMute = streamState.audioEnabled !== true;
-                audioEl.muted = shouldMute;
-                if (!shouldMute) {
-                    const p = audioEl.play();
-                    if (p && p.catch) p.catch(() => {});
+                const globalAudio = document.getElementById("remote-audio");
+                const studioAudio = document.getElementById("rb-studio-audio");
+                for (const el of [globalAudio, studioAudio]) {
+                    if (!el) continue;
+                    el.muted = shouldMute;
+                    if (!shouldMute) {
+                        const p = el.play();
+                        if (p && p.catch) p.catch(() => {});
+                    }
+                }
+                // مرآة المحرك البرمجي تتبع سياسة صوتها المستقلة (rbBc.speakerOn)
+                const bcAudio = document.getElementById("bc-pro-audio");
+                if (bcAudio) {
+                    const bcMute = !rbBc.speakerOn;
+                    bcAudio.muted = bcMute;
+                    if (!bcMute) {
+                        const p = bcAudio.play();
+                        if (p && p.catch) p.catch(() => {});
+                    }
                 }
             } catch (e) { console.warn('mute apply failed', e); }
+        }
+
+        // ============================================================
+        // 🔧 B18 — النواة الموحّدة لكل واجهات البث الثلاث (main / pro / studio):
+        // • دلالات النقر: نقرة 1 → بدء | نقرة 2 على نفس الأيقونة → إيقاف
+        // • نقرة أيقونة بثٍّ آخر أثناء بثّ قائم → إيقاف الحالي فوراً ثم بدء الآخر (~700ms احتياطياً)
+        // • مصدر واحد للأوامر (rbToggleStreamKind) ومرجع واحد للإيقاف (rbStopAllStreams)
+        // ============================================================
+        function rbStreamModeLabel(mode) {
+            return mode === 'screen' ? 'بث الشاشة 🖥️' : mode === 'camera' ? 'بث الكاميرا 🎥' : mode === 'audio' ? 'بث الصوت 🎙️' : 'لا شيء';
+        }
+        function rbRefreshStreamPane() {
+            try {
+                if (activeTab !== 'camera') return;
+                const panel = document.getElementById('panel-content');
+                if (!panel) return;
+                if (broadcastViewMode === 'pro') renderBroadcastProPane(panel);
+                else if (broadcastViewMode === 'studio') renderStudioLiveView(panel);
+                else renderCameraStreamView();
+            } catch (_) {}
+        }
+        // إعادة ربط عناصر الوسائط بعد كل إعادة رسم (innerHTML يمحو srcObject)
+        function rbRebindMediaElements() {
+            try {
+                if (!remoteMediaStream) return;
+                const pairs = [
+                    ['remote-video', false], ['remote-audio', true],
+                    ['bc-pro-video', false], ['bc-pro-audio', true],
+                    ['rb-studio-video', false], ['rb-studio-audio', true]
+                ];
+                for (const [id, isAudio] of pairs) {
+                    const el = document.getElementById(id);
+                    if (el && !el.srcObject) { el.srcObject = remoteMediaStream; try { el.play().catch(() => {}); } catch (_) {} }
+                    if (isAudio && el && (id === 'bc-pro-audio')) el.muted = !rbBc.speakerOn;
+                }
+            } catch (_) {}
+        }
+        // ساعة المدة الحية (عناصر data-rb-live-clock في كل الواجهات)
+        let rbLiveStartTs = 0, rbLiveClockTimer = null;
+        function rbLiveClockEnsure() {
+            try {
+                if (!rbLiveStartTs) rbLiveStartTs = Date.now();
+                if (rbLiveClockTimer) return;
+                rbLiveClockTimer = setInterval(rbLiveClockTick, 1000);
+                rbLiveClockTick();
+            } catch (_) {}
+        }
+        function rbLiveClockTick() {
+            try {
+                if (!rbLiveStartTs) return;
+                const s = Math.floor((Date.now() - rbLiveStartTs) / 1000);
+                const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
+                const label = (h ? String(h).padStart(2, '0') + ':' : '') + String(m).padStart(2, '0') + ':' + String(r).padStart(2, '0');
+                document.querySelectorAll('[data-rb-live-clock]').forEach(el => { el.textContent = label; });
+            } catch (_) {}
+        }
+        function rbLiveClockStop() {
+            try { if (rbLiveClockTimer) clearInterval(rbLiveClockTimer); } catch (_) {}
+            rbLiveClockTimer = null; rbLiveStartTs = 0;
+        }
+        function rbStreamSwitchBusyFlash() { showToast('تبديل وسيلة البث قيد التنفيذ — لحظة من فضلك', 'info'); }
+        let rbStreamSwitchBusy = false;
+        // الإيقاف المحلي الموحّد (بلا إرسال أمر) — يُستخدم عند التأكيد من ردّ المضيف أيضاً
+        function rbStopLocalStateOnly() {
+            streamState.active = false;
+            streamState.audioOnly = false;
+            streamState.mode = 'none';
+            streamState.audioEnabled = false;
+            applyStreamMuteToElements();
+            rbStreamRecoveryCancel();
+            rbLiveClockStop();
+            rbStopAudioLevelFeed();
+            try { rbBc.framesSeen = false; rbBc.lastBytes = 0; rbBc.lastBitrateKbps = 0; } catch (_) {}
+            try { if (rbBc.watchdogTimer) { clearInterval(rbBc.watchdogTimer); rbBc.watchdogTimer = null; } } catch (_) {}
+            try { if (rbBc.engineTimer) { clearInterval(rbBc.engineTimer); rbBc.engineTimer = null; } } catch (_) {}
+        }
+        // الإيقاف الموحّد (أي أمر إيقاف في أي واجهة يمرّ من هنا)
+        function rbStopAllStreams(reasonLabel) {
+            try {
+                sendRPCCommand('stop_camera_stream');
+            } catch (_) {}
+            rbStopLocalStateOnly();
+            showToast(reasonLabel || 'تم إيقاف كافة وسائل البث المباشر', 'info');
+            rbRefreshStreamPane();
+        }
+        // بدء وسيلة البث (الأوامر القياسية للمضيف — نفس بروتوكول الربط والهاتف والنظام)
+        function rbStartStreamCore(kind) {
+            try {
+                if (kind === 'screen') {
+                    streamState.mode = 'screen';
+                    streamState.audioEnabled = false; // سياسة الكتم الافتراضي حتى لو كانت أيقونة الصوت مفعّلة سابقاً
+                    applyStreamMuteToElements();
+                    sendRPCCommand('start_screen_stream');
+                    showToast('تم إرسال طلب بدء بث شاشة الجوال المباشرة... (الصوت مكتوم افتراضياً)', 'info');
+                } else if (kind === 'camera') {
+                    streamState.mode = 'camera';
+                    streamState.audioEnabled = false;
+                    applyStreamMuteToElements();
+                    sendRPCCommand('start_camera_stream', { front: streamState.isFront, audio: true });
+                    showToast('تم إرسال أمر بدء بث الكاميرا (' + (streamState.isFront ? 'الأمامية 🤳' : 'الخلفية 📷') + ') — الصوت مكتوم افتراضياً', 'success');
+                } else if (kind === 'audio') {
+                    streamState.mode = 'audio';
+                    streamState.audioEnabled = true;
+                    applyStreamMuteToElements();
+                    sendRPCCommand('start_audio_stream');
+                    showToast('تم إرسال أمر بدء بث الصوت من الميكروفون', 'success');
+                }
+                streamState.active = false;
+                rbStreamRecoveryEnsure(); // حرس التعافي (B17) يعمل طوال البث
+                rbBcArmWatchdog();        // 🔧 B18 — حارس «بلا إطارات 12 ثانية» يعمل لكل الوسائط (عبر عناصر data-*)
+                rbBcStartEngineTick();    // نبضة الحالة/معدل البت (B18 — تشتغل لكل الواجهات عبر عناصر data-*)
+                rbLiveClockEnsure();
+                rbAudioLevelFeedStart();  // شريط مستوى الصوت الحي (يقرأ مقياس AnalyserNode الفعلي إن وجد)
+                rbRefreshStreamPane();
+            } catch (e) { showToast('تعذر بدء البث: ' + String(e && e.message || e), 'error'); }
+        }
+        // الموجّه المركزي — كل أيقونات البث في الواجهات الثلاث تستدعيه
+        async function rbToggleStreamKind(kind) {
+            if (kind !== 'screen' && kind !== 'camera' && kind !== 'audio') return;
+            const activeMode = (streamState.active && streamState.mode && streamState.mode !== 'none') ? streamState.mode : null;
+            // نقرة ثانية على نفس الأيقونة → إيقاف
+            if (activeMode === kind) {
+                rbStopAllStreams('نقرة الإيقاف على ' + rbStreamModeLabel(kind) + ' — أُوقف البث الحي');
+                return;
+            }
+            if (rbStreamSwitchBusy) { rbStreamSwitchBusyFlash(); return; }
+            rbStreamSwitchBusy = true;
+            try {
+                if (activeMode) {
+                    // نقرة أيقونة بثٍّ آخر أثناء بث قائم → إيقاف الحالي ثم بدء الجديد
+                    rbStopAllStreams('انتقال موحّد: أوقفت ' + rbStreamModeLabel(activeMode) + ' — جارٍ بدء ' + rbStreamModeLabel(kind) + '...');
+                    await new Promise(r => setTimeout(r, 700)); // احتياطي واجهة فقط: المضيف يوقف داخلياً أيضاً
+                }
+                rbStartStreamCore(kind);
+            } finally {
+                rbStreamSwitchBusy = false;
+                rbRefreshStreamPane();
+            }
+        }
+        // أزرار تبديل الواجهات الثلاث (شريط موحّد أعلى كل لوحة بث)
+        function rbModeSwitchButtons(mode) {
+            const b = (m, label, hint) => {
+                const on = broadcastViewMode === m;
+                const accent = m === 'main' ? 'bg-emerald-600/25 text-emerald-300 border-emerald-500/40'
+                    : m === 'pro' ? 'bg-sky-600/25 text-sky-300 border-sky-500/40'
+                    : 'bg-fuchsia-600/25 text-fuchsia-300 border-fuchsia-500/40';
+                const off = 'bg-slate-900 text-slate-400 border-slate-700 hover:border-slate-500';
+                return `<button onclick="setBroadcastViewMode('${m}')" class="text-[10px] font-bold px-2.5 py-1 rounded-lg border transition ${on ? accent : off}">${on ? '✓ ' : ''}${label}</button>`;
+            };
+            return `<div class="flex flex-wrap items-center gap-1.5 mt-1.5">
+                <span class="text-[10px] text-slate-500 font-bold">الواجهة:</span>
+                ${b('main', '🎛️ كلاسيكية')}
+                ${b('pro', '🧩 المحرك البرمجي')}
+                ${b('studio', '🎬 استوديو B18')}
+            </div>`;
+        }
+
+        // شريط مستوى الصوت الحي (وقفة 200ms يقرأ RMS من مقياس AnalyserNode إن كان نشطاً — إن لا، يعرض حالة السكون)
+        let rbLevelFeedTimer = null;
+        function rbAudioLevelFeedStart() {
+            try {
+                if (rbLevelFeedTimer) return;
+                rbLevelFeedTimer = setInterval(() => {
+                    try {
+                        const lvl = Math.min(1, Math.max(0, (window.__rbLiveRms || 0) * 6));
+                        const fill = document.getElementById('rb-studio-level-fill');
+                        const val = document.getElementById('rb-studio-level-val');
+                        const on = !!(window.__rbLiveMeter && streamState.active);
+                        const w = on ? Math.round(lvl * 100) + '%' : '0%';
+                        if (fill) fill.style.width = w;
+                        if (val) val.textContent = on ? '−' + Math.max(0, Math.round((1 - lvl) * 60)) + ' dB' : 'سكون';
+                    } catch (_) {}
+                }, 200);
+            } catch (_) {}
+        }
+        function rbStopAudioLevelFeed() {
+            try { if (rbLevelFeedTimer) clearInterval(rbLevelFeedTimer); } catch (_) {}
+            rbLevelFeedTimer = null;
+            try {
+                const fill = document.getElementById('rb-studio-level-fill');
+                const val = document.getElementById('rb-studio-level-val');
+                if (fill) fill.style.width = '0%';
+                if (val) val.textContent = 'سكون';
+                window.__rbLiveRms = 0;
+            } catch (_) {}
+        }
+
+        // ============================================================
+        // 🎬 B18 — الواجهة الثالثة الاحتياطية: «استوديو البث الحي» (rb-studio-v3)
+        // تصميم سينمائي حاد: منصة عرض بإضاءة حواف، شريط أوامر زجاجي بأيقونات
+        // دائرية متوهجة، ساعة مدة حية، شارات P2P/DC/معدل البت، شريط مستوى صوت
+        // حي — والنقر الموحّد عبر الموجّه المركزي نفسه لكل الواجهات الثلاث
+        // ============================================================
+        function rbMpFullscreen() {
+            try {
+                const st = document.getElementById('rb-mp-stage') || document.getElementById('rb-studio-stage');
+                if (!st || !st.requestFullscreen) { showToast('ملء الشاشة غير مدعوم في هذا المتصفح', 'warning'); return; }
+                if (document.fullscreenElement) { document.exitFullscreen().catch(() => {}); }
+                else { st.requestFullscreen().catch(() => showToast('تعذر فتح ملء الشاشة — قد يتطلب تفويضاً', 'warning')); }
+            } catch (_) {}
+        }
+        function rbMpPiP() {
+            try {
+                const v = document.getElementById('remote-video') || document.getElementById('rb-studio-video');
+                if (!v) return;
+                if (document.pictureInPictureElement) { document.exitPictureInPicture().catch(() => {}); return; }
+                if (!v.srcObject) { showToast('لا يوجد بث معروض لفتح النافذة المصغّرة — ابدأ البث أولاً', 'info'); return; }
+                if (v.requestPictureInPicture) {
+                    v.requestPictureInPicture().then(() => showToast('النافذة المصغّرة مفتوحة — البث يستمر أثناء تنقلك بين الأقسام', 'success'))
+                     .catch(e => showToast('تعذر فتح PiP (' + String(e && e.name || e) + ') — المتصفح قد لا يدعمه', 'warning'));
+                } else showToast('PiP غير مدعوم في هذا المتصفح', 'warning');
+            } catch (e) { showToast('تعذر فتح النافذة المصغّرة: ' + String(e && e.message || e), 'error'); }
+        }
+        function rbMpToggleFit() {
+            try {
+                const st = document.getElementById('rb-mp-stage');
+                if (!st) return;
+                st.classList.toggle('rb-mp-cover');
+                const on = st.classList.contains('rb-mp-cover');
+                const btn = document.getElementById('rb-mp-fit-btn');
+                if (btn) btn.classList.toggle('on', on);
+                showToast(on ? 'وضع الملء: يغطي الإطار بالكامل (cover)' : 'وضع الملء: يحفظ النِّسَب كاملة (contain)', 'info');
+            } catch (_) {}
+        }
+        function rbMpScreenshot() { try { openLiveScreenshot(); } catch (_) { showToast('تعذر التقاط اللقطة', 'error'); } }
+
+        function renderStudioLiveView(panel) {
+            if (!panel) return;
+            const isCamActive = streamState.active && streamState.mode === 'camera';
+            const isAudioActive = streamState.active && streamState.mode === 'audio';
+            const isScreenActive = streamState.active && streamState.mode === 'screen';
+            const on = streamState.active;
+            const modeIcon = isScreenActive ? '🖥️' : isCamActive ? '🎥' : '🎙️';
+            const modeLabel = rbStreamModeLabel(streamState.mode);
+            panel.innerHTML = `
+                <audio id="rb-studio-audio" autoplay class="hidden"></audio>
+                <div class="rbv3-shell">
+                    <div class="rbv3-head">
+                        <div class="rbv3-brand">
+                            <span class="rbv3-badge">🎬</span>
+                            <div>
+                                <p class="rbv3-title">استوديو البث الحي</p>
+                                <p class="rbv3-sub">rb-studio-v3 — الواجهة السينمائية الاحتياطية • النقر الموحّد</p>
+                            </div>
+                        </div>
+                        <div class="rbv3-status">
+                            ${on ? `<span class="rbv3-tag rbv3-live-tag"><span class="rb-mp-live-dot"></span> LIVE</span>` : `<span class="rbv3-tag">الاستوديو خامل</span>`}
+                            ${on ? `<span class="rbv3-tag hot" data-rb-live-clock>00:00</span>` : ''}
+                            <span class="rbv3-tag" data-rb-p2p>P2P: ${(pc && pc.connectionState) ? pc.connectionState : 'غير مُنشأ'}</span>
+                            <span class="rbv3-tag" data-rb-dc>DC: ${dataChannel && dataChannel.readyState === 'open' ? 'مفتوح' : 'مغلق'}</span>
+                            <span class="rbv3-tag" data-rb-bitrate>معدل البت: —</span>
+                        </div>
+                    </div>
+
+                    <div class="rbv3-stage ${on ? 'rb-on-live' : ''}" id="rb-studio-stage">
+                        <video id="rb-studio-video" autoplay playsinline class="${on && !isAudioActive ? '' : 'hidden'}"></video>
+                        <div class="rbv3-vault"></div>
+                        ${on ? `<span class="rbv3-stage-badge"><span class="rb-mp-live-dot"></span> ${modeLabel}</span>` : ''}
+                        ${on ? `<span class="rbv3-stage-clock" data-rb-live-clock>00:00</span>` : ''}
+                        ${on ? `
+                        <div class="absolute z-10 flex gap-1" style="top:44px;inset-inline-start:9px;">
+                            <button onclick="rbMpScreenshot()" title="لقطة فورية من الإطار الحي" class="rb-mp-tool">📸</button>
+                            <button onclick="rbMpPiP()" title="نافذة مصغّرة عائمة (PiP)" class="rb-mp-tool">📺</button>
+                            <button onclick="rbMpFullscreen()" title="ملء الشاشة" class="rb-mp-tool">⛶</button>
+                        </div>` : ''}
+                        ${isAudioActive ? `
+                            <div class="rbv3-idle">
+                                <div class="rbv3-ring">🎙️</div>
+                                <p class="text-sm font-bold text-sky-200">استقبال صوت حي عبر الاستوديو</p>
+                                <p class="text-[10px] text-sky-300/80">شريط المستوى أدناه يقرأ AnalyserNode الفعلي</p>
+                            </div>
+                        ` : !on ? `
+                            <div class="rbv3-idle">
+                                <div class="rbv3-ring">🎬</div>
+                                <p class="text-sm font-bold text-sky-100">منصة الاستوديو جاهزة</p>
+                                <p class="text-[10px] text-sky-300/80">نقرة 1 على أيقونة = بدء • نقرة 2 = إيقاف • نقرة وسيلة أخرى = انتقال مباشر</p>
+                            </div>
+                        ` : ''}
+                    </div>
+
+                    <!-- الشريط الزجاجي: أيقونات دائرية متوهجة — النقر الموحّد B18 -->
+                    <div class="rbv3-console">
+                        <button onclick="rbToggleStreamKind('screen')" class="rbv3-key ${isScreenActive ? 'rb-on' : ''}" title="نقرة 1 = بدء بث الشاشة • نقرة 2 = إيقاف">
+                            <span>🖥️</span><span class="rbv3-key-label">شاشة</span>
+                        </button>
+                        <button onclick="rbToggleStreamKind('camera')" class="rbv3-key ${isCamActive ? 'rb-on' : ''}" title="نقرة 1 = بدء بث الكاميرا • نقرة 2 = إيقاف">
+                            <span>${streamState.isFront ? '🤳' : '📷'}</span><span class="rbv3-key-label">كاميرا</span>
+                        </button>
+                        <button onclick="rbToggleStreamKind('audio')" class="rbv3-key ${isAudioActive ? 'rb-on' : ''}" title="نقرة 1 = بدء بث الميكروفون • نقرة 2 = إيقاف">
+                            <span>🎙️</span><span class="rbv3-key-label">صوت</span>
+                        </button>
+                        <button onclick="switchLiveCameraLens()" class="rbv3-key ${isCamActive ? 'rb-on' : ''}" title="تبديل العدسة متزامناً — الحالية: ${streamState.isFront ? 'أمامية 🤳' : 'خلفية 📷'}">
+                            <span>🔄</span><span class="rbv3-key-label">عدسة</span>
+                        </button>
+                        <button onclick="toggleLiveAudio()" class="rbv3-key ${streamState.audioEnabled ? 'rb-on' : 'rb-mute'}" title="${streamState.audioEnabled ? 'الصوت مفعّل — انقر للكتم' : 'الصوت مكتوم — انقر للتفعيل'}">
+                            <span>${streamState.audioEnabled ? '🔊' : '🔇'}</span><span class="rbv3-key-label">صوتية</span>
+                        </button>
+                        ${on ? `
+                        <button onclick="rbStopAllStreams()" class="rbv3-key rb-stop" title="إيقاف كل وسائل البث فوراً">
+                            <span>🛑</span><span class="rbv3-key-label">إيقاف</span>
+                        </button>` : ''}
+                        <span class="rbv3-key-label" style="position:static;inset-inline:0;display:block;margin-top:2px;font-size:9px;color:#38bdf8;opacity:.8;">${on ? 'بث نشط: ' + modeLabel + ' — انقر الأيقونة نفسها للإيقاف' : 'لا بث نشط — انقر أيقونة للبدء'}</span>
+                    </div>
+
+                    <!-- شريط مستوى الصوت الحي -->
+                    <div class="rbv3-meter-row">
+                        <span class="rbv3-meter-title">مستوى الصوت الحي</span>
+                        <div class="rbv3-meter-track"><div class="rbv3-meter-fill" id="rb-studio-level-fill"></div></div>
+                        <span class="rbv3-meter-val" id="rb-studio-level-val">سكون</span>
+                    </div>
+                </div>
+                ${rbModeSwitchButtons()}
+            `;
+            rbRebindMediaElements();
+            rbAudioLevelFeedStart();
+            if (on) rbLiveClockEnsure();
         }
 
         // ============================================================
@@ -5848,64 +6435,13 @@
             }
         }
 
-        function toggleScreenStream() {
-            if (streamState.active && streamState.mode === 'screen') {
-                stopLiveStream();
-                return;
-            }
-            streamState.mode = 'screen';
-            streamState.active = false;
-            // ☝️ سياسة الكتم الافتراضي: يغلب أي حالة قديمة مهما كانت
-            streamState.audioEnabled = false;
-            applyStreamMuteToElements();
-            sendRPCCommand('start_screen_stream');
-            rbStreamRecoveryEnsure(); // 🔧 B17 — تشغيل حرس التعافي طوال البث
-            showToast("تم إرسال طلب بدء بث شاشة الجوال المباشرة... (الصوت مكتوم افتراضياً)", "info");
-            if (activeTab === 'camera') renderCameraStreamView();
-        }
+        // 🔧 B18 — دوال الاستدعاء القديمة أصبحت بوابة موحّدة عبر الموجّه المركزي:
+        // النقرة 1 = بدء | النقرة 2 على نفس الوسيلة = إيقاف | نقرة وسيلة أخرى = إيقاف الحالي ثم بدء الآخر
+        function toggleScreenStream() { rbToggleStreamKind('screen'); }
 
-        function toggleLiveCameraStream() {
-            if (streamState.active && streamState.mode === 'camera') {
-                stopLiveStream();
-                return;
-            }
-            streamState.mode = 'camera';
-            streamState.active = false;
-            // ☝️ سياسة الكتم الافتراضي حتى لو كانت أيقونة الصوت مفعّلة سابقاً
-            streamState.audioEnabled = false;
-            applyStreamMuteToElements();
-            sendRPCCommand('start_camera_stream', { front: streamState.isFront, audio: true });
-            rbStreamRecoveryEnsure(); // 🔧 B17 — تشغيل حرس التعافي طوال البث
-            showToast("تم إرسال أمر بدء بث الكاميرا — الصوت مكتوم افتراضياً (انقر مكبر الصوت للتفعيل)", "success");
-            if (activeTab === 'camera') renderCameraStreamView();
-        }
+        function toggleLiveCameraStream() { rbToggleStreamKind('camera'); }
 
-        function startAudioOnlyStream() {
-            if (streamState.active && streamState.mode === 'audio') {
-                stopLiveStream();
-                return;
-            }
-            // 🔧 B17 — إذا كان بث حي قائم (شاشة/كاميرا) والمطلوب «الصوت فقط»:
-            // نُفعّل الصوت على نفس البث بلا إيقاف الفيديو أو إعادة بناء المشغّل
-            // (للأسف الأقدم كان يوقف بث الكاميرا كلياً — وهذا سبب توقف الاتصال عن خبث التعاود)
-            if (streamState.active && (streamState.mode === 'camera' || streamState.mode === 'screen')) {
-                if (!streamState.audioEnabled) {
-                    toggleLiveAudio();
-                    showToast('تم تفعيل الصوت ضمن البث الحي القائم بلا إيقاف الفيديو — لإيقاف الفيديو استخدم زر الإيقاف الموحّد', 'success');
-                } else {
-                    showToast('الصوت مفعّل بالفعل على البث القائم', 'info');
-                }
-                return;
-            }
-            streamState.mode = 'audio';
-            streamState.active = false;
-            streamState.audioEnabled = true;   // بث الصوت فقط يعمل مفعلاً بشكل طبيعي
-            applyStreamMuteToElements();
-            sendRPCCommand('start_audio_stream');
-            rbStreamRecoveryEnsure(); // 🔧 B17 — تشغيل حرس التعافي طوال البث
-            showToast("تم إرسال أمر بدء بث الصوت فقط من الميكروفون", "success");
-            if (activeTab === 'camera') renderCameraStreamView();
-        }
+        function startAudioOnlyStream() { rbToggleStreamKind('audio'); }
 
         // ============================================================
         // B16 — تبويب «البث المباشر» الفرعي: المحرك البرمجي الاحتياطي
@@ -5933,20 +6469,8 @@
                 rbBc.framesSeen = false;
                 rbBc.lastBytes = 0;
                 rbBc.lastBitrateKbps = 0;
-                if (mode === 'screen') {
-                    sendRPCCommand('start_screen_stream');
-                    rbBcLog('أُرسل أمر بدء بث الشاشة (start_screen_stream)');
-                } else if (mode === 'camera') {
-                    sendRPCCommand('start_camera_stream', { front: streamState.isFront, audio: true });
-                    rbBcLog('أُرسل أمر بدء بث الكاميرا (start_camera_stream) — العدسة: ' + (streamState.isFront ? 'أمامية' : 'خلفية'));
-                } else {
-                    sendRPCCommand('start_audio_stream');
-                    rbBcLog('أُرسل أمر بدء بث الميكروفون (start_audio_stream)');
-                }
-                rbBcArmWatchdog();
-                rbBcStartEngineTick();
-                showToast('🧩 أُرسل أمر البث عبر المحرك البرمجي — بانتظار أول إطارات', 'info');
-                setTimeout(() => { if (activeTab === 'camera') renderBroadcastProPane(document.getElementById('panel-content')); }, 150);
+                rbBcLog('أُرسل أمر البث عبر الموجّه الموحّد (' + mode + ') — دلالة النقر الموحّدة B18');
+                rbToggleStreamKind(mode);
             } catch (e) { rbBcLog('خطأ بدء: ' + String(e && e.message || e)); }
         }
 
@@ -5998,13 +6522,8 @@
 
         function rbBcStop() {
             try {
-                sendRPCCommand('stop_camera_stream');
-                rbBcLog('أُرسل أمر إيقاف البث (stop_camera_stream)');
-                try { if (rbBc.watchdogTimer) clearInterval(rbBc.watchdogTimer); } catch (_) {}
-                rbBc.watchdogTimer = null;
-                rbBc.framesSeen = false; rbBc.lastBytes = 0; rbBc.lastBitrateKbps = 0;
-                showToast('تم إيقاف البث من المحرك البرمجي', 'info');
-                setTimeout(() => { if (activeTab === 'camera') renderBroadcastProPane(document.getElementById('panel-content')); }, 250);
+                rbBcLog('زر الإيقاف في المحرك → الموجّه الموحّد (stop_camera_stream)');
+                rbStopAllStreams('تم إيقاف البث من المحرك البرمجي');
             } catch (e) { rbBcLog('خطأ إيقاف: ' + String(e && e.message || e)); }
         }
 
@@ -6020,16 +6539,21 @@
         }
 
         // نبضة المحرك كل ثانية: تحديث شِپسات الحالة + قياس معدل البت لحظياً عبر getStats
+        // 🔧 B18 — تغذي الآن شارات الحالة في كل الواجهات (عناصر data-rb-p2p / data-rb-dc / data-rb-bitrate)
         function rbBcStartEngineTick() {
             try { if (rbBc.engineTimer) clearInterval(rbBc.engineTimer); } catch (_) {}
             rbBc.engineTimer = setInterval(async () => {
                 try {
+                    const p2pVal = (pc && pc.connectionState) ? pc.connectionState : 'غير منشأ';
+                    const dcVal = (dataChannel && dataChannel.readyState) ? dataChannel.readyState : 'مغلق';
                     const c1 = document.getElementById('bc-pro-st-p2p');
-                    if (c1) c1.textContent = 'P2P: ' + ((pc && pc.connectionState) ? pc.connectionState : 'غير منشأ');
+                    if (c1) c1.textContent = 'P2P: ' + p2pVal;
                     const c2 = document.getElementById('bc-pro-st-dc');
-                    if (c2) c2.textContent = 'DC: ' + ((dataChannel && dataChannel.readyState) ? dataChannel.readyState : 'مغلق');
-                    const c3 = document.getElementById('bc-pro-st-bitrate');
-                    if (c3 && pc && pc.connectionState === 'connected' && typeof pc.getStats === 'function') {
+                    if (c2) c2.textContent = 'DC: ' + dcVal;
+                    document.querySelectorAll('[data-rb-p2p]').forEach(el => { el.textContent = 'P2P: ' + p2pVal; });
+                    document.querySelectorAll('[data-rb-dc]').forEach(el => { el.textContent = 'DC: ' + dcVal; });
+                    let computed = false;
+                    if (pc && pc.connectionState === 'connected' && typeof pc.getStats === 'function') {
                         const rep = await pc.getStats();
                         let bytes = 0;
                         rep.forEach(s => { if (s.type === 'inbound-rtp' && (s.kind === 'video' || s.mediaType === 'video')) bytes += Number(s.bytesReceived || 0); });
@@ -6037,12 +6561,16 @@
                             rbBc.lastBitrateKbps = Math.round(((bytes - rbBc.lastBytes) * 8) / 1000);
                         }
                         rbBc.lastBytes = bytes;
-                        c3.textContent = 'معدل البت: ' + rbBc.lastBitrateKbps + ' kbps';
+                        computed = true;
                         if (bytes > 0 && !rbBc.framesSeen) {
                             rbBc.framesSeen = true;
                             rbBcLog('وصلت بيانات بث فعلي — المحرك مستقر');
                         }
                     }
+                    const txt = 'معدل البت: ' + (computed ? rbBc.lastBitrateKbps + ' kbps' : '—');
+                    const c3 = document.getElementById('bc-pro-st-bitrate');
+                    if (c3) c3.textContent = txt;
+                    document.querySelectorAll('[data-rb-bitrate]').forEach(el => { el.textContent = txt; });
                 } catch (_) {}
             }, 1000);
         }
@@ -6062,11 +6590,7 @@
                     </div>
                     <span class="text-[10px] font-bold px-2.5 py-1 rounded-full bg-sky-950/60 text-sky-300 border border-sky-700/50 shrink-0">الحالة: ${activeLabel}</span>
                 </div>
-                <div class="flex flex-wrap items-center gap-1.5 mb-2.5">
-                    <span class="text-[10px] text-slate-500 font-bold">التبديل:</span>
-                    <button onclick="setBroadcastViewMode('main')" title="العودة إلى الواجهة الاحترافية المعتادة" class="text-[10px] font-bold px-2.5 py-1 rounded-lg border transition bg-slate-900 text-slate-400 border-slate-700 hover:border-slate-500">🎛️ الواجهة الاحترافية</button>
-                    <button onclick="setBroadcastViewMode('pro')" class="text-[10px] font-bold px-2.5 py-1 rounded-lg border transition bg-sky-600/30 text-sky-300 border-sky-500/40">🧩 البث المباشر (نشط)</button>
-                </div>
+                ${rbModeSwitchButtons()}
 
                 <div class="rb-stream-stage ${streamState.active ? 'rb-live-glow' : ''} border-0 rounded-2xl overflow-hidden relative aspect-video max-h-[340px] flex items-center justify-center mb-3">
                     <video id="bc-pro-video" autoplay playsinline muted class="w-full h-full object-contain ${streamState.active && streamState.mode !== 'audio' ? '' : 'hidden'}"></video>
@@ -6084,19 +6608,19 @@
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
-                    <button onclick="rbBcStart('screen')" class="rb-stream-card" title="بدء بث الشاشة عبر المحرك البرمجي">
+                    <button onclick="rbBcStart('screen')" class="rb-stream-card ${streamState.active && streamState.mode === 'screen' ? 'rb-stream-card-on' : ''}" title="نقرة 1 = بدء بث الشاشة عبر المحرك — نقرة 2 = إيقاف">
                         <span class="rb-stream-ico">🖥️</span>
-                        <span class="rb-stream-t">بث الشاشة</span>
+                        <span class="rb-stream-t">${(streamState.active && streamState.mode === 'screen') ? 'بث الشاشة نشط — انقر للإيقاف' : 'بث الشاشة'}</span>
                         <span class="rb-stream-d">أمر start_screen_stream مع مؤقّت ذكي ولوحة سجل</span>
                     </button>
-                    <button onclick="rbBcStart('camera')" class="rb-stream-card" title="بدء بث الكاميرا عبر المحرك البرمجي">
+                    <button onclick="rbBcStart('camera')" class="rb-stream-card ${streamState.active && streamState.mode === 'camera' ? 'rb-stream-card-on' : ''}" title="نقرة 1 = بدء بث الكاميرا عبر المحرك — نقرة 2 = إيقاف">
                         <span class="rb-stream-ico">${streamState.isFront ? '🤳' : '📷'}</span>
-                        <span class="rb-stream-t">بث الكاميرا</span>
+                        <span class="rb-stream-t">${(streamState.active && streamState.mode === 'camera') ? 'بث الكاميرا نشط — انقر للإيقاف' : 'بث الكاميرا'}</span>
                         <span class="rb-stream-d">أمر start_camera_stream — العدسة: ${streamState.isFront ? 'أمامية 🤳' : 'خلفية 📷'}</span>
                     </button>
-                    <button onclick="rbBcStart('audio')" class="rb-stream-card" title="بدء بث الميكروفون عبر المحرك البرمجي">
+                    <button onclick="rbBcStart('audio')" class="rb-stream-card ${streamState.active && streamState.mode === 'audio' ? 'rb-stream-card-on' : ''}" title="نقرة 1 = بدء بث الميكروفون عبر المحرك — نقرة 2 = إيقاف">
                         <span class="rb-stream-ico">🎙️</span>
-                        <span class="rb-stream-t">ميكروفون فقط</span>
+                        <span class="rb-stream-t">${(streamState.active && streamState.mode === 'audio') ? 'بث الصوت نشط — انقر للإيقاف' : 'ميكروفون فقط'}</span>
                         <span class="rb-stream-d">أمر start_audio_stream — قياس معدل البت لحظياً</span>
                     </button>
                 </div>
@@ -6121,16 +6645,10 @@
                     <div id="bc-pro-log" class="text-[9.5px] leading-5 text-slate-400 max-h-36 overflow-y-auto custom-scrollbar">${rbBc.log.slice(-12).map(l => `<div class="ts-en" style="direction:ltr">${escHtml(l)}</div>`).join('')}</div>
                 </div>
             `;
+            rbRebindMediaElements();
         }
 
-        function stopLiveStream() {
-            sendRPCCommand('stop_camera_stream');
-            streamState.active = false;
-            streamState.mode = 'none';
-            rbStreamRecoveryCancel(); // 🔧 B17 — إنهاء الحرس مع انتهاء البث
-            showToast("تم إيقاف كافة وسائل البث المباشر", "info");
-            if (activeTab === 'camera') renderCameraStreamView();
-        }
+        function stopLiveStream() { rbStopAllStreams(); } // B18 — الإيقاف الموحّد من أي واجهة
 
         let rbSwitchingLens = false;
         function switchLiveCameraLens() {

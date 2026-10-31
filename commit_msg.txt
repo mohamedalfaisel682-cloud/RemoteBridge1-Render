@@ -1,0 +1,15 @@
+B18: موجّه مركزي موحّد لنقرات البث الثلاث + مشغّل مطوّر + واجهة استوديو سينمائية ثالثة
+
+- الموجّه المركزي rbToggleStreamKind: نقرة 1 = بدء، نقرة 2 على الأيقونة نفسها = إيقاف،
+  نقرة وسيلة أخرى أثناء بث قائم = إيقاف الحالي ثم بدء الآخر (~700ms احتياطياً) —
+  وحّد toggleScreenStream/toggleLiveCameraStream/startAudioOnlyStream/rbBcStart/rbBcStop
+  على مرجع واحد للإيقاف (rbStopAllStreams) ومرجع واحد للبدء (rbStartStreamCore)
+- مشغّل الفيديو المطوّر: منصة عريضة aspect-ratio 16/9، حواف متدرجة (fade)،
+  تراكب حالة P2P/DC/ساعة LIVE، ملء شاشة، PiP محمي، تبديل object-fit contain/cover
+- الواجهة الثالثة rb-studio-v3: استوديو بث سينمائي — شريط أوامر زجاجي بأيقونات
+  دائرية متوهجة نابضة، ساعة مدة حية، شارات P2P/DC/معدل البت عبر getStats،
+  شريط مستوى صوت حي يقرأ AnalyserNode الفعلي، مرايا rb-studio-video/rb-studio-audio
+  في ontrack والإعادة الرسمية، كتم موحّد لعناصر الصوت عبر الواجهات
+- ربط مفتاح النمط: ثلاثة أوضاع (كلاسيكية/محرك برمجي/استوديو) في rb_bc_mode_v1
+  مع زر تبديل ثلاثي موحّد rbModeSwitchButtons في كل لوحات البث
+- إضافة extract_check.mjs (أداة فحص معيارية) — الناتج: NODE_CHECK=PASS
