@@ -6,6 +6,7 @@
 ## 2. Bidirectional Text (Bidi), Language Isolation & UI Overflow Prevention (English Technical Rule)
 - **Bidi Isolation:** Isolate all English technical terms, variables, functions, and library names inside inline code backticks (e.g., `` `code` ``) or code blocks to prevent RTL/LTR rendering distortion.
 - **Responsive UI & Text Fitting:** Prevent text clipping, overlapping, or hidden text using dynamic font scaling, proper text wrapping, or scrolling indicators.
+- **Fit-to-Content Density (B16 Governance Rule):** Message bubbles, chat tabs, list rows, window panes, and option tiles must hug their text content exactly — no unjustified whitespace, no oversized fixed containers. Apply consistent compact sizing across ALL controller windows, lists, and tabs so more items fit per screen for professional evidence-grade preview.
 
 ## 3. Dynamic UI Iconography, Color Semantics & Contrast Optimization (English Technical Rule)
 - **Icons & Animations:** Include static, dynamic, or animated icons reflecting exact functions. Active states feature motion/pulse.

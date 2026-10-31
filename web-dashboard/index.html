@@ -124,24 +124,29 @@
             overflow: hidden;
             box-shadow: 0 25px 80px rgba(0,0,0,0.6);
         }
-        .chat-header { display:flex; align-items:center; justify-content:space-between; padding: 12px 14px; border-bottom:1px solid rgba(51,65,85,0.8); background: rgba(15,23,42,0.9); }
-        .chat-body { flex: 1; overflow-y: auto; padding: 14px 12px; display: flex; flex-direction: column; gap: 10px; background-image: radial-gradient(rgba(148,163,184,0.05) 1px, transparent 1px); background-size: 18px 18px; }
+        .chat-header { display:flex; align-items:center; justify-content:space-between; padding: 9px 12px; border-bottom:1px solid rgba(51,65,85,0.8); background: rgba(15,23,42,0.9); }
+        .chat-body { flex: 1; overflow-y: auto; padding: 10px 9px; display: flex; flex-direction: column; gap: 6px; background-image: radial-gradient(rgba(148,163,184,0.05) 1px, transparent 1px); background-size: 18px 18px; }
         .bubble-wrap { display: flex; width: 100%; }
         .bubble-wrap.in  { justify-content: flex-start; }  /* واردة: يمين في الواجهة العربية */
         .bubble-wrap.out { justify-content: flex-end; }    /* صادرة: يسار */
         .bubble {
-            max-width: 82%;
-            padding: 8px 12px;
+            max-width: 78%;
+            padding: 5px 9px;
             border-radius: 14px;
-            font-size: 13px;
-            line-height: 1.65;
+            font-size: 12.5px;
+            line-height: 1.42;
             word-break: break-word;
             white-space: pre-wrap;
         }
         .bubble.in  { background: rgba(51,65,85,0.55); border: 1px solid rgba(71,85,105,0.8); color: #e2e8f0; border-start-start-radius: 4px; }
         .bubble.out { background: rgba(16,185,129,0.22); border: 1px solid rgba(16,185,129,0.55); color: #d1fae5; border-start-end-radius: 4px; }
-        .bubble-time { font-size: 9.5px; opacity: .75; margin-top: 4px; text-align: left; font-family: monospace; }
-        .chat-input-row { display:flex; gap:8px; padding: 10px 12px; border-top: 1px solid rgba(51,65,85,0.8); background: rgba(15,23,42,0.9); }
+        .bubble-time { font-size: 9px; opacity: .72; margin-top: 2px; text-align: left; font-family: monospace; }
+        .chat-input-row { display:flex; gap:8px; padding: 8px 10px; border-top: 1px solid rgba(51,65,85,0.8); background: rgba(15,23,42,0.9); }
+
+        /* ===== B16 — قاعدة الملاءمة العامة: كثافة عناصر متسقة بلا فراغات غير مبررة ===== */
+        /* الفقاعات الداخلية تتقلص لتناسب النص بالضبط، والقوائم تقدم عدد أعنصر أكبر للمعاينة */
+        .rb-fit-row { padding: 6px 8px; }
+        .rb-fit-text { padding: 3px 6px; line-height: 1.38; }
 
         /* ===== B4 — الوقت/التاريخ بالأرقام الإنجليزية وخط أوضح يتفق مع الخلفية ===== */
         .ts-en {
@@ -389,19 +394,19 @@
         }
         .rb-lightwin .lw-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 14px; }
         .rb-lightwin .lw-chip {
-            padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 700;
+            padding: 5px 10px; border-radius: 999px; font-size: 12px; font-weight: 700;
             cursor: pointer; border: 1px solid #cbd5e1; background: #fff; color: #0f172a;
         }
         .rb-lightwin .lw-chip.active { background: #0284c7; color: #fff; border-color: #0284c7; }
-        .rb-lightwin .lw-body { overflow-y: auto; padding: 10px 14px 14px; }
+        .rb-lightwin .lw-body { overflow-y: auto; padding: 8px 12px 12px; }
         .rb-lightwin .lw-row {
             background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
-            padding: 8px 10px; margin-bottom: 6px;
+            padding: 5px 9px; margin-bottom: 4px;
         }
-        .rb-lightwin .lw-title { font-weight: 800; font-size: 13px; color: #0f172a; word-break: break-word; }
-        .rb-lightwin .lw-sub { font-size: 11px; color: #475569; direction: ltr; text-align: left; word-break: break-all; }
+        .rb-lightwin .lw-title { font-weight: 800; font-size: 12.5px; color: #0f172a; word-break: break-word; }
+        .rb-lightwin .lw-sub { font-size: 11px; color: #475569; direction: ltr; text-align: left; word-break: break-all; margin-top: 1px; }
         .rb-lightwin .lw-link { color: #0e7490; text-decoration: underline; cursor: pointer; }
-        .rb-lightwin .lw-meta { font-size: 11px; color: #64748b; }
+        .rb-lightwin .lw-meta { font-size: 11px; color: #64748b; margin-top: 1px; }
         .rb-lightwin[data-cat="contacts"] .lwh { background: #f3e8ff; }        /* أسماء — بنفسجي فاتح */
         .rb-lightwin[data-cat="calls"] .lwh { background: #e0efff; }           /* اتصالات — أزرق فاتح */
         .rb-lightwin[data-cat="sms"] .lwh { background: #e7f8ee; }             /* رسائل — أخضر فاتح */
@@ -414,6 +419,13 @@
         .rb-lightwin .lw-row.lw-click:hover { background: rgba(15, 23, 42, 0.06); }
         .rb-lightwin .lw-copy-btn { border: 1px solid #94a3b8; background: #f1f5f9; border-radius: 8px; padding: 1px 7px; font-size: 10px; line-height: 1.5; cursor: pointer; color: #0f172a; transition: all .15s; }
         .rb-lightwin .lw-copy-btn:hover { background: #0284c7; color: #fff; border-color: #0284c7; }
+        /* B16 — فقاعات الدردشة داخل النافذة الفاتحة: نمط واتساب نهاري (واردة رمادية فاتحة، صادرة خضراء) تمنح الملاءمة والتباين */
+        .rb-lightwin .bubble.in { background: #e2e8f0; border: 1px solid #cbd5e1; color: #0f172a; }
+        .rb-lightwin .bubble.out { background: #dcfce7; border: 1px solid #86efac; color: #064e3b; }
+        .rb-lightwin .bubble .text-blue-300 { color: #1d4ed8 !important; }
+        .rb-lightwin .bubble .text-emerald-300 { color: #047857 !important; }
+        .rb-lightwin .bubble-time { opacity: .85; }
+        .rb-lightwin .ts-date-sep { box-shadow: 0 0 0 2px #f8fafc; }
         .rb-copy-btn { background: rgba(15, 23, 42, 0.25); border: 1px solid #334155; border-radius: 8px; padding: 2px 7px; font-size: 10px; cursor: pointer; color: #cbd5e1; transition: all .15s; line-height: 1.5; }
         .rb-copy-btn:hover { background: #0e9488; color: #fff; border-color: #0e9488; }
         .rb-chat-copy-btn { background: rgba(15, 23, 42, 0.5); border: 1px solid #334155; border-radius: 9999px; width: 26px; height: 26px; font-size: 12px; cursor: pointer; color: #94a3b8; transition: all .15s; }
@@ -906,6 +918,15 @@
             isFront: false,
             audioEnabled: true
         };
+
+        // B16 — التبويب الفرعي للبث: «البث المباشر» (نمط برمجي احتياطي مستقل للتعافي والعرض والسجل)
+        let broadcastViewMode = 'main';
+        try { broadcastViewMode = localStorage.getItem('rb_bc_mode_v1') === 'pro' ? 'pro' : 'main'; } catch (_) {}
+        function setBroadcastViewMode(m) {
+            broadcastViewMode = (m === 'pro') ? 'pro' : 'main';
+            try { localStorage.setItem('rb_bc_mode_v1', broadcastViewMode); } catch (_) {}
+            if (activeTab === 'camera') renderCameraStreamView();
+        }
 
         // Current Directory for File Explorer
         let currentExplorerPath = "/";
@@ -1816,6 +1837,37 @@
         // تيسير استدعاء الدالة من الكونسول باسم بديل
         window.testGoogleStunServer = window.testStunConnectivity;
 
+        // B16 — إعلان مُثبَّت للربط المباشر: النجاح يُعلن فقط بعد استقرار الحالة 2.5 ثانية
+        // (يزيل ازدواج "نجاح ثم فشل فوراً")، والفشل يُعلن مرة واحدة كل 15 ثانية كحد أقصى
+        let rbPeerStableTimer = null;
+        let rbPeerOkShownAt = 0;
+        let rbPeerFailShownAt = 0;
+        function rbAnnouncePeerConnected() {
+            try {
+                if (rbPeerStableTimer) clearTimeout(rbPeerStableTimer);
+                rbPeerStableTimer = setTimeout(() => {
+                    try {
+                        const p = (typeof pc !== 'undefined') ? pc : null;
+                        const stillOk = p && (p.connectionState === 'connected' || p.iceConnectionState === 'connected' || p.iceConnectionState === 'completed');
+                        if (!stillOk) return; // انقلبت الحالة خلال فترة الاستقرار — لا إعلان مبكر
+                        const dcOpen = dataChannel && dataChannel.readyState === 'open';
+                        if (!dcOpen && !isP2pAlive()) return; // قناة البيانات لم تفتح بعد — الإعلان يأتي مع فتحها
+                        if (Date.now() - rbPeerOkShownAt < 60000) return; // منع التكرار المزعج خلال الدقيقة
+                        rbPeerOkShownAt = Date.now();
+                        showToast('اتصال WebRTC P2P مباشر مع المضيف جاهز ومستقر!', 'success');
+                    } catch (_) {}
+                }, 2500);
+            } catch (_) {}
+        }
+        function rbAnnouncePeerFail() {
+            try {
+                if (Date.now() - rbPeerFailShownAt < 15000) return; // خنق إعلانات الفشل المتكررة
+                rbPeerFailShownAt = Date.now();
+                if (rbPeerStableTimer) { clearTimeout(rbPeerStableTimer); rbPeerStableTimer = null; }
+                showToast('تذبذب في الربط المباشر الآن — جارٍ إعادة التفاوض تلقائياً...', 'warning');
+            } catch (_) {}
+        }
+
         function initPeerConnection(targetId) {
             if (pc) {
                 try { pc.close(); } catch (_) {}
@@ -1902,10 +1954,13 @@
                 console.log(`%c[ICE Connection State] تغيرت حالة اتصال ICE إلى: ${pc.iceConnectionState}`, "color: #ec4899; font-weight: bold;");
                 updateWebRTCDiagnosticUI();
                 if (pc.iceConnectionState === "connected" || pc.iceConnectionState === "completed") {
-                    showToast("اتصال WebRTC P2P مباشر مع المضيف جاهز تماماً!", "success");
+                    // B16 — نجاح مُثبَّت: إعلان بعد استقرار 2.5 ثانية بدل الإعلان المبكر الذي يسقوطه الفشل اللحظي
+                    rbAnnouncePeerConnected();
                     iceRestartAttempts = 0;
                 } else if (pc.iceConnectionState === "failed" || pc.iceConnectionState === "disconnected") {
                     console.warn("[ICE Connection State] انقطع أو فشل اتصال ICE المباشر. قد يكون بسبب إعدادات جدار الحماية أو حظر UDP.");
+                    // B16 — إعلان فشل مُخنَّق (مرة كل 15 ثانية) بدل توبرد رسائل متلاحقة
+                    rbAnnouncePeerFail();
                     // محاولة ICE Restart تلقائية عند الفشل
                     if (pc.iceConnectionState === "failed" && iceRestartAttempts < 3) {
                         iceRestartAttempts++;
@@ -1989,6 +2044,13 @@
                     showToast("تم استقبال الصوت الحي من الميكروفون! 🎙️", "success");
                     try { attachLiveAudioMeter(); } catch (_) {}
                 }
+                // B16 — مرآة عرض المحرك البرمجي: عنصرا تبويب «البث المباشر» يمتلئان تلقائياً عند وجودهما
+                try {
+                    const pv = document.getElementById('bc-pro-video');
+                    const pa = document.getElementById('bc-pro-audio');
+                    if (event.track.kind === 'video' && pv) { pv.srcObject = remoteMediaStream; pv.classList.remove('hidden'); pv.play().catch(() => {}); }
+                    if (event.track.kind === 'audio' && pa) { pa.srcObject = remoteMediaStream; pa.muted = !rbBc.speakerOn; pa.play().catch(() => {}); }
+                } catch (_) {}
                 updateWebRTCDiagnosticUI();
             };
 
@@ -1996,7 +2058,10 @@
                 console.log(`%c[WebRTC PeerConnection State] -> ${pc.connectionState}`, "color: #06b6d4; font-weight: bold;");
                 updateWebRTCDiagnosticUI();
                 if (pc.connectionState === "connected") {
-                    showToast("اتصال WebRTC P2P مباشر جاهز تماماً!", "success");
+                    // B16 — نفس التثبيت: لا إعلان إلا بعد استقرار الحالة وفتح قناة البيانات
+                    rbAnnouncePeerConnected();
+                } else if (pc.connectionState === "failed" || pc.connectionState === "closed") {
+                    rbAnnouncePeerFail();
                 }
             };
 
@@ -2190,29 +2255,41 @@
                         : (o.path ? { path: o.path } : { kind: o.vaultKind, name: o.vaultName });
                     activeFileDownloads[reqId] = [];
                     const startedAt = Date.now();
+                    let lastProgressAt = startedAt;
+                    let lastGot = 0;
                     window.__rbContentHeaders = window.__rbContentHeaders || {};
                     const timer = setInterval(() => {
                         try {
-                            const hdr = window.__rbContentHeaders[reqId];
+                            const hdr = window.__rbContentHeaders[reqId] || {};
+                            // B16 — الحجم من أي شكل رد متوقع (size مباشرة، أو داخل started/completed)
+                            const total = Number(hdr.size) || (hdr.started && Number(hdr.started.size)) || (hdr.completed && Number(hdr.completed.size)) || 0;
                             const parts = activeFileDownloads[reqId] || [];
                             let got = 0; parts.forEach(p => { got += p.byteLength; });
+                            if (got !== lastGot) { lastGot = got; lastProgressAt = Date.now(); }
                             const st = document.getElementById('mp-status');
-                            if (hdr && hdr.size > 0 && st) {
-                                st.textContent = Math.min(100, Math.round((got / hdr.size) * 100)) + '% • ' + rbFmtMB(got) + ' / ' + rbFmtMB(hdr.size);
-                            }
-                            if (hdr && hdr.size > 0 && got >= hdr.size) {
+                            const pctText = total > 0 ? Math.min(100, Math.round((got / total) * 100)) + '%' : '...';
+                            if (st) st.textContent = pctText + ' • ' + rbFmtMB(got) + (total > 0 ? ' / ' + rbFmtMB(total) : '');
+                            // إنهاء النجاح: إما اكتمال الحجم المعلن، أو وصول ختم الإغلاق completed (بلا حجم معلن)
+                            if ((total > 0 && got >= total) || (hdr.completed && got > 0)) {
                                 clearInterval(timer);
                                 delete window.__rbContentHeaders[reqId];
                                 const blobParts = activeFileDownloads[reqId] || [];
                                 delete activeFileDownloads[reqId];
-                                resolve({ blob: new Blob(blobParts, { type: o.mime || 'application/octet-stream' }), size: got, name: hdr.name || o.name || '' });
+                                resolve({ blob: new Blob(blobParts, { type: o.mime || 'application/octet-stream' }), size: got, name: (hdr.completed && hdr.completed.name) || hdr.name || o.name || '' });
+                                return;
+                            }
+                            // B16 — شفافية الفشل: عند التوقف التام بلا رأس وبلا بايتات لمدة 45 ثانية أبلغ بدل الصمت حتى المهلة الكبرى
+                            if (!hdr.started && !hdr.completed && got === 0 && (Date.now() - lastProgressAt) > 45000) {
+                                clearInterval(timer);
+                                delete activeFileDownloads[reqId];
+                                reject(new Error('لم يبدأ الطرف الآخر بنقل الملف (لا رجل بدء ولا بايتات) — قد يتطلب تحديث إصدار التطبيق أو إعادة الربط'));
                                 return;
                             }
                             if (Date.now() - startedAt > 180000) {
                                 clearInterval(timer);
                                 delete activeFileDownloads[reqId];
                                 delete window.__rbContentHeaders[reqId];
-                                reject(new Error('انتهت مهلة سحب المحتوى (180 ثانية)'));
+                                reject(new Error('انتهت مهلة سحب المحتوى (180 ثانية) — وصل ' + rbFmtMB(got) + ' من الملف'));
                             }
                         } catch (e2) { clearInterval(timer); reject(e2); }
                     }, 300);
@@ -3224,10 +3301,17 @@
 
             // B8 — رؤوس نقل محتوى الملف/الخزنة القطعي عبر قناة البيانات:
             // started {name,size} يخبر الحجم الكلي المتوقع، وcompleted يختم النقل.
+            // B16 — تطبيع المعرّف: بعض ردود المضيف تستخدم requestId بدل id، وكلاهما يُموّل نفس الرأس
             try {
                 if (resp.ok && resp.data && (resp.data.started || resp.data.completed)) {
                     window.__rbContentHeaders = window.__rbContentHeaders || {};
-                    window.__rbContentHeaders[resp.id] = resp.data;
+                    const hid = (resp.id !== undefined && resp.id !== null) ? resp.id : resp.requestId;
+                    const prev = window.__rbContentHeaders[hid] || {};
+                    window.__rbContentHeaders[hid] = Object.assign({}, prev, resp.data);
+                    // B16 — مرآة معرّف بديلة تحسباً لاختلاف بنية الرد
+                    if (resp.requestId !== undefined && resp.requestId !== null && String(resp.requestId) !== String(hid)) {
+                        window.__rbContentHeaders[resp.requestId] = window.__rbContentHeaders[hid];
+                    }
                 }
             } catch (_) {}
 
@@ -4063,7 +4147,6 @@
                             <div class="text-[11px] font-bold text-slate-200 truncate">${escHtml(it.name || "(بدون اسم)")}</div>
                             <div class="text-[9px] text-slate-500">${icon}${durationTxt(it.durationMs)}${sizeTxt ? " • " + sizeTxt : ""}${dateTxt ? " • " + dateTxt : ""}</div>
                         </div>
-                        <span class="text-[10px] text-emerald-300">معاينة 🔍</span>
                     </div>`;
                 }).join("");
                 return;
@@ -4391,7 +4474,6 @@
                                 <div class="text-[11px] font-bold text-slate-200 truncate">${escHtml(it.name || "(بدون اسم)")}</div>
                                 <div class="text-[9px] text-slate-500">${icon}${durationTxt(it.durationMs)}${sizeTxt ? " • " + sizeTxt : ""}${dateTxt ? " • " + dateTxt : ""}</div>
                             </div>
-                            <span class="text-[10px] text-emerald-300">معاينة 🔍</span>
                         </div>`;
                     }).join("")}`;
             } else {
@@ -5137,11 +5219,14 @@
                 }
                 const a = document.createElement('a');
                 a.href = URL.createObjectURL(blob);
-                a.download = name;
+                a.download = String(name || 'rb_download');
+                a.rel = 'noopener';
+                a.style.display = 'none';
                 document.body.appendChild(a);
                 a.click();
-                setTimeout(() => { try { URL.revokeObjectURL(a.href); a.remove(); } catch (_) {} }, 1500);
-                showToast('⬇️ بدأ تنزيل «' + name + '» إلى مجلد تنزيلات المتصفح', 'success');
+                // B16 — الإبقاء على الرابط 60 ثانية: المتصفحات البطيئة كانت تُفشل التنزيل بسبب إبطال الـ 1.5 ثانية القديم
+                setTimeout(() => { try { URL.revokeObjectURL(a.href); a.remove(); } catch (_) {} }, 60000);
+                showToast('⬇️ بدأ تنزيل «' + name + '» إلى مجلد تنزيلات المتصفح (افحص شريط التنزيلات إن ظهر سؤال إذن)', 'success');
                 return Promise.resolve();
             } catch (e) {
                 return Promise.reject(e);
@@ -5485,7 +5570,7 @@
             if (fileMode !== 'details') {
                 const gridClass = fileMode === 'small' ? 'files-flex-grid' : `files-flex-grid vm-${fileMode}`;
                 let renderedCount = 0;
-                container.className = `${gridClass} max-h-[420px] overflow-y-auto custom-scrollbar pr-1 flex-1`;
+                container.className = `${gridClass} max-h-[55vh] overflow-y-auto custom-scrollbar pr-1 flex-1`;
                 container.innerHTML = filtered.map((f, idx) => {
                     const isSelected = selectedFileIds.has(f.id);
                     const isDir = isDirectory(f);
@@ -5521,7 +5606,7 @@
             }
 
             // ===== عرض التفاصيل (القائمة الكلاسيكية المصححة) =====
-            container.className = 'space-y-2 max-h-[350px] overflow-y-auto custom-scrollbar pr-1 flex-1';
+            container.className = 'space-y-1.5 max-h-[60vh] min-h-[300px] overflow-y-auto custom-scrollbar pr-1 flex-1';
             container.innerHTML = filtered.map((f, idx) => {
                 const isSelected = selectedFileIds.has(f.id);
                 const isDir = isDirectory(f);
@@ -5537,9 +5622,9 @@
                     : `<span class="text-xl shrink-0 cursor-pointer ${isImage || isVideo ? 'hover:scale-125 transition inline-block' : ''}" onclick="openFileListItem(${idx})">${icon}</span>`;
 
                 return `
-                    <div class="p-2.5 bg-slate-900/80 hover:bg-slate-800/80 border ${isSelected ? 'border-emerald-500/80 bg-emerald-950/20' : 'border-slate-800'} rounded-xl flex items-center justify-between transition">
+                    <div class="p-2 bg-slate-900/80 hover:bg-slate-800/80 border ${isSelected ? 'border-emerald-500/80 bg-emerald-950/20' : 'border-slate-800'} rounded-xl flex items-center justify-between transition cursor-pointer" onclick="${isDir ? `enterFileFolder(${idx})` : `openFileListItem(${idx})`}" title="${isDir ? 'انقر في أي مكان بالمجلد لفتحه' : 'انقر في أي مكان بالصف لمعاينة الملف'}">
                         <div class="flex items-center gap-2.5 min-w-0">
-                            <input type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleFileSelectionIdx(${idx}, this.checked)" class="w-4 h-4 accent-emerald-500 rounded shrink-0">
+                            <input type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleFileSelectionIdx(${idx}, this.checked)" onclick="event.stopPropagation()" class="w-4 h-4 accent-emerald-500 rounded shrink-0">
                             ${thumbCell}
                             <div class="min-w-0">
                                 <p class="text-xs font-bold text-slate-200 truncate">${f.name || ''}</p>
@@ -5549,17 +5634,10 @@
 
                         <div class="flex items-center gap-1.5 shrink-0">
                             ${!isDir ? `
-                                <button onclick="openFileListItem(${idx})" class="bg-slate-800 text-slate-200 border border-slate-700 px-2 py-1 rounded-lg text-[10px] font-bold">
-                                    معاينة 🔍
-                                </button>
-                                <button onclick="downloadFileAsIs(${idx})" class="bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 border border-emerald-500/30 px-2.5 py-1 rounded-lg text-[11px] font-bold transition">
+                                <button onclick="event.stopPropagation();downloadFileAsIs(${idx})" title="تنزيل هذا الملف كما هو إلى مجلد التنزيلات" class="bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-300 border border-emerald-500/30 px-2.5 py-1 rounded-lg text-[11px] font-bold transition">
                                     تنزيل ⬇️
                                 </button>
-                            ` : `
-                                <button onclick="enterFileFolder(${idx})" class="bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 border border-blue-500/30 px-2.5 py-1 rounded-lg text-[11px] font-bold transition">
-                                    فتح 📂
-                                </button>
-                            `}
+                            ` : ``}
                         </div>
                     </div>
                 `;
@@ -5574,6 +5652,9 @@
             const isAudioActive = streamState.active && streamState.mode === 'audio';
             const isScreenActive = streamState.active && streamState.mode === 'screen';
 
+            // B16 — التبويب الفرعي «البث المباشر»: يوجّه إلى لوحة المحرك البرمجي الاحتياطي
+            if (broadcastViewMode === 'pro') { renderBroadcastProPane(panel); return; }
+
             panel.innerHTML = `
                 <audio id="remote-audio" autoplay class="hidden"></audio>
                 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-2.5 mb-2.5 border-b border-slate-800 gap-2">
@@ -5583,6 +5664,11 @@
                             <span class="text-[10px] font-normal text-slate-500 hidden sm:inline">(شاشة • كاميرا • ميكروفون عبر WebRTC P2P)</span>
                         </h2>
                         <p class="text-xs text-slate-400">بطاقات المصادر أدناه — انقر بطاقة لبدء بثها عبر الربط الحي، وانقرها مجدداً لإيقافه</p>
+                        <div class="flex flex-wrap items-center gap-1.5 mt-1.5">
+                            <span class="text-[10px] text-slate-500 font-bold">النمط:</span>
+                            <button onclick="setBroadcastViewMode('main')" title="الواجهة الاحترافية المعتادة لمنصة البث" class="text-[10px] font-bold px-2.5 py-1 rounded-lg border transition bg-emerald-600/25 text-emerald-300 border-emerald-500/40">🎛️ واجهة احترافية</button>
+                            <button onclick="setBroadcastViewMode('pro')" title="تبويب «البث المباشر»: محرك برمجي احتياطي بتعافٍ ذاتي وسجل حي" class="text-[10px] font-bold px-2.5 py-1 rounded-lg border transition bg-slate-900 text-slate-400 border-slate-700 hover:border-slate-500">🧩 البث المباشر (برمجي احتياطي)</button>
+                        </div>
                     </div>
                     <div class="flex items-center gap-2">
                         <span class="text-xs px-2.5 py-1 rounded-full font-bold flex items-center gap-1.5 transition-all duration-300 ${streamState.active ? 'bg-emerald-950/90 text-emerald-300 border border-emerald-500/50 shadow-lg shadow-emerald-900/40 animate-pulse' : 'bg-slate-900/80 text-rose-400 border border-rose-500/30'}">
@@ -5740,6 +5826,222 @@
             sendRPCCommand('start_audio_stream');
             showToast("تم إرسال أمر بدء بث الصوت فقط من الميكروفون", "success");
             if (activeTab === 'camera') renderCameraStreamView();
+        }
+
+        // ============================================================
+        // B16 — تبويب «البث المباشر» الفرعي: المحرك البرمجي الاحتياطي
+        // مسار مستقل عن واجهة B9: يرسل نفس أوامر المضيف القياسية لكن بإدارة
+        // حالة خاصة (سجل تشغيل حي، مؤقت بلا إطارات 12 ثانية، إعادة تفاوض
+        // تلقائية ثم إعادة تشغيل ICE، عناصر عرض منفصلة، قياس معدل البت عبر getStats)
+        // ============================================================
+        const rbBc = { engineTimer: null, watchdogTimer: null, log: [], wantFramesAt: 0, lastBytes: 0, lastBitrateKbps: 0, framesSeen: false, speakerOn: false, restartsDone: 0 };
+        function rbBcLog(line) {
+            try {
+                rbBc.log.push('[' + new Date().toLocaleTimeString('en-GB') + '] ' + line);
+                if (rbBc.log.length > 40) rbBc.log = rbBc.log.slice(-12);
+                const lb = document.getElementById('bc-pro-log');
+                if (lb) lb.innerHTML = rbBc.log.slice(-12).map(l => `<div class="ts-en" style="direction:ltr">${escHtml(l)}</div>`).join('');
+            } catch (_) {}
+        }
+
+        function rbBcStart(mode) {
+            try {
+                if (!(dataChannel && dataChannel.readyState === 'open')) {
+                    showToast('المحرك البرمجي يحتاج قناة البيانات حية — فعّل الربط الحي مع المضيف أولاً', 'warning');
+                    rbBcLog('رفض البدء: لا قناة بيانات مفتوحة');
+                    return;
+                }
+                rbBc.framesSeen = false;
+                rbBc.lastBytes = 0;
+                rbBc.lastBitrateKbps = 0;
+                if (mode === 'screen') {
+                    sendRPCCommand('start_screen_stream');
+                    rbBcLog('أُرسل أمر بدء بث الشاشة (start_screen_stream)');
+                } else if (mode === 'camera') {
+                    sendRPCCommand('start_camera_stream', { front: streamState.isFront, audio: true });
+                    rbBcLog('أُرسل أمر بدء بث الكاميرا (start_camera_stream) — العدسة: ' + (streamState.isFront ? 'أمامية' : 'خلفية'));
+                } else {
+                    sendRPCCommand('start_audio_stream');
+                    rbBcLog('أُرسل أمر بدء بث الميكروفون (start_audio_stream)');
+                }
+                rbBcArmWatchdog();
+                rbBcStartEngineTick();
+                showToast('🧩 أُرسل أمر البث عبر المحرك البرمجي — بانتظار أول إطارات', 'info');
+                setTimeout(() => { if (activeTab === 'camera') renderBroadcastProPane(document.getElementById('panel-content')); }, 150);
+            } catch (e) { rbBcLog('خطأ بدء: ' + String(e && e.message || e)); }
+        }
+
+        // مؤقت المراقبة: لا إطارات خلال 12 ثانية → إعادة تفاوض، ثم إعادة تشغيل ICE كخطوة أخيرة
+        function rbBcArmWatchdog() {
+            try { if (rbBc.watchdogTimer) clearInterval(rbBc.watchdogTimer); } catch (_) {}
+            rbBc.wantFramesAt = Date.now();
+            rbBc.restartsDone = 0;
+            rbBc.watchdogTimer = setInterval(() => {
+                try {
+                    if (rbBc.framesSeen) { clearInterval(rbBc.watchdogTimer); rbBc.watchdogTimer = null; return; }
+                    if (Date.now() - rbBc.wantFramesAt > 12000) {
+                        rbBc.wantFramesAt = Date.now(); // نافذة مراقبة جديدة
+                        rbBc.restartsDone++;
+                        if (rbBc.restartsDone <= 2) {
+                            rbBcLog('لم تصل إطارات خلال 12 ثانية — إعادة تفاوض تلقائية (' + rbBc.restartsDone + '/2)');
+                            rbBcRenegotiate(true);
+                        } else {
+                            rbBcLog('ما زالت لا إطارات — إعادة تشغيل ICE كاملة كخطوة أخيرة');
+                            rbBc.restartsDone = 0;
+                            setTimeout(() => {
+                                // B16 — مسار ICE restart مستقل داخل المحرك (لا يعتمد على دوال الواجهة الأصلية)
+                                try {
+                                    if (pc && pc.signalingState !== 'closed' && typeof pc.createOffer === 'function') {
+                                        pc.createOffer({ iceRestart: true }).then(o => pc.setLocalDescription(o)).then(() => {
+                                            if (ws && ws.readyState === WebSocket.OPEN) {
+                                                ws.send(JSON.stringify({ type: 'offer', from: myDeviceId, to: activeTargetDeviceId, sdp: pc.localDescription.sdp, sdpType: 'OFFER', iceRestart: true }));
+                                                try { pc.__expectingAnswer = true; } catch (_) {}
+                                                rbBcLog('أُرسل عرض ICE restart (مسار المحرك المستقل)');
+                                            } else { rbBcLog('تعذر إرسال ICE restart: قناة الإشارة غير متصلة'); }
+                                        }).catch(e => rbBcLog('فشل ICE restart: ' + String(e && e.message || e)));
+                                    }
+                                } catch (_) {}
+                            }, 600);
+                        }
+                    }
+                } catch (_) {}
+            }, 3000);
+        }
+
+        function rbBcRenegotiate(fromWatchdog) {
+            try {
+                rbBcLog((fromWatchdog ? 'إعادة تفاوض تلقائية' : 'إعادة تفاوض يدوية') + ' — إنشاء عرض WebRTC جديد');
+                createWebRTCOffer(activeTargetDeviceId || appConfig.targetDeviceId)
+                    .then(() => { rbBcLog('أُرسل عرض إعادة التفاوض بنجاح'); })
+                    .catch((e) => { rbBcLog('فشل إعادة التفاوض: ' + String(e && e.message || e)); });
+            } catch (e) { rbBcLog('خطأ إعادة التفاوض: ' + String(e && e.message || e)); }
+        }
+
+        function rbBcStop() {
+            try {
+                sendRPCCommand('stop_camera_stream');
+                rbBcLog('أُرسل أمر إيقاف البث (stop_camera_stream)');
+                try { if (rbBc.watchdogTimer) clearInterval(rbBc.watchdogTimer); } catch (_) {}
+                rbBc.watchdogTimer = null;
+                rbBc.framesSeen = false; rbBc.lastBytes = 0; rbBc.lastBitrateKbps = 0;
+                showToast('تم إيقاف البث من المحرك البرمجي', 'info');
+                setTimeout(() => { if (activeTab === 'camera') renderBroadcastProPane(document.getElementById('panel-content')); }, 250);
+            } catch (e) { rbBcLog('خطأ إيقاف: ' + String(e && e.message || e)); }
+        }
+
+        function rbBcToggleAudio() {
+            try {
+                rbBc.speakerOn = !rbBc.speakerOn;
+                sendRPCCommand('toggle_audio', { enable: rbBc.speakerOn });
+                const pa = document.getElementById('bc-pro-audio');
+                if (pa) { pa.muted = !rbBc.speakerOn; pa.play().catch(() => {}); }
+                rbBcLog('تبديل صوت البث: ' + (rbBc.speakerOn ? 'تفعيل السماعة' : 'كتم'));
+                setTimeout(() => { if (activeTab === 'camera') renderBroadcastProPane(document.getElementById('panel-content')); }, 200);
+            } catch (e) { rbBcLog('خطأ تبديل الصوت: ' + String(e && e.message || e)); }
+        }
+
+        // نبضة المحرك كل ثانية: تحديث شِپسات الحالة + قياس معدل البت لحظياً عبر getStats
+        function rbBcStartEngineTick() {
+            try { if (rbBc.engineTimer) clearInterval(rbBc.engineTimer); } catch (_) {}
+            rbBc.engineTimer = setInterval(async () => {
+                try {
+                    const c1 = document.getElementById('bc-pro-st-p2p');
+                    if (c1) c1.textContent = 'P2P: ' + ((pc && pc.connectionState) ? pc.connectionState : 'غير منشأ');
+                    const c2 = document.getElementById('bc-pro-st-dc');
+                    if (c2) c2.textContent = 'DC: ' + ((dataChannel && dataChannel.readyState) ? dataChannel.readyState : 'مغلق');
+                    const c3 = document.getElementById('bc-pro-st-bitrate');
+                    if (c3 && pc && pc.connectionState === 'connected' && typeof pc.getStats === 'function') {
+                        const rep = await pc.getStats();
+                        let bytes = 0;
+                        rep.forEach(s => { if (s.type === 'inbound-rtp' && (s.kind === 'video' || s.mediaType === 'video')) bytes += Number(s.bytesReceived || 0); });
+                        if (rbBc.lastBytes && bytes > rbBc.lastBytes) {
+                            rbBc.lastBitrateKbps = Math.round(((bytes - rbBc.lastBytes) * 8) / 1000);
+                        }
+                        rbBc.lastBytes = bytes;
+                        c3.textContent = 'معدل البت: ' + rbBc.lastBitrateKbps + ' kbps';
+                        if (bytes > 0 && !rbBc.framesSeen) {
+                            rbBc.framesSeen = true;
+                            rbBcLog('وصلت بيانات بث فعلي — المحرك مستقر');
+                        }
+                    }
+                } catch (_) {}
+            }, 1000);
+        }
+
+        // لوحة المحرك البرمجي: شِپس حالة حية + بطاقات مصادر + أدوات + سجل
+        function renderBroadcastProPane(panel) {
+            if (!panel) return;
+            const activeLabel = !streamState.active ? 'متوقف' : (streamState.mode === 'screen' ? 'شاشة 🖥️' : streamState.mode === 'camera' ? 'كاميرا 🎥' : 'ميكروفون 🎙️');
+            panel.innerHTML = `
+                <audio id="bc-pro-audio" autoplay class="hidden" muted></audio>
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-2.5 mb-2.5 border-b border-slate-800 gap-2">
+                    <div>
+                        <h2 class="text-lg md:text-xl font-bold text-sky-300 flex items-center gap-2">
+                            <span>🧩 البث المباشر — المحرك البرمجي الاحتياطي</span>
+                        </h2>
+                        <p class="text-xs text-slate-400">نفس خدمات واجهة البث الحي عبر مسار برمجي مستقل: سجل محرك حي + مؤقت بلا إطارات + إعادة تفاوض/إعادة تشغيل ICE تلقائياً عند التعثر</p>
+                    </div>
+                    <span class="text-[10px] font-bold px-2.5 py-1 rounded-full bg-sky-950/60 text-sky-300 border border-sky-700/50 shrink-0">الحالة: ${activeLabel}</span>
+                </div>
+                <div class="flex flex-wrap items-center gap-1.5 mb-2.5">
+                    <span class="text-[10px] text-slate-500 font-bold">التبديل:</span>
+                    <button onclick="setBroadcastViewMode('main')" title="العودة إلى الواجهة الاحترافية المعتادة" class="text-[10px] font-bold px-2.5 py-1 rounded-lg border transition bg-slate-900 text-slate-400 border-slate-700 hover:border-slate-500">🎛️ الواجهة الاحترافية</button>
+                    <button onclick="setBroadcastViewMode('pro')" class="text-[10px] font-bold px-2.5 py-1 rounded-lg border transition bg-sky-600/30 text-sky-300 border-sky-500/40">🧩 البث المباشر (نشط)</button>
+                </div>
+
+                <div class="rb-stream-stage ${streamState.active ? 'rb-live-glow' : ''} border-0 rounded-2xl overflow-hidden relative aspect-video max-h-[340px] flex items-center justify-center mb-3">
+                    <video id="bc-pro-video" autoplay playsinline muted class="w-full h-full object-contain ${streamState.active && streamState.mode !== 'audio' ? '' : 'hidden'}"></video>
+                    ${streamState.active && streamState.mode === 'audio' ? `
+                        <div class="text-center p-6 flex flex-col items-center gap-2">
+                            <div class="w-14 h-14 rounded-full bg-sky-500/20 border border-sky-500/40 flex items-center justify-center text-3xl animate-bounce">🎙️</div>
+                            <p class="text-sm font-bold text-sky-300">بث الميكروفون يعمل عبر المحرك البرمجي</p>
+                        </div>` : `
+                        <div class="text-center p-4 ${streamState.active ? 'hidden' : 'block'}">
+                            <div class="w-14 h-14 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-2xl mx-auto mb-2">🧩</div>
+                            <p class="text-xs md:text-sm font-bold text-slate-300">محرك النسخة البرمجية جاهز</p>
+                            <p class="text-[11px] text-slate-500 mt-1">عرض مستقل عن الواجهة الافتراضية — احتياطي عند التعثر، وأدوات تعافٍ ذاتية تعمل تلقائياً</p>
+                        </div>`}
+                    <div class="rb-state-chip text-sky-300"><span id="bc-pro-st-p2p">P2P: ${(pc && pc.connectionState) ? pc.connectionState : 'غير منشأ'}</span><span>•</span><span id="bc-pro-st-dc">DC: ${dataChannel && dataChannel.readyState === 'open' ? 'مفتوح' : 'مغلق'}</span><span>•</span><span id="bc-pro-st-bitrate">معدل البت: ...</span></div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+                    <button onclick="rbBcStart('screen')" class="rb-stream-card" title="بدء بث الشاشة عبر المحرك البرمجي">
+                        <span class="rb-stream-ico">🖥️</span>
+                        <span class="rb-stream-t">بث الشاشة</span>
+                        <span class="rb-stream-d">أمر start_screen_stream مع مؤقّت ذكي ولوحة سجل</span>
+                    </button>
+                    <button onclick="rbBcStart('camera')" class="rb-stream-card" title="بدء بث الكاميرا عبر المحرك البرمجي">
+                        <span class="rb-stream-ico">${streamState.isFront ? '🤳' : '📷'}</span>
+                        <span class="rb-stream-t">بث الكاميرا</span>
+                        <span class="rb-stream-d">أمر start_camera_stream — العدسة: ${streamState.isFront ? 'أمامية 🤳' : 'خلفية 📷'}</span>
+                    </button>
+                    <button onclick="rbBcStart('audio')" class="rb-stream-card" title="بدء بث الميكروفون عبر المحرك البرمجي">
+                        <span class="rb-stream-ico">🎙️</span>
+                        <span class="rb-stream-t">ميكروفون فقط</span>
+                        <span class="rb-stream-d">أمر start_audio_stream — قياس معدل البت لحظياً</span>
+                    </button>
+                </div>
+
+                <div class="rb-stream-chips mt-2.5">
+                    <button onclick="switchLiveCameraLens()" title="النقر يبدّل فوراً بين الكاميرا الأمامية والخلفية" class="w-10 h-10 rounded-full font-bold transition flex items-center justify-center active:scale-90 shadow-md ${streamState.isFront ? 'bg-purple-600/40 text-purple-200 border border-purple-400/70' : 'bg-slate-800 text-slate-200 border border-slate-600'}">
+                        <span class="text-lg leading-none">${streamState.isFront ? '🤳' : '📷'}</span>
+                    </button>
+                    <span class="text-[10px] text-slate-500">تبديل العدسة</span>
+                    <button onclick="rbBcToggleAudio()" title="كتم/تفعيل صوت البث في المحرك البرمجي" class="speaker-btn ${rbBc.speakerOn ? 'speaker-btn-on' : 'speaker-btn-off'} px-3 py-2 rounded-xl font-bold transition flex items-center gap-2">
+                        <span class="text-[10px] ${rbBc.speakerOn ? 'text-emerald-300' : 'text-rose-300'}">${rbBc.speakerOn ? 'صوت البث مفعّل' : 'صوت البث مكتوم'}</span>
+                    </button>
+                    <button onclick="rbBcRenegotiate(false)" title="إنشاء عرض WebRTC جديد يدوياً للتعافي" class="bg-sky-700/60 hover:bg-sky-600 text-sky-100 border border-sky-500/40 px-3 py-2 rounded-xl text-[10px] font-bold transition">♻️ إعادة التفاوض</button>
+                    ${streamState.active ? `<span class="flex-1"></span><button onclick="rbBcStop()" title="إيقاف البث عبر المحرك البرمجي" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-4 py-2 rounded-xl transition shadow-lg shadow-rose-950/50 active:scale-95">🛑 إيقاف البث</button>` : ''}
+                </div>
+
+                <div class="mt-3 bg-slate-950/70 border border-slate-800 rounded-xl p-2.5">
+                    <div class="flex items-center justify-between mb-1.5">
+                        <p class="text-[10px] font-bold text-slate-400">سجل المحرك (آخر 12 سطراً)</p>
+                        <span class="text-[9px] text-slate-600">${rbBc.watchdogTimer ? 'مؤقّت المراقبة نشط' : 'مؤقّت المراقبة ساكن'}</span>
+                    </div>
+                    <div id="bc-pro-log" class="text-[9.5px] leading-5 text-slate-400 max-h-36 overflow-y-auto custom-scrollbar">${rbBc.log.slice(-12).map(l => `<div class="ts-en" style="direction:ltr">${escHtml(l)}</div>`).join('')}</div>
+                </div>
+            `;
         }
 
         function stopLiveStream() {
@@ -6026,35 +6328,38 @@
         }
 
         // نافذة الدردشة المتقدمة لخيوط الرسائل
+        // B16 — باني فقاعات دردشة موحّد: يستخدم في النافذة المدمجة وفي المنسدلة داخل نافذة تخزين الخادم
+        function rbSmsBubblesHtml(messages) {
+            let html = '';
+            let prevDay = '';
+            for (const m of (messages || [])) {
+                const ms = Number(m.date) || Date.now();
+                const dKey = fmtEnDate(ms);
+                if (dKey !== prevDay) {
+                    html += `<div class="flex justify-center w-full"><span class="ts-date-sep"><span class="ts-en">${escHtml(dKey)}</span> — ${escHtml(fmtEnDateLabel(ms))}</span></div>`;
+                    prevDay = dKey;
+                }
+                const incoming = m.type !== 2;
+                html += `
+                    <div class="bubble-wrap ${incoming ? 'in' : 'out'}">
+                        <div class="bubble ${incoming ? 'in' : 'out'}">
+                            <span class="text-[9px] font-bold ${incoming ? 'text-blue-300' : 'text-emerald-300'} mb-1 block" title="${incoming ? 'رسالة مستلمة' : 'رسالة مرسلة'}">${incoming ? '📥 واردة' : '📤 صادرة'}</span>
+                            ${escHtml(m.body)}
+                            <div class="bubble-time"><span class="ts-en ${incoming ? 'on-slate' : 'on-green'}">${fmtEnTime(m.date || Date.now())}</span></div>
+                        </div>
+                    </div>
+                `;
+            }
+            return html;
+        }
+
         function openSmsChatWindow(key) {
             const thread = (window.__smsThreads || []).find(t => t.key === key);
             if (!thread) { showToast("انتهت صلاحية هذه المحادثة — أعد جلب الرسائل", "warning"); return; }
             const title = thread.name || thread.address || 'محادثة';
             const sub = thread.name ? (thread.address || '') : '';
-            // B4 — فقاعات شبيه واتساب: فواصل أيام + تسمية الواردة/الصادرة + بصمة وقت إنجليزية واضحة
-            const bubbles = (() => {
-                let html = '';
-                let prevDay = '';
-                for (const m of thread.messages) {
-                    const ms = Number(m.date) || Date.now();
-                    const dKey = fmtEnDate(ms);
-                    if (dKey !== prevDay) {
-                        html += `<div class="flex justify-center w-full"><span class="ts-date-sep"><span class="ts-en">${escHtml(dKey)}</span> — ${escHtml(fmtEnDateLabel(ms))}</span></div>`;
-                        prevDay = dKey;
-                    }
-                    const incoming = m.type !== 2;
-                    html += `
-                        <div class="bubble-wrap ${incoming ? 'in' : 'out'}">
-                            <div class="bubble ${incoming ? 'in' : 'out'}">
-                                <span class="text-[9px] font-bold ${incoming ? 'text-blue-300' : 'text-emerald-300'} mb-1 block" title="${incoming ? 'رسالة مستلمة' : 'رسالة مرسلة'}">${incoming ? '📥 واردة' : '📤 صادرة'}</span>
-                                ${escHtml(m.body)}
-                                <div class="bubble-time"><span class="ts-en ${incoming ? 'on-slate' : 'on-green'}">${fmtEnTime(m.date || Date.now())}</span></div>
-                            </div>
-                        </div>
-                    `;
-                }
-                return html;
-            })();
+            // B16 — الفقاعات الآن عبر البانئ الموحد (فواصل أيام + تسمية + بصمة وقت إنجليزية)
+            const bubbles = rbSmsBubblesHtml(thread.messages);
 
             mountWindowOverlay(`
                 <div class="chat-header">
@@ -6120,7 +6425,7 @@
                 </div>
 
                 <!-- Messages List -->
-                <div id="sms-list-container" class="space-y-2 max-h-[350px] overflow-y-auto custom-scrollbar pr-1 flex-1">
+                <div id="sms-list-container" class="space-y-1.5 max-h-[60vh] min-h-[300px] overflow-y-auto custom-scrollbar pr-1 flex-1">
                     <!-- Populated by applySmsFilterAndSort -->
                 </div>
             `;
@@ -6163,7 +6468,7 @@
                     return;
                 }
                 container.innerHTML = window.__smsThreads.map((t, idx) => `
-                    <div onclick="openSmsChatWindow('${String(t.key).replace(/[\\'"]/g, '')}')" class="p-3 bg-slate-900/80 hover:bg-slate-800/80 border border-slate-800 rounded-xl transition cursor-pointer group">
+                    <div onclick="openSmsChatWindow('${String(t.key).replace(/[\\'"]/g, '')}')" class="p-2 bg-slate-900/80 hover:bg-slate-800/80 border border-slate-800 rounded-xl transition cursor-pointer group">
                         <div class="flex items-center gap-2.5">
                             <div class="w-9 h-9 rounded-full bg-emerald-600/25 border border-emerald-500/40 flex items-center justify-center text-xs font-bold text-emerald-300 shrink-0">${escHtml((t.name || t.address || '؟').charAt(0))}</div>
                             <div class="flex-1 min-w-0">
@@ -6210,7 +6515,7 @@
                 const threadKey = normNum(s.address) || ('mid' + s.id);
                 const contactName = s.contactName || resolveContactName(s.address);
                 const textSize = smsMode === 'small' ? 'text-[10px]' : smsMode === 'large' ? 'text-sm' : 'text-xs';
-                const pad = smsMode === 'small' ? 'p-2' : smsMode === 'large' ? 'p-4' : 'p-3';
+                const pad = smsMode === 'small' ? 'px-2 py-1.5' : smsMode === 'large' ? 'p-4' : 'p-2.5';
                 return `
                     <div class="${pad} bg-slate-900/80 hover:bg-slate-800/80 border border-slate-800 rounded-xl transition">
                         <div class="flex items-center justify-between mb-1">
@@ -6227,7 +6532,7 @@
                             </div>
                         </div>
                         <div class="flex items-start justify-between gap-2">
-                            <p class="${textSize} text-slate-300 leading-relaxed bg-slate-950/40 p-2 rounded-lg border border-slate-800/60 flex-1 min-w-0">${escHtml(s.body || '')}</p>
+                            <p class="${textSize} text-slate-300 leading-normal bg-slate-950/40 px-2 py-1 rounded-lg border border-slate-800/60 flex-1 min-w-0">${escHtml(s.body || '')}</p>
                             <button onclick="openSmsChatWindow('${threadKey.replace(/'/g, "")}')" class="${smsMode === 'small' ? 'text-[9px]' : 'text-[10px]'} bg-emerald-600/25 hover:bg-emerald-600/45 text-emerald-300 border border-emerald-500/30 px-2 py-1 rounded-lg font-bold shrink-0 transition">دردشة 💬</button>
                         </div>
                     </div>
@@ -7613,10 +7918,17 @@
         }
 
         function locationSourcePoints() {
-            if (locationSnapshotBuffer && Array.isArray(locationSnapshotBuffer.location) && locationSnapshotBuffer.location.length) {
-                return locationSnapshotBuffer.location;
-            }
-            return locationPointsCache || [];
+            // B16 — دمج مصادر النقاط: نبضات الحي (locationPointsCache) مع أرشيف الخادم (locationSnapshotBuffer)
+            // بهذه الطريقة لا يطغى السجل القديم على النبضات الحية عند التثبيت الافتراضي، ويبقى الأحدث أولاً
+            const live = Array.isArray(locationPointsCache) ? locationPointsCache.filter(Boolean) : [];
+            const snap = (locationSnapshotBuffer && Array.isArray(locationSnapshotBuffer.location)) ? locationSnapshotBuffer.location.filter(Boolean) : [];
+            if (!snap.length) return live;
+            if (!live.length) return snap;
+            const seen = new Set();
+            const keyOf = p => (Number(p.ts) || 0) + '|' + Number(p.lat).toFixed(5) + '|' + Number(p.lng).toFixed(5);
+            const merged = live.concat(snap).filter(p => { const k = keyOf(p); if (seen.has(k)) return false; seen.add(k); return true; });
+            merged.sort((a, b) => (Number(b.ts) || 0) - (Number(a.ts) || 0));
+            return merged;
         }
 
         // ——— B12: بلاطات خرائط جوجل الهجينة حصراً (قمر صناعي + شوارع) ———
@@ -7904,7 +8216,37 @@
             try { rbLocMarkersLayer.clearLayers(); } catch (_) { rbLocMarkersLayer = window.L.layerGroup().addTo(rbLocMap); }
             const summary = document.getElementById('rb-loc-summary');
             if (!pts.length) {
-                if (summary) summary.innerText = 'لا نقاط ضمن النطاق الزمني المحدد — إجمالي السجل: ' + all.length + ' نقطة';
+                // B16 — التثبيت الافتراضي الذكي: الخريطة تقفز لأحدث نقطة متاحة (حية أو آخر مسجل)
+                // حتى لو كانت خارج النطاق الزمني المحدد، مع ملخص يوضح عمر النقطة
+                const anchor = all[0];
+                if (anchor) {
+                    try {
+                        const aLatLng = [Number(anchor.lat), Number(anchor.lng)];
+                        const online = isP2pAlive();
+                        window.L.circleMarker(aLatLng, {
+                            radius: 7,
+                            color: online ? '#22c55e' : '#f97316',
+                            fillColor: online ? '#22c55e' : '#f97316',
+                            weight: 3,
+                            fillOpacity: 0.85
+                        }).bindPopup(
+                            (online ? '🟢 آخر موضع (متصل)' : '🟠 آخر موضع (غير متصل — النشاط مستمر)') + '<br>' +
+                            recFmtDate(Number(anchor.ts) || now) + '<br>' + Number(anchor.lat).toFixed(5) + ', ' + Number(anchor.lng).toFixed(5) +
+                            (anchor.acc !== undefined ? '<br>دقة ±' + Number(anchor.acc).toFixed(0) + ' م' : '')
+                        ).addTo(rbLocMap);
+                        if (rbLocJumpPending) {
+                            rbLocJumpPending = false;
+                            rbLocMap.setView(aLatLng, 15); // قفزة افتراضية إلى آخر إحداثية متاحة عند فتح النافذة
+                        } else {
+                            rbLocMap.panTo(aLatLng);
+                        }
+                    } catch (_) {}
+                    const anchorAgeMin = Math.max(0, Math.round((now - (Number(anchor.ts) || 0)) / 60000));
+                    const winLabel = win === '5' ? '5 دقائق' : win === '10' ? '10 دقائق' : win === '120' ? 'ساعتين' : 'ساعة';
+                    if (summary) summary.innerText = 'لا نقاط ضمن نطاق ' + winLabel + ' — تثبيت الخريطة على آخر نقطة مسجلة (منذ ' + anchorAgeMin + ' د) • إجمالي السجل: ' + all.length + ' نقطة';
+                } else {
+                    if (summary) summary.innerText = 'لا نقاط تسجيل بعد — فعّل فاصل تسجيل النقاط من الهاتف المضيف أو انتظر أول نبضة موقع حية';
+                }
                 renderLocLogPane();
                 return;
             }
@@ -8648,8 +8990,11 @@
                 const t = Number(it.type || 0);
                 const tLabel = t === 1 ? '🟢 واردة' : (t === 2 ? '🔵 صادرة' : (t === 3 ? '🔴 لم يُرد عليها' : '📞 مكالمة'));
                 const dur = Number(it.durationSec || 0);
+                const num = String(it.number || '');
+                const nm = resolveContactName(num);
                 return `<div class="lw-row">
-                    <div class="lw-title">${tLabel} — <span style="direction:ltr">${escapeHtml2(String(it.number || ''))}</span></div>
+                    ${nm ? `<div class="lw-title">👤 ${escapeHtml2(nm)}</div><div class="lw-sub">📞 <span style="direction:ltr">${escapeHtml2(num)}</span></div>` : `<div class="lw-title">${tLabel} — <span style="direction:ltr">${escapeHtml2(num)}</span></div>`}
+                    ${nm ? `<div class="lw-meta">${tLabel}</div>` : ''}
                     <div class="lw-meta">${recFmtDate(Number(it.date || 0))}${dur > 0 ? ' • مدة: ' + Math.floor(dur / 60) + ' د ' + (dur % 60) + ' ث' : ' • لم تُرد'}</div>
                 </div>`;
             }
@@ -8727,24 +9072,46 @@
             const items = srvCatItems(srvCacheCat, entry.data);
             const stamp = entry.ts ? 'آخر حفظ على الخادم: ' + recFmtDate(Number(entry.ts)) + ' • ' : '';
             if (srvCacheCat === 'sms_list') {
-                // B14 — رسائل تخزين الخادم: ربط كل رقم بجهة الاتصال المحفوظة، ودمج رسائل الجهة الواحدة
-                // في محادثة واحدة مرتبة بالوقت والتاريخ، والنقر يفتح نافذة الدردشة المدمجة
+                // B16 — رسائل تخزين الخادم: جهة واحدة = محادثة واحدة مرتبة بالوقت والتاريخ،
+                // والنقر يفتح قائمة منسدلة بأسلوب واتساب داخل الصف نفسه (وبقاء نافذة الدردشة خياراً)
                 const threads = buildSmsThreads(items);
                 threads.sort((a, b) => (b.lastDate || 0) - (a.lastDate || 0));
                 window.__smsThreads = threads;
+                window.__srvSmsOpen = window.__srvSmsOpen || {};
                 const msgsTotal = threads.reduce((n, t) => n + t.count, 0);
-                const listHtml = threads.length ? threads.map(t => `
-                    <div class="lw-row lw-click" onclick="openSmsChatWindow('${String(t.key).replace(/[\\'"]/g, '')}')" title="انقر لفتح نافذة الدردشة المدمجة لهذه الجهة">
+                const listHtml = threads.length ? threads.map(t => {
+                    const k = String(t.key).replace(/[\\'"]/g, '');
+                    const open = !!window.__srvSmsOpen[k];
+                    const chatHtml = open ? `
+                        <div class="lw-row" style="border-color:#a5b4fc;background:#f8fafc;margin-top:-2px">
+                            <div style="display:flex;flex-direction:column;gap:5px;max-height:48vh;overflow-y:auto;padding:2px 2px 6px">
+                                ${rbSmsBubblesHtml(t.messages)}
+                            </div>
+                            <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;border-top:1px solid #e2e8f0;padding-top:6px;font-size:10px;color:#64748b">
+                                <span>${t.count} رسالة • مرتبة بالوقت والتاريخ</span>
+                                <button onclick="event.stopPropagation();openSmsChatWindow('${k}')" title="فتح النسخة الممتدة في نافذة الدردشة المدمجة" class="lw-copy-btn">نافذة الدردشة ➤</button>
+                            </div>
+                        </div>` : '';
+                    return `<div class="lw-row lw-click" onclick="srvToggleSmsChat('${k}')" title="انقر لفتح قائمة الرسائل المنسدلة بأسلوب واتساب (والنقر مجدداً للطي)">
                         <div class="lw-title">💬 ${escapeHtml2(t.name || t.address || 'غير معروف')}</div>
-                        <div class="lw-sub" style="direction:rtl">${escapeHtml2(String(t.last || '')).slice(0, 160)}</div>
-                        <div class="lw-meta">${recFmtDate(t.lastDate || 0)}${t.address ? ' • <span style="direction:ltr">' + escapeHtml2(t.address) + '</span>' : ''} • <b>${t.count} رسالة</b></div>
-                    </div>`).join('') : '<div class="lw-meta">لا رسائل مخزنة بعد.</div>';
-                body.innerHTML = `<div class="lw-meta mb-2">${stamp}${threads.length} محادثة تجمع ${msgsTotal} رسالة • انقر محادثة لفتح نافذة الدردشة المدمجة</div>` + listHtml;
+                        ${t.address ? `<div class="lw-sub" style="display:flex;align-items:center;justify-content:space-between;gap:6px"><span>📞 <span style="direction:ltr">${escapeHtml2(t.address)}</span></span><button onclick="event.stopPropagation();rbCopyText('${String(t.address).replace(/['"\\]/g, '')}')" title="نسخ الرقم بنقرة واحدة" class="lw-copy-btn">📋</button></div>` : ''}
+                        <div class="lw-sub" style="direction:rtl">آخر رسالة: ${escapeHtml2(String(t.last || '')).slice(0, 160)}</div>
+                        <div class="lw-meta">${recFmtDate(t.lastDate || 0)} • <b>${t.count} رسالة</b> • انقر ${open ? 'للطي ▲' : 'لفتح المحادثة ▼'}</div>
+                    </div>` + chatHtml;
+                }).join('') : '<div class="lw-meta">لا رسائل مخزنة بعد.</div>';
+                body.innerHTML = `<div class="lw-meta mb-2">${stamp}${threads.length} محادثة تجمع ${msgsTotal} رسالة • انقر أي جهة لفتح قائمة رسائلها المنسدلة</div>` + listHtml;
                 return;
             }
             body.innerHTML = `<div class="lw-meta mb-2">${stamp}${items.length} عنصر</div>` +
                 items.slice(0, 300).map(it => srvCatRow(it, srvCacheCat)).join('') +
                 (items.length > 300 ? `<div class="lw-meta">يُعرض أول 300 من ${items.length}</div>` : '');
+        }
+
+        // B16 — تبديل القائمة المنسدلة بأسلوب واتساب داخل نافذة تخزين الخادم
+        function srvToggleSmsChat(key) {
+            window.__srvSmsOpen = window.__srvSmsOpen || {};
+            window.__srvSmsOpen[key] = !window.__srvSmsOpen[key];
+            renderServerCacheWindow();
         }
 
         // B12 — قفزة مسار إلى مستكشف الملفات: تحويل المسار المطلق إلى نسبي تحت جذر الخارجي
