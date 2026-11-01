@@ -1,9 +1,8 @@
-feat: الدفعة B19 — توسعة صلاحيات الهاتف المضيف إلى 15 بطاقة وتحرير بيانات الاتصال وإصدار 1.4.0
+feat: الدفعة B20 — علاج إعادة البث بعد الإيقاف الأول وتشغيل الوسائط بكل الأحجام وشارة التنزيل الحية والمسار المرقّم — إصدار 1.4.1
 
-- البيان: إذنيات SEND_SMS و CALL_PHONE و ANSWER_PHONE_CALLS و WRITE_CONTACTS و WRITE_CALL_LOG و MODIFY_AUDIO_SETTINGS و BLUETOOTH_CONNECT و SYSTEM_ALERT_WINDOW و WRITE_SETTINGS و WRITE_SECURE_SETTINGS
-- تسجيل خدمة إمكانية الوصول (HostAccessibilityService) ومتلقّي مدير الجهاز (HostDeviceAdminReceiver) في البيان
-- ملفّا تكوين جديدان: res/xml/accessibility_service_config.xml و res/xml/device_admin.xml
-- بطاقات أذونات الإعدادات: من 6 إلى 15 بطاقة مع فحوص حية وأهداف لمس آمنة ومطابقة الألوان للتباين
-- بطاقة تحرير بيانات الاتصال في شاشة المضيف: خادم الإشارات وخادم STUN ونمط النقل واسم الجهاز مع حفظ واستعادة افتراضات
-- دوال HostViewModel.saveConnectionSettings و HostViewModel.restoreConnectionDefaults عبر SettingsRepository
-- رفع الإصدار إلى versionCode 5 و versionName 1.4.0
+- المضيف (PeerConnectionManager.kt): تفريغ المرسلين قبل الإتلاف في stopStreaming عبر setTrack(null)، ومعرّفات مسارات فريدة (RBV/RBA بعدّاد trackSeq) في مواضع الإنشاء الستة، وإعادة محاولة واحدة في startCameraStreaming عند رفض Camera2 لحظة الإيقاف
+- المتحكم (web-dashboard/index.html): دالة rbSyncRemoteTracksFromReceivers تقرأ pc.getReceivers() وتعيد ربط remote-video و remote-audio ومرايا الاستوديو والمحرك، مع جدولة 300/900/2000 و 500/1500/3000 ملّي ثانية بعد الإجابة ونبض البث وبلوغ الاتصال
+- الوسائط: رفع حد بوابة المعاينة من 3 ميجابايت إلى 512 ميجابايت (حد استحالة قناة البيانات) وتحديث النصوص الملازمة — التشغيل والتنزيل من الاستوديو والتسجيلات ومجلدات الأرشيف بكل الأحجام
+- شارة التنزيل الحية: سجل rbDlJobs يتغذى من pullHostContent عند كل نبضة 300 ملّي ثانية، مع شارة عائمة تعرض النسبة المئوية والزمن المتوقع وشريط تقدّم متحركاً وعدّاد المهام وميض نجاح أو فشل
+- الخريطة: مسار مرقّم من 1 حتى نقطة النهاية بعلامتي بداية ونهاية على بلاطات جوجل الهجينة، وتوجيه خط المسار وكل العلامات إلى طبقة تُمسَح قبل الرسم بدل التراكب المتراكم
+- رفع الإصدار إلى versionCode 6 و versionName 1.4.1

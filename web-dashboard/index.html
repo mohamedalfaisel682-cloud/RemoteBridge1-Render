@@ -2314,6 +2314,7 @@
                 if (pc.connectionState === "connected") {
                     // B16 — نفس التثبيت: لا إعلان إلا بعد استقرار الحالة وفتح قناة البيانات
                     rbAnnouncePeerConnected();
+                    rbSyncSchedule([500, 1500, 3000]); // B20 — مزامنة المسارات عند بلوغ الاتصال كاملاً (تغطي إعادة بناء العميل)
                 } else if (pc.connectionState === "failed" || pc.connectionState === "closed") {
                     rbAnnouncePeerFail();
                 }
@@ -2356,6 +2357,56 @@
             });
         }
 
+        // 🧩 B20 — مزامنة المسارات المستقبِلة مع مشاهد العرض: بعد استبدال مسار على
+        // المضيف (`replaceTrack`) لا يُطلق `ontrack` ثانياً فيتظل الزيّ مربوطاً بالوسيلة
+        // القديمة الميتة حتى إعادة الاتصال الكامل؛ هنا تُقرأ مستقبِلات `PeerConnection`
+        // وتُعاد ربط كل عناصر العرض بالمسار الحي فوراً (بعده انطفاء العلة كلياً).
+        function rbSyncRemoteTracksFromReceivers() {
+            try {
+                if (!pc || pc.connectionState === 'closed') return false;
+                const rect = (typeof pc.getReceivers === 'function') ? (pc.getReceivers() || []) : [];
+                let vTrack = null, aTrack = null;
+                rect.forEach(r => {
+                    const t = r && r.track;
+                    if (t && t.readyState === 'live') {
+                        if (t.kind === 'video' && !vTrack) vTrack = t;
+                        if (t.kind === 'audio' && !aTrack) aTrack = t;
+                    }
+                });
+                if (!vTrack && !aTrack) return false;
+                let changed = false;
+                if (!remoteMediaStream) remoteMediaStream = new MediaStream();
+                [['remote-video', vTrack], ['remote-audio', aTrack],
+                 ['bc-pro-video', vTrack], ['bc-pro-audio', aTrack],
+                 ['rb-studio-video', vTrack], ['rb-studio-audio', aTrack]].forEach(pair => {
+                    const el = document.getElementById(pair[0]);
+                    const t = pair[1];
+                    if (!el || !t) return;
+                    const cur = el.srcObject;
+                    const curLive = cur && cur.getTracks && cur.getTracks().some(x => x.id === t.id);
+                    if (curLive) return;
+                    if (!remoteMediaStream.getTracks().some(x => x.id === t.id)) {
+                        const old = remoteMediaStream.getTracks().find(x => x.kind === t.kind);
+                        if (old) { try { remoteMediaStream.removeTrack(old); } catch (_) {} }
+                        remoteMediaStream.addTrack(t);
+                    }
+                    el.srcObject = remoteMediaStream;
+                    if (t.kind === 'video') el.classList.remove('hidden');
+                    try { el.play().catch(() => {}); } catch (_) {}
+                    changed = true;
+                });
+                if (changed) {
+                    document.querySelectorAll('.rb-mp-idle, .rbv3-idle').forEach(el => { el.classList.add('hidden'); });
+                    console.log('%c[B20 rbSync] أُعيدت ربط المسارات المستقبِلة بكل مشاهد العرض', 'color: #22c55e; font-weight: bold;');
+                }
+                return changed;
+            } catch (e) { console.warn('[B20 rbSync]', e); return false; }
+        }
+        // B20 — استمزارات مزامنة مؤجلة: تجمع كل توأم التأخير (300/900/2000 م.ث) في استدعاء واحد
+        function rbSyncSchedule(delays) {
+            (delays || [300, 900, 2000]).forEach(ms => { setTimeout(() => { try { rbSyncRemoteTracksFromReceivers(); } catch (_) {} }, ms); });
+        }
+
         function handleRemoteAnswer(msg) {
             if (!pc) return;
             if (!pc.__expectingAnswer) {
@@ -2369,6 +2420,7 @@
                 console.log("%c[WebRTC Handshake] تم تطبيق Remote Description بنجاح وتأكيد القناة المباشرة!", "color: #10b981; font-weight: bold;");
                 showToast("تمت المصافحة وتأكيد القناة المباشرة!", "success");
                 updateWebRTCDiagnosticUI();
+                rbSyncSchedule([300, 900, 2000]); // B20 — إعادة ربط المسارات بعد اكتمال التفاوض
 
                 if (pendingRemoteIceCandidates.length > 0) {
                     console.log(`[WebRTC ICE Drain] إضافة (${pendingRemoteIceCandidates.length}) مرشحات ICE كانت معلقة في قائمة الانتظار...`);
@@ -2511,6 +2563,8 @@
                     const startedAt = Date.now();
                     let lastProgressAt = startedAt;
                     let lastGot = 0;
+                    // B20 — اسم مرافق للشارة الحية (هرمي: اسم معلن ← آخر مقطع مسار ← عام)
+                    const dlLabel = String(o.name || o.vaultName || (o.path ? (String(o.path).split(/[/\\]/).filter(Boolean).pop() || String(o.path)) : '') || 'محتوى الهاتف');
                     window.__rbContentHeaders = window.__rbContentHeaders || {};
                     const timer = setInterval(() => {
                         try {
@@ -2520,6 +2574,8 @@
                             const parts = activeFileDownloads[reqId] || [];
                             let got = 0; parts.forEach(p => { got += p.byteLength; });
                             if (got !== lastGot) { lastGot = got; lastProgressAt = Date.now(); }
+                            // B20 — تغذية الشارة الحية العائمة بنسبة هذا السحب وزمنه المتوقع
+                            rbDlOnProgress(reqId, dlLabel, got, total);
                             const st = document.getElementById('mp-status');
                             const pctText = total > 0 ? Math.min(100, Math.round((got / total) * 100)) + '%' : '...';
                             if (st) st.textContent = pctText + ' • ' + rbFmtMB(got) + (total > 0 ? ' / ' + rbFmtMB(total) : '');
@@ -2529,6 +2585,7 @@
                                 delete window.__rbContentHeaders[reqId];
                                 const blobParts = activeFileDownloads[reqId] || [];
                                 delete activeFileDownloads[reqId];
+                                rbDlOnDone(reqId, true, got);
                                 resolve({ blob: new Blob(blobParts, { type: o.mime || 'application/octet-stream' }), size: got, name: (hdr.completed && hdr.completed.name) || hdr.name || o.name || '' });
                                 return;
                             }
@@ -2536,6 +2593,7 @@
                             if (!hdr.started && !hdr.completed && got === 0 && (Date.now() - lastProgressAt) > 45000) {
                                 clearInterval(timer);
                                 delete activeFileDownloads[reqId];
+                                rbDlOnDone(reqId, false, got);
                                 reject(new Error('لم يبدأ الطرف الآخر بنقل الملف (لا رجل بدء ولا بايتات) — قد يتطلب تحديث إصدار التطبيق أو إعادة الربط'));
                                 return;
                             }
@@ -2543,14 +2601,149 @@
                                 clearInterval(timer);
                                 delete activeFileDownloads[reqId];
                                 delete window.__rbContentHeaders[reqId];
+                                rbDlOnDone(reqId, false, got);
                                 reject(new Error('انتهت مهلة سحب المحتوى (180 ثانية) — وصل ' + rbFmtMB(got) + ' من الملف'));
                             }
                         } catch (e2) { clearInterval(timer); reject(e2); }
                     }, 300);
                     try { dc.send(JSON.stringify({ id: reqId, cmd: cmd, params: params })); }
-                    catch (e3) { clearInterval(timer); delete activeFileDownloads[reqId]; reject(e3); }
+                    catch (e3) { clearInterval(timer); delete activeFileDownloads[reqId]; rbDlOnDone(reqId, false); reject(e3); }
                 } catch (e) { reject(e); }
             });
+        }
+
+        // ——— 🛬 B20 — شارة التنزيل الحية العائمة: نسبة مئوية + زمن متوقع + أيقونة متحركة ———
+        // تتجمع كل مهام السحب (ملف / مجلد / أرشيف ZIP / فتح المشغّل) في بطاقة واحدة
+        // تطفو في الإطار الرئيسي، مع وميض نجاح/فشل قصير بلا إزعاج للأجزاء الصغيرة.
+        (function rbDlStyleOnce() {
+            if (document.getElementById('rb-dl-style')) return;
+            const st = document.createElement('style');
+            st.id = 'rb-dl-style';
+            st.textContent = `
+                #rb-dl-badge{position:fixed;bottom:76px;left:14px;z-index:60;direction:rtl;width:266px;max-width:74vw;background:rgba(15,23,42,.95);border:1px solid rgba(22,163,74,.55);border-radius:16px;padding:10px 12px;color:#dcfce7;font-family:Segoe UI,Tahoma,Arial,sans-serif;box-shadow:0 8px 28px rgba(0,0,0,.5);pointer-events:none;opacity:1;transform:translateY(0);transition:opacity .35s ease,transform .35s ease}
+                #rb-dl-badge.rb-dl-out{opacity:0;transform:translateY(12px)}
+                #rb-dl-badge.rb-dl-ok{border-color:rgba(250,204,21,.75)}
+                #rb-dl-badge.rb-dl-err{border-color:rgba(185,28,28,.9)}
+                .rb-dl-top{display:flex;align-items:center;gap:8px;min-width:0}
+                .rb-dl-ic{width:20px;height:20px;border-radius:9999px;border:2.5px solid rgba(22,163,74,.3);border-top-color:#16a34a;animation:rbDlSpin .9s linear infinite;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px}
+                #rb-dl-badge.rb-dl-ok .rb-dl-ic,#rb-dl-badge.rb-dl-err .rb-dl-ic{animation:none;border:none;font-size:15px}
+                .rb-dl-pct{font-weight:800;font-size:13px;color:#ffffff;min-width:38px;text-align:left}
+                .rb-dl-name{font-size:11px;color:#bbf7d0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+                .rb-dl-barwrap{margin-top:6px;height:5px;border-radius:9999px;background:#1e293b;overflow:hidden}
+                .rb-dl-bar{height:100%;width:12%;border-radius:9999px;background:linear-gradient(90deg,#14532d,#16a34a);transition:width .45s ease}
+                .rb-dl-sub{margin-top:5px;display:flex;gap:8px;justify-content:space-between;font-size:10px;color:#94a3b8}
+                .rb-dl-eta{color:#cbd5e1}
+                .rb-dl-flash{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700}
+                @keyframes rbDlSpin{to{transform:rotate(360deg)}}
+                .rb-loc-numwrap{background:transparent;border:none}
+                .rb-loc-num{width:20px;height:20px;border-radius:9999px;background:rgba(20,83,45,.94);border:1px solid #16a34a;color:#f0fdf4;font:700 10.5px/19px Segoe UI,Tahoma,Arial;text-align:center;box-shadow:0 1px 5px rgba(0,0,0,.6)}
+                .rb-loc-cap{background:rgba(15,23,42,.9);border:1px solid rgba(22,163,74,.6);border-radius:9999px;padding:1px 7px;font-size:13px;box-shadow:0 1px 6px rgba(0,0,0,.55)}`;
+            document.head.appendChild(st);
+        })();
+        const rbDlMarkup = () => `
+                <div class="rb-dl-top">
+                    <div class="rb-dl-ic" aria-hidden="true">⬇</div>
+                    <span class="rb-dl-pct" id="rb-dl-pct">0%</span>
+                    <span class="rb-dl-name" id="rb-dl-name">جارٍ السحب من الهاتف…</span>
+                </div>
+                <div class="rb-dl-barwrap"><div class="rb-dl-bar" id="rb-dl-bar"></div></div>
+                <div class="rb-dl-sub"><span class="rb-dl-eta" id="rb-dl-eta">الزمن المتوقع: يجري حسابه…</span><span id="rb-dl-count"></span></div>`;
+        let rbDlJobs = {};
+        let rbDlFlash = null;
+        let rbDlBadgeTimer = null;
+        function rbDlFmtSec(sec) {
+            if (!isFinite(sec) || sec <= 0) return 'أوشكت على الانتهاء';
+            sec = Math.ceil(sec);
+            const m = Math.floor(sec / 60), s = sec % 60;
+            if (m <= 0) return sec + ' ث';
+            if (m < 60) return m + ' د' + (s > 0 ? ' ' + s + ' ث' : '');
+            return Math.floor(m / 60) + ' س ' + (m % 60) + ' د';
+        }
+        function rbDlBindBadge() {
+            let b = document.getElementById('rb-dl-badge');
+            if (b) return b;
+            b = document.createElement('div');
+            b.id = 'rb-dl-badge';
+            b.setAttribute('role', 'status');
+            b.setAttribute('aria-label', 'شارة جارٍ التنزيل مع النسبة المئوية والزمن المتوقع');
+            b.innerHTML = rbDlMarkup();
+            document.body.appendChild(b);
+            return b;
+        }
+        function rbDlTick() {
+            let b = document.getElementById('rb-dl-badge');
+            const jobs = Object.keys(rbDlJobs).map(k => rbDlJobs[k]).filter(j => j && !j.done);
+            if (jobs.length) {
+                if (!b) b = rbDlBindBadge();
+                b.classList.remove('rb-dl-out', 'rb-dl-ok', 'rb-dl-err');
+                // استعادة بنية العرض بعد أي وميض سابق
+                if (!document.getElementById('rb-dl-bar')) b.innerHTML = rbDlMarkup();
+                let gotAll = 0, totalAll = 0, knownTotal = false, newest = jobs[0];
+                jobs.forEach(j => {
+                    gotAll += Number(j.got) || 0;
+                    if (Number(j.total) > 0) { totalAll += Number(j.total); knownTotal = true; }
+                    if ((Number(j.updAt) || 0) >= (Number(newest.updAt) || 0)) newest = j;
+                });
+                const pct = knownTotal && totalAll > 0 ? Math.min(100, Math.round(gotAll / totalAll * 100)) : null;
+                const pctEl = document.getElementById('rb-dl-pct'), nameEl = document.getElementById('rb-dl-name'),
+                    bar = document.getElementById('rb-dl-bar'), etaEl = document.getElementById('rb-dl-eta'), cntEl = document.getElementById('rb-dl-count');
+                if (pctEl) pctEl.textContent = pct === null ? '⟳' : (pct + '%');
+                if (nameEl) nameEl.textContent = (newest && newest.name) || 'جارٍ السحب من الهاتف…';
+                if (bar) bar.style.width = (pct === null ? ((Number(newest && newest.got) > 0) ? 40 : 12) : pct) + '%';
+                if (etaEl) {
+                    if (pct === null) etaEl.textContent = 'جارٍ السحب: ' + rbFmtMB(gotAll);
+                    else {
+                        let eta = null;
+                        if (newest && Number(newest.total) > 0 && Number(newest.got) > 0) {
+                            const el = Math.max(0.5, (Date.now() - Number(newest.startedAt)) / 1000);
+                            const rate = Number(newest.got) / el;
+                            eta = Math.max(0, (Number(newest.total) - Number(newest.got)) / rate);
+                        }
+                        etaEl.textContent = pct >= 100 ? 'أوشكت على الانتهاء' : (eta !== null
+                            ? 'الزمن المتوقع: ' + rbDlFmtSec(eta)
+                            : rbFmtMB(gotAll) + ' من ' + rbFmtMB(totalAll));
+                    }
+                }
+                if (cntEl) cntEl.textContent = jobs.length > 1 ? ('مهام: ' + jobs.length) : '';
+                return;
+            }
+            // لا مهام نشطة — وميض الإتمام/الفشل قصيراً ثم إخفاء الشارة
+            const fl = rbDlFlash;
+            if (fl && Date.now() < Number(fl.until)) {
+                if (!b) b = rbDlBindBadge();
+                b.classList.remove('rb-dl-out');
+                b.classList.add(fl.ok ? 'rb-dl-ok' : 'rb-dl-err');
+                b.innerHTML = '<div class="rb-dl-flash" style="color:' + (fl.ok ? '#bbf7d0' : '#fecaca') + '"><span aria-hidden="true">' + (fl.ok ? '✅' : '❌') + '</span><span>' + (fl.ok ? 'اكتمل التنزيل ✓' : 'فشل التنزيل ✖') + (fl.name ? ' — ' + escapeHtml2(fl.name) : '') + '</span></div>';
+                return;
+            }
+            rbDlFlash = null;
+            if (b) {
+                b.classList.add('rb-dl-out');
+                setTimeout(() => { const el = document.getElementById('rb-dl-badge'); if (el && el.classList.contains('rb-dl-out')) el.remove(); }, 400);
+            }
+            clearInterval(rbDlBadgeTimer); rbDlBadgeTimer = null;
+        }
+        function rbDlOnProgress(reqId, name, got, total) {
+            try {
+                const j = rbDlJobs[reqId] || (rbDlJobs[reqId] = { got: 0, total: 0, startedAt: Date.now(), updAt: 0, name: '' });
+                j.name = name || j.name || 'ملف من الهاتف';
+                j.got = Number(got) || 0;
+                j.total = Number(total) || 0;
+                j.updAt = Date.now();
+                if (!rbDlBadgeTimer) { rbDlBadgeTimer = setInterval(rbDlTick, 500); rbDlBindBadge(); }
+                rbDlTick();
+            } catch (_) {}
+        }
+        function rbDlOnDone(reqId, ok, sizeBytes) {
+            try {
+                const j = rbDlJobs[reqId];
+                const nm = (j && j.name) || '';
+                const sz = Number(sizeBytes) || 0;
+                delete rbDlJobs[reqId];
+                // الأجزاء الصغيرة لا تستحق وميضاً يشتت العين — فقط المهام الفعلية تُظهر الشارة
+                if (!ok || sz >= 262144) rbDlFlash = { ok: !!ok, name: nm, until: Date.now() + 2600 };
+                rbDlTick();
+            } catch (_) {}
         }
 
         // —— هيكل المشغل (يُنشأ مرة واحدة) ——
@@ -3902,6 +4095,7 @@
                         streamState.audioEnabled = audioEnabled;
                         applyStreamMuteToElements();
                         ensureStreamRenegotiation();
+                        rbSyncSchedule([300, 900, 2000]); // B20 — مزامنة فورية للمسارات بعد نبض بدء البث
                         rbLiveClockEnsure();
                         showToast(`✅ البث الحي بدأ فعلياً على المضيف (${mode === 'audio' ? 'ميكروفون' : mode === 'camera' ? 'كاميرا' : 'شاشة'}) — جارٍ استلام الإطارات`, "success");
                         rbRefreshStreamPane();
@@ -4907,7 +5101,7 @@
                     <div class="flex items-center justify-center bg-slate-950/60 rounded-xl overflow-hidden" style="min-height:200px">${body}</div>
                     <div class="text-[10px] text-slate-400 mt-2 text-center"><span class="ts-en">${fmtEnTime(it.dateMs || Date.now())}</span> • ${kindTxt}${it.size ? ' • ' + rbFmtMB(Number(it.size)) : ''}${Number(it.durationMs || 0) > 0 ? ' • المدة: ' + Math.floor(Number(it.durationMs) / 60000) + ':' + String(Math.floor((Number(it.durationMs) % 60000) / 1000)).padStart(2, '0') : ''}</div>
                     ${it.path ? `<div class="text-[10px] mt-1.5 text-center border-t border-slate-800 pt-1.5"><span class="text-sky-400 underline cursor-pointer" onclick="closeStudioPreview(); rbJumpToExplorerDir('${String(it.path).replace(/\\/g, '/').replace(/'/g, '')}')">📂 المسار: <span style="direction:ltr">${escHtml(String(it.path))}</span> — انقر للانتقال إلى مجلد الملف في مستكشف الملفات</span></div>` : ''}
-                    ${Number(it.size || 0) > rbMedia3MBLimit() ? '<div class="text-[9px] text-amber-400/90 mt-1 text-center">⚠️ الحجم أكبر من 3 ميجابايت — التشغيل والتنزيل من هنا معطّل، استخدم زر المسار أعلاه للمعاينة أو التحميل في مستكشف الملفات</div>' : ''}
+                    ${Number(it.size || 0) > rbMedia3MBLimit() ? '<div class="text-[9px] text-amber-400/90 mt-1 text-center">⚠️ الحجم أكبر من 512 ميجابايت — تجاوز حد السحب، استخدم رابط المسار أعلاه للمعاينة أو التحميل في مستكشف الملفات</div>' : ''}
                 </div>
             </div>`;
             if ((it.kind === "image" || it.kind === "video") && !it.thumb) {
@@ -4924,9 +5118,11 @@
             if (h) h.remove();
         }
 
-        // ——— B12: حد 3 ميجابايت — الملفات الأكبر تُعرض خصائصها فقط (مدة/وقت/حجم/مسار) ———
+        // ——— B20: الحكم بالأحجام — المعاينة والتشغيل والتنزيل مفتوحة بكل الأحجام
+        // (الشارة الحية العائمة ترافق السحب بالنسبة والزمن المتوقع)، ويبقى حد
+        // الاستحالة للسحب عبر قناة البيانات 512 ميجابايت: ما يتجاوزه يُعرض بخصائصه ومساره ———
         function rbMedia3MBLimit() {
-            return 3 * 1024 * 1024;
+            return 512 * 1024 * 1024;
         }
 
         function rbMediaPropertyGate(it) {
@@ -4951,14 +5147,14 @@
             const rows = [
                 ['النوع', it.kindLabel || '—'],
                 ['الاسم', String(it.name || '—')],
-                ['الحجم', rbFmtMB(size) + ' (' + size.toLocaleString('en-US') + ' بايت) — أكبر من حد 3MB للسحب المباشر'],
+                ['الحجم', rbFmtMB(size) + ' (' + size.toLocaleString('en-US') + ' بايت) — تجاوز حد 512MB للسحب عبر قناة البيانات'],
                 ['الوقت/التاريخ', recFmtDate(Number(it.dateMs || 0))],
                 ['المدة', dur > 0 ? Math.floor(dur / 60000) + ':' + String(Math.floor((dur % 60000) / 1000)).padStart(2, '0') + ' دقيقة' : 'غير متاحة'],
                 ['المسار', pth || '—']
             ];
             wrap.innerHTML = `<div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md p-4 shadow-2xl max-h-[88vh] overflow-y-auto">
                 <div class="flex items-center justify-between mb-3">
-                    <h3 class="text-sm font-bold text-amber-300">📄 خصائص الملف (أكبر من 3 ميجابايت)</h3>
+                    <h3 class="text-sm font-bold text-amber-300">📄 خصائص الملف (أكبر من 512 ميجابايت)</h3>
                     <button onclick="document.getElementById('rb-props-modal').remove()" class="text-slate-400 hover:text-white px-1">✕</button>
                 </div>
                 <div class="space-y-1.5 text-[12px] text-slate-300">
@@ -4967,7 +5163,7 @@
                 ${pth ? `<button onclick="document.getElementById('rb-props-modal').remove(); rbJumpToExplorerDir('${pth.replace(/\\/g, '/').replace(/'/g, '')}')" class="w-full mt-3 bg-sky-700 hover:bg-sky-600 text-white text-xs font-bold py-2.5 rounded-xl transition">📂 فتح مجلد الملف في مستكشف الملفات</button>` : ''}
             </div>`;
             document.body.appendChild(wrap);
-            try { showToast('الملف أكبر من 3 ميجابايت — تُعرض الخصائص فقط، والمعاينة/التحميل عبر المستكشف', 'info'); } catch (_) {}
+            try { showToast('الملف أكبر من 512 ميجابايت (حد السحب عبر قناة البيانات) — تُعرض الخصائص والمسار، والتنزيل عبر المستكشف', 'info'); } catch (_) {}
         }
 
         // تفعيل افتراضي عند تحميل الصفحة: الفحص التلقائي يعمل مرة واحدة عند البداية
@@ -8867,7 +9063,7 @@
                             (online ? '🟢 آخر موضع (متصل)' : '🟠 آخر موضع (غير متصل — النشاط مستمر)') + '<br>' +
                             recFmtDate(Number(anchor.ts) || now) + '<br>' + Number(anchor.lat).toFixed(5) + ', ' + Number(anchor.lng).toFixed(5) +
                             (anchor.acc !== undefined ? '<br>دقة ±' + Number(anchor.acc).toFixed(0) + ' م' : '')
-                        ).addTo(rbLocMap);
+                        ).addTo(rbLocMarkersLayer);
                         if (rbLocJumpPending) {
                             rbLocJumpPending = false;
                             rbLocMap.setView(aLatLng, 15); // قفزة افتراضية إلى آخر إحداثية متاحة عند فتح النافذة
@@ -8884,16 +9080,22 @@
                 renderLocLogPane();
                 return;
             }
-            const latlngs = pts.map(p => [Number(p.lat), Number(p.lng)]).reverse(); // الأقدم → الأحدث
-            window.L.polyline(latlngs, { color: '#34d399', weight: 3.2, opacity: 0.85 }).addTo(rbLocMap);
+            // 🗺️ B20 — المسار المرقّم: الترتيب الزمني الأقدم → الأحدث، وترقيم من 1 حتى نقطة النهاية
+            const crono = pts.slice().reverse(); // النقطة 1 هي الأقدم، والنقطة N هي أحدث موضع
+            const latlngs = crono.map(p => [Number(p.lat), Number(p.lng)]);
+            window.L.polyline(latlngs, { color: '#34d399', weight: 3.2, opacity: 0.85 }).addTo(rbLocMarkersLayer);
             const latestTs = Number(pts[0].ts) || now;   // النقاط قادمة: الأحدث أولاً
             const hostOnline = isP2pAlive();
             const staleMin = Math.max(0, Math.round((now - latestTs) / 60000));
             // B12 — لون آخر نقطة: أخضر = مضيف متصل • برتقالي = غير متصل لكن النشاط مستمر
             const lastColor = hostOnline ? '#22c55e' : '#f97316';
-            pts.forEach((p, i) => {
-                const latest = i === 0;
-                const marker = window.L.circleMarker([Number(p.lat), Number(p.lng)], {
+            const N = crono.length;
+            // كثافة الترقيم: حتى 60 نقطة تُرقَّم كلها؛ وما فوقها يُتباعد مع ضمان الرقم 1 ورقم النهاية
+            const numEvery = N > 60 ? Math.ceil(N / 48) : 1;
+            crono.forEach((p, i) => {
+                const idx = i + 1; // الترقيم التصاعدي: 1 = بداية المسار، N = نقطة النهاية
+                const latest = idx === N;
+                window.L.circleMarker([Number(p.lat), Number(p.lng)], {
                     radius: latest ? 7 : 3.4,
                     color: latest ? lastColor : '#a78bfa',
                     fillColor: latest ? lastColor : '#a78bfa',
@@ -8904,12 +9106,30 @@
                     recFmtDate(Number(p.ts) || now) + '<br>' + Number(p.lat).toFixed(5) + ', ' + Number(p.lng).toFixed(5) +
                     (p.acc !== undefined ? '<br>دقة ±' + Number(p.acc).toFixed(0) + ' م' : '') +
                     (p.provider ? '<br>' + escapeHtml2(p.provider) : '')
-                );
-                marker.addTo(rbLocMap);
+                ).addTo(rbLocMarkersLayer);
+                if (idx === 1 || idx === N || idx % numEvery === 0) {
+                    const numIcon = window.L.divIcon({
+                        className: 'rb-loc-numwrap',
+                        html: '<div class="rb-loc-num">' + idx + '</div>',
+                        iconSize: [20, 20], iconAnchor: [10, 10]
+                    });
+                    window.L.marker([Number(p.lat), Number(p.lng)], {
+                        icon: numIcon, keyboard: false, title: 'النقطة ' + idx + ' من ' + N
+                    }).bindPopup(
+                        '📍 النقطة ' + idx + ' من ' + N + ' (ترتيب زمني: من البداية إلى النهاية)<br>' +
+                        recFmtDate(Number(p.ts) || now) + '<br>' + Number(p.lat).toFixed(5) + ', ' + Number(p.lng).toFixed(5)
+                    ).addTo(rbLocMarkersLayer);
+                }
+            });
+            // علامتا البداية والنهاية بتمييز بصري واضح فوق الأرقام
+            const capIcon = (sym) => window.L.divIcon({
+                className: 'rb-loc-numwrap',
+                html: '<div class="rb-loc-cap">' + sym + '</div>',
+                iconSize: [26, 26], iconAnchor: [13, 13]
             });
             const first = latlngs[0], last = latlngs[latlngs.length - 1];
-            window.L.marker(first, { title: 'بداية المسار' }).addTo(rbLocMap).bindPopup('🚩 بداية المسار');
-            window.L.marker(last, { title: 'آخر نقطة' }).addTo(rbLocMap).bindPopup('🏁 آخر موضع');
+            window.L.marker(first, { icon: capIcon('🟢'), keyboard: false, title: 'بداية المسار' }).bindPopup('🟢 بداية المسار (أقدم نقطة ضمن الفترة المحددة)').addTo(rbLocMarkersLayer);
+            window.L.marker(last, { icon: capIcon('🏁'), keyboard: false, title: 'نهاية المسار' }).bindPopup('🏁 نهاية المسار (أحدث موضع — النقطة ' + N + ')').addTo(rbLocMarkersLayer);
             try {
                 if (rbLocJumpPending) {
                     rbLocJumpPending = false;

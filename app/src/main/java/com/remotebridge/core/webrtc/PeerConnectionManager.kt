@@ -430,7 +430,7 @@ class PeerConnectionManager(
             )
             videoCapturer?.startCapture(1280, 720, 30)
 
-            videoTrack = factory.createVideoTrack("ARDAMSv0", videoSource!!)
+            videoTrack = factory.createVideoTrack(nextVideoTrackId(), videoSource!!)
             attachOrPrepareTracks()
 
             // صوت الشاشة: يُنشأ الميكروفون مساراً مكتوماً افتراضياً (السياسة الجديدة)
@@ -438,7 +438,7 @@ class PeerConnectionManager(
             try {
                 val audioConstraints = MediaConstraints()
                 val audioSource = factory.createAudioSource(audioConstraints)
-                audioTrack = factory.createAudioTrack("ARDAMSa0", audioSource)
+                audioTrack = factory.createAudioTrack(nextAudioTrackId(), audioSource)
                 isAudioStreamingEnabled = false
                 audioTrack?.setEnabled(false)
                 attachOrPrepareTracks()
@@ -495,16 +495,36 @@ class PeerConnectionManager(
             videoCapturer = capturer
             videoSource = factory.createVideoSource(false)
             capturer.initialize(surfaceTextureHelper, context, videoSource!!.capturerObserver)
-            capturer.startCapture(1280, 720, 30)
+            // 🧩 B20 — إعادة محاولة واحدة عند التعثر: بعد الإيقاف مباشرة قد ترفض `Camera2`
+            // فتح الجهاز لحظات قليلة (لأنه لم يتحرر بعد من التسوية السابقة) فيفشل بدء البث
+            // كله؛ الهدوء القصير ثم المحاولة الثانية يعالجان العلة المتكررة.
+            try {
+                capturer.startCapture(1280, 720, 30)
+            } catch (first: Throwable) {
+                Log.w(TAG, "تعثر أول التقاط للكاميرا (${first.message}) — إعادة المحاولة بعد 350 م.ث")
+                try { Thread.sleep(350L) } catch (_: Throwable) { }
+                try {
+                    capturer.startCapture(1280, 720, 30)
+                } catch (second: Throwable) {
+                    Log.e(TAG, "فشل بدء بث الكاميرا حتى بعد إعادة المحاولة", second)
+                    try { capturer.dispose() } catch (_: Throwable) { }
+                    videoCapturer = null
+                    videoSource?.dispose()
+                    videoSource = null
+                    surfaceTextureHelper?.dispose()
+                    surfaceTextureHelper = null
+                    return false
+                }
+            }
 
-            videoTrack = factory.createVideoTrack("ARDAMSv0", videoSource!!)
+            videoTrack = factory.createVideoTrack(nextVideoTrackId(), videoSource!!)
             attachOrPrepareTracks()
 
             if (withAudio) {
                 val audioConstraints = MediaConstraints()
                 val audioSourceNew = factory.createAudioSource(audioConstraints)
                 audioSource = audioSourceNew
-                audioTrack = factory.createAudioTrack("ARDAMSa0", audioSourceNew)
+                audioTrack = factory.createAudioTrack(nextAudioTrackId(), audioSourceNew)
                 isAudioStreamingEnabled = true
                 attachOrPrepareTracks()
             }
@@ -528,7 +548,7 @@ class PeerConnectionManager(
             val audioConstraints = MediaConstraints()
             val audioSourceNew = factory.createAudioSource(audioConstraints)
             audioSource = audioSourceNew
-            audioTrack = factory.createAudioTrack("ARDAMSa0", audioSourceNew)
+            audioTrack = factory.createAudioTrack(nextAudioTrackId(), audioSourceNew)
             isAudioStreamingEnabled = true
             attachOrPrepareTracks()
 
@@ -613,7 +633,7 @@ class PeerConnectionManager(
                 try {
                     val audioSourceNew = factory.createAudioSource(MediaConstraints())
                     audioSource = audioSourceNew
-                    audioTrack = factory.createAudioTrack("ARDAMSa0", audioSourceNew)
+                    audioTrack = factory.createAudioTrack(nextAudioTrackId(), audioSourceNew)
                     isAudioStreamingEnabled = true
                     attachOrPrepareTracks()
                     audioTrack?.setEnabled(true)
@@ -635,9 +655,29 @@ class PeerConnectionManager(
     fun isUsingFrontCamera(): Boolean = isFrontFacingCamera
     fun isAudioTrackEnabled(): Boolean = isAudioStreamingEnabled
 
+    // 🧩 B20 — عدّاد معرّفات مسارات فريدة: كان `ARDAMSv0` يُعاد استخدامه في كل بدء
+    // فيتعثّر تمييز المسار الجديد لدى مستقبِل المتحكم؛ كل بدء يولّد معرّفين جديدين.
+    private var trackSeq = 0
+    private fun nextVideoTrackId(): String { trackSeq++; return "RBV$trackSeq" }
+    private fun nextAudioTrackId(): String { trackSeq++; return "RBA$trackSeq" }
+
     fun stopStreaming() {
         try {
             videoCapturer?.stopCapture()
+        } catch (_: Throwable) {
+        }
+        // 🧩 B20 — فصل المرسلين قبل تلف المسارات: من دون هذه الخطوة يظل راسل `RTP`
+        // ممسكاً بمسار متلف فيتجمد النقل لاحقاً مع بقاء الاتصال ظاهراً سليماً؛
+        // تفريغ المرسِل هنا يجعل `setTrack` بمسار جديد نافذاً فعلياً عند بدء البث القادم.
+        try {
+            connection?.transceivers?.forEach { tr ->
+                try {
+                    if (tr.sender?.track() != null) {
+                        tr.sender.setTrack(null, true)
+                    }
+                } catch (_: Throwable) {
+                }
+            }
         } catch (_: Throwable) {
         }
         videoCapturer?.dispose()
