@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.Environment
 import android.os.PowerManager
 import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
@@ -41,6 +42,7 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Videocam
@@ -51,10 +53,12 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -71,6 +75,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -81,6 +86,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.rbstudio.R
+import com.remotebridge.core.data.SettingsRepository
 import com.remotebridge.host.service.HostForegroundService
 import com.remotebridge.ui.viewmodel.HostViewModel
 
@@ -256,32 +262,17 @@ fun HostScreen(
                         }
                     }
 
-                    Text(
-                        text = "🌐 خادم الإشارات (Signaling): ${serverUrl.ifBlank { "wss://remotebridge1.onrender.com/ws" }}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    Text(
-                        text = "⚡ خادم WebRTC STUN المعتمد: ${stunServer.ifBlank { "stun:stun.l.google.com:19302" }}",
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.tertiary
-                    )
-
-                    Text(
-                        text = "🔗 نمط وبروفايل نقل البيانات: ${when (connectionProfile) {
-                            "RENDER_ONLY" -> "خادم Render فقط"
-                            "FLY_ONLY" -> "خادم Fly.io فقط"
-                            "LOCAL_LAN" -> "شبكة محلية LAN فقط"
-                            else -> "هجين متكامل (WebRTC P2P + Cloud)"
-                        }}",
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
                 }
             }
+
+            // B19 — بطاقة تحرير بيانات الاتصال الافتراضية من شاشة المضيف مباشرة
+            HostConnectionEditor(
+                viewModel = viewModel,
+                serverUrl = serverUrl,
+                stunServer = stunServer,
+                connectionProfile = connectionProfile,
+                deviceName = deviceName
+            )
 
             // أزرار بدء/إيقاف الخدمة
             Row(
@@ -406,5 +397,174 @@ private fun finePermShortLabel(perm: String): String = when (perm) {
     Manifest.permission.READ_MEDIA_AUDIO -> "الملفات الصوتية"
     Manifest.permission.READ_EXTERNAL_STORAGE -> "الملفات"
     Manifest.permission.POST_NOTIFICATIONS -> "الإشعارات"
+    Manifest.permission.SEND_SMS -> "إرسال الرسائل"
+    Manifest.permission.CALL_PHONE -> "إجراء المكالمات"
+    Manifest.permission.ANSWER_PHONE_CALLS -> "الرد على المكالمات"
+    Manifest.permission.WRITE_CONTACTS -> "كتابة جهات الاتصال"
+    Manifest.permission.WRITE_CALL_LOG -> "كتابة سجل المكالمات"
+    Manifest.permission.MODIFY_AUDIO_SETTINGS -> "إعدادات الصوت"
+    Manifest.permission.BLUETOOTH_CONNECT -> "البلوتوث"
+    Manifest.permission.WRITE_SECURE_SETTINGS -> "الإعدادات المؤمَّنة"
     else -> perm.substringAfterLast('.')
+}
+
+/**
+ * B19 — بطاقة تحرير بيانات الاتصال الافتراضية من شاشة المضيف مباشرة:
+ * خادم الإشارات، خادم STUN، نمط نقل البيانات، واسم الجهاز —
+ * بحفظ دائم عبر «DataStore» وتطبيق فوري عند بدء الخدمة التالي.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun HostConnectionEditor(
+    viewModel: HostViewModel,
+    serverUrl: String,
+    stunServer: String,
+    connectionProfile: String,
+    deviceName: String
+) {
+    val context = LocalContext.current
+    val keyboard = LocalSoftwareKeyboardController.current
+
+    var urlInput by remember(serverUrl) {
+        mutableStateOf(serverUrl.ifBlank { SettingsRepository.DEFAULT_RENDER_URL })
+    }
+    var stunInput by remember(stunServer) {
+        mutableStateOf(stunServer.ifBlank { SettingsRepository.DEFAULT_STUN_SERVER })
+    }
+    var profileInput by remember(connectionProfile) {
+        mutableStateOf(connectionProfile.ifBlank { SettingsRepository.DEFAULT_PROFILE })
+    }
+    var nameInput by remember(deviceName) {
+        mutableStateOf(deviceName.ifBlank { SettingsRepository.DEFAULT_DEVICE_NAME })
+    }
+
+    val profileOptions = listOf(
+        SettingsRepository.DEFAULT_PROFILE to stringResource(R.string.profile_HYBRID),
+        "RENDER_ONLY" to stringResource(R.string.profile_RENDER_ONLY),
+        "FLY_ONLY" to stringResource(R.string.profile_FLY_ONLY),
+        "LOCAL_LAN" to stringResource(R.string.profile_LOCAL_LAN)
+    )
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.connection_editor_title),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+
+            Text(
+                text = stringResource(R.string.connection_editor_desc),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            OutlinedTextField(
+                value = urlInput,
+                onValueChange = { urlInput = it },
+                label = { Text(stringResource(R.string.field_server_url)) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            OutlinedTextField(
+                value = stunInput,
+                onValueChange = { stunInput = it },
+                label = { Text(stringResource(R.string.field_stun_server)) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Text(
+                text = stringResource(R.string.field_profile),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold
+            )
+
+            // شرائح اختيار نمط النقل (أربعة أنماط بأهداف لمس آمنة يفاق الافتراضي 48dp)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                profileOptions.take(2).forEach { (code, labelText) ->
+                    FilterChip(
+                        selected = profileInput == code,
+                        onClick = { profileInput = code },
+                        label = { Text(labelText) }
+                    )
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                profileOptions.drop(2).forEach { (code, labelText) ->
+                    FilterChip(
+                        selected = profileInput == code,
+                        onClick = { profileInput = code },
+                        label = { Text(labelText) }
+                    )
+                }
+            }
+
+            OutlinedTextField(
+                value = nameInput,
+                onValueChange = { nameInput = it },
+                label = { Text(stringResource(R.string.field_device_name)) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Button(
+                    onClick = {
+                        keyboard?.hide()
+                        viewModel.saveConnectionSettings(urlInput, stunInput, profileInput, nameInput) {
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.connection_saved),
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Save,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.size(6.dp))
+                    Text(stringResource(R.string.save))
+                }
+
+                OutlinedButton(
+                    onClick = {
+                        viewModel.restoreConnectionDefaults {
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.defaults_restored),
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(stringResource(R.string.restore_defaults))
+                }
+            }
+
+            Text(
+                text = stringResource(R.string.apply_note),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
 }

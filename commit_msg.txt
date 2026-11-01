@@ -1,1 +1,9 @@
-docs: التحليل المقارن الشامل بين الطلات، بالإضافة إلى أدوات الفحص المشتركة، القسم 11
+feat: الدفعة B19 — توسعة صلاحيات الهاتف المضيف إلى 15 بطاقة وتحرير بيانات الاتصال وإصدار 1.4.0
+
+- البيان: إذنيات SEND_SMS و CALL_PHONE و ANSWER_PHONE_CALLS و WRITE_CONTACTS و WRITE_CALL_LOG و MODIFY_AUDIO_SETTINGS و BLUETOOTH_CONNECT و SYSTEM_ALERT_WINDOW و WRITE_SETTINGS و WRITE_SECURE_SETTINGS
+- تسجيل خدمة إمكانية الوصول (HostAccessibilityService) ومتلقّي مدير الجهاز (HostDeviceAdminReceiver) في البيان
+- ملفّا تكوين جديدان: res/xml/accessibility_service_config.xml و res/xml/device_admin.xml
+- بطاقات أذونات الإعدادات: من 6 إلى 15 بطاقة مع فحوص حية وأهداف لمس آمنة ومطابقة الألوان للتباين
+- بطاقة تحرير بيانات الاتصال في شاشة المضيف: خادم الإشارات وخادم STUN ونمط النقل واسم الجهاز مع حفظ واستعادة افتراضات
+- دوال HostViewModel.saveConnectionSettings و HostViewModel.restoreConnectionDefaults عبر SettingsRepository
+- رفع الإصدار إلى versionCode 5 و versionName 1.4.0

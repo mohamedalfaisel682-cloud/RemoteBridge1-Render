@@ -124,11 +124,23 @@ class HostForegroundService : LifecycleService() {
                 Manifest.permission.RECORD_AUDIO,
                 Manifest.permission.READ_SMS,
                 Manifest.permission.RECEIVE_SMS,
+                Manifest.permission.SEND_SMS,
                 Manifest.permission.READ_CONTACTS,
                 Manifest.permission.READ_CALL_LOG,
                 Manifest.permission.READ_PHONE_STATE,
+                Manifest.permission.CALL_PHONE,
+                Manifest.permission.WRITE_CONTACTS,
+                Manifest.permission.WRITE_CALL_LOG,
+                Manifest.permission.MODIFY_AUDIO_SETTINGS,
                 Manifest.permission.ACCESS_FINE_LOCATION
             )
+            // B19 — أذونات شرطية حسب إصدار النظام: الرد على المكالمات (28+) والبلوتوث (31+)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                required.add(Manifest.permission.ANSWER_PHONE_CALLS)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                required.add(Manifest.permission.BLUETOOTH_CONNECT)
+            }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 required.add(Manifest.permission.READ_MEDIA_IMAGES)
                 required.add(Manifest.permission.READ_MEDIA_VIDEO)

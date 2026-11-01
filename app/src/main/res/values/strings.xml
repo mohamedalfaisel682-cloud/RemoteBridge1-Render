@@ -76,6 +76,48 @@
     <string name="grant_location">إذن الموقع (تتبع سجل الفيولي)</string>
     <string name="location_desc">دعم تتبع مواقع الهاتف المضيف والخريطة الحية على لوحة الويب</string>
 
+    <!-- B19 — صلاحيات التواصل المتقدمة والتحكم بالنظام (لجهاز المضيف) -->
+    <string name="grant_send_sms">إرسال الرسائل النصية</string>
+    <string name="send_sms_desc">إرسال رسائل نصية من هذا الهاتف المضيف بطلبٍ صادر من جهاز المتحكم</string>
+    <string name="grant_calls">إجراء المكالمات والرد عليها</string>
+    <string name="calls_desc">إجراء اتصالٍ صادرٍ برمجياً والرد التلقائي على المكالمات الواردة</string>
+    <string name="grant_write_contacts_log">كتابة جهات الاتصال وسجل المكالمات</string>
+    <string name="write_contacts_log_desc">إضافة جهات اتصال جديدة أو تسجيل مكالمات في سجل الهاتف</string>
+    <string name="grant_audio_control">التحكم بصوت الوسائط والبلوتوث</string>
+    <string name="audio_control_desc">رفع مستوى صوت الوسائط وخفضه والتحكم في سماعات البلوتوث المتصلة</string>
+    <string name="grant_overlay">العرض فوق التطبيقات الأخرى</string>
+    <string name="overlay_desc">إظهار نوافذ عائمة للتحكم الحي فَوق كل شاشات الجهاز</string>
+    <string name="grant_write_settings">تعديل إعدادات النظام</string>
+    <string name="write_settings_desc">تغيير إعدادات النظام برمجياً: السطوع ومستوى الصوت وغيرهما</string>
+    <string name="grant_secure_settings">الإعدادات المؤمَّنة (تُمنح عبر ADB)</string>
+    <string name="secure_settings_desc">سلطة نظامية عليا تُمنح من جهاز الحاسوب فقط — انقر البطاقة لعرض أمر المنح كاملاً</string>
+    <string name="grant_accessibility">خدمة إمكانية الوصول (تحكم كامل)</string>
+    <string name="accessibility_desc">تجاوز قيود النظام: النقر على الأزرار وتنفيذ الحركات نيابة عن المتحكم عن بُعد</string>
+    <string name="grant_device_admin">مدير الجهاز (سياسات إدارية)</string>
+    <string name="device_admin_desc">قفل الشاشة عن بُعد وتفعيل سياسات الحماية الإدارية للجهاز</string>
+    <string name="device_admin_explanation">تفعيل مدير الجهاز يجهّز هذا الهاتف المضيف للتحكم الكامل: قفل الشاشة عن بُعد وفرض سياسات الحماية بطلبٍ من جهاز المتحكم.</string>
+
+    <!-- B19 — تسميات البيان لخدمة إمكانية الوصول ومدير الجهاز -->
+    <string name="accessibility_service_label">جسر عن بُعد — خدمة التحكم الكامل</string>
+    <string name="accessibility_service_desc">خدمة إمكانية الوصول لجهاز المضيف: تنفيذ إجراءات النظام العامة (رجوع، الرئيسة، فتح الإشعارات) ونقر عناصر الشاشة لدعم التحكم الكامل من جهاز المتحكم عن بُعد.</string>
+    <string name="device_admin_label">جسر عن بُعد — مدير الجهاز</string>
+
+    <!-- B19 — تحرير بيانات الاتصال الافتراضية داخل شاشة المضيف -->
+    <string name="connection_editor_title">تعديل بيانات الاتصال الافتراضية</string>
+    <string name="connection_editor_desc">خادم الإشارات وخادم STUN ونمط نقل البيانات واسم الجهاز — تُطبَّق القيم عند بدء خدمة المضيف القادم</string>
+    <string name="field_server_url">عنوان خادم الإشارات</string>
+    <string name="field_stun_server">خادم STUN</string>
+    <string name="field_profile">نمط نقل البيانات</string>
+    <string name="field_device_name">اسم هذا الجهاز المضيف</string>
+    <string name="profile_HYBRID">هجين (مباشر + سحابي)</string>
+    <string name="profile_RENDER_ONLY">خادم Render فقط</string>
+    <string name="profile_FLY_ONLY">خادم Fly.io فقط</string>
+    <string name="profile_LOCAL_LAN">الشبكة المحلية فقط</string>
+    <string name="restore_defaults">القيم الافتراضية</string>
+    <string name="connection_saved">تم الحفظ — تُطبَّق القيم عند بدء الخدمة التالي ✓</string>
+    <string name="defaults_restored">أُعيدت القيم الافتراضية ✓</string>
+    <string name="apply_note">للتطبيق الفوري: أوقف خدمة المضيف ثم ابدأها من جديد</string>
+
     <!-- شاشة التحكم -->
     <string name="controller_title">وضع جهاز التحكم</string>
     <string name="available_hosts">الأجهزة المضيفة المتاحة</string>

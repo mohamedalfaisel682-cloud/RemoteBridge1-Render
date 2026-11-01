@@ -53,6 +53,56 @@ class HostViewModel(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
 
     /**
+     * B19 — حفظ بيانات الاتصال الافتراضية من شاشة المضيف مباشرة:
+     * خادم الإشارات، خادم STUN، نمط النقل، واسم الجهاز —
+     * يُخزَّن كل شيء دائماً في `DataStore` ويبدأ التطبيق به عند الخدمة القادمة.
+     */
+    fun saveConnectionSettings(
+        serverUrl: String,
+        stunServer: String,
+        connectionProfile: String,
+        deviceName: String,
+        onSuccess: () -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            try {
+                settings.setServerUrl(serverUrl.trim())
+                settings.setStunServer(stunServer.trim())
+                settings.setConnectionProfile(connectionProfile.trim())
+                settings.setDeviceName(deviceName.trim())
+                onSuccess()
+            } catch (t: Throwable) {
+                Log.e("HostViewModel", "تعذر حفظ بيانات الاتصال", t)
+                Toast.makeText(
+                    getApplication(),
+                    "⚠️ تعذر حفظ بيانات الاتصال: ${t.message ?: "خطأ غير معروف"}",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
+    /** B19 — استعادة القيم الافتراضية لبيانات الاتصال بنقرة واحدة. */
+    fun restoreConnectionDefaults(onSuccess: () -> Unit = {}) {
+        viewModelScope.launch {
+            try {
+                settings.setServerUrl(SettingsRepository.DEFAULT_SERVER_URL)
+                settings.setStunServer(SettingsRepository.DEFAULT_STUN_SERVER)
+                settings.setConnectionProfile(SettingsRepository.DEFAULT_PROFILE)
+                settings.setDeviceName(SettingsRepository.DEFAULT_DEVICE_NAME)
+                onSuccess()
+            } catch (t: Throwable) {
+                Log.e("HostViewModel", "تعذر استعادة القيم الافتراضية", t)
+                Toast.makeText(
+                    getApplication(),
+                    "⚠️ تعذر استعادة القيم الافتراضية: ${t.message ?: "خطأ غير معروف"}",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
+    /**
      * يبدأ خدمة المضيف الأمامية.
      *
      * 🔧 إصلاح عدم استجابة زر بدء المضيف: لم نعد نمنع البدء بصمت عند نقص الأذونات.

@@ -1,6 +1,8 @@
 package com.remotebridge.ui.screens.settings
 
 import android.Manifest
+import android.app.admin.DevicePolicyManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -9,6 +11,7 @@ import android.os.Build
 import android.os.Environment
 import android.os.PowerManager
 import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
@@ -26,13 +29,22 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Accessibility
+import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.BatteryChargingFull
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Sms
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -59,6 +71,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.remotebridge.host.service.HostDeviceAdminReceiver
 import com.rbstudio.R
 
 /**
@@ -89,6 +102,27 @@ internal fun HostPermissionsSection() {
 
     // 📍 طالب إذن الموقع (لتتبع سجل الفيولي والخريطة الحية)
     val locationLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) {
+        permissionTick++
+    }
+
+    // B19 — طالب أذونات التواصل المتقدمة (إرسال الرسائل وإجراء المكالمات والرد عليها)
+    val commsLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) {
+        permissionTick++
+    }
+
+    // B19 — طالب أذونات الكتابة (جهات الاتصال وسجل المكالمات)
+    val writeDataLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) {
+        permissionTick++
+    }
+
+    // B19 — طالب أذونات الصوت والبلوتوث (تعديل إعدادات الصوت والاتصال بسماعات البلوتوث)
+    val audioLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) {
         permissionTick++
@@ -146,10 +180,37 @@ internal fun HostPermissionsSection() {
     val powerManager = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
     val isIgnoringBattery = powerManager?.isIgnoringBatteryOptimizations(context.packageName) == true
 
-    // ملخص علوي: X/6 ممنوحة
+    // B19 — فحوص الصلاحيات الموسّعة
+    val hasSendSms = hasPermission(Manifest.permission.SEND_SMS)
+    val hasCallPhone = hasPermission(Manifest.permission.CALL_PHONE)
+    val hasAnswerCalls = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        hasPermission(Manifest.permission.ANSWER_PHONE_CALLS)
+    } else true
+    val hasWriteContacts = hasPermission(Manifest.permission.WRITE_CONTACTS)
+    val hasWriteCallLog = hasPermission(Manifest.permission.WRITE_CALL_LOG)
+    val hasModifyAudio = hasPermission(Manifest.permission.MODIFY_AUDIO_SETTINGS)
+    val hasBluetoothConnect = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        hasPermission(Manifest.permission.BLUETOOTH_CONNECT)
+    } else true
+    val hasOverlay = Settings.canDrawOverlays(context)
+    val canWriteSystem = Settings.System.canWrite(context)
+    val hasSecureSettings = hasPermission(Manifest.permission.WRITE_SECURE_SETTINGS)
+    val hasAccessibility = Settings.Secure.getString(
+        context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+    )?.contains(context.packageName) == true
+
+    val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as? DevicePolicyManager
+    val adminComponent = ComponentName(context, HostDeviceAdminReceiver::class.java)
+    val isAdminActive = dpm?.isAdminActive(adminComponent) == true
+
+    // ملخص علوي: X/15 ممنوحة
     val grantedCount = listOf(
         hasDataPerms, hasCameraPerm && hasMicPerm, isIgnoringBattery,
-        hasAllFiles, hasNotificationListener, hasLocationPerm
+        hasAllFiles, hasNotificationListener, hasLocationPerm,
+        // B19 — البطاقات الجديدة
+        hasSendSms, hasCallPhone && hasAnswerCalls, hasWriteContacts && hasWriteCallLog,
+        hasModifyAudio && hasBluetoothConnect, hasOverlay, canWriteSystem,
+        hasSecureSettings, hasAccessibility, isAdminActive
     ).count { it }
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -161,7 +222,7 @@ internal fun HostPermissionsSection() {
         )
 
         Text(
-            text = "ممنوحة $grantedCount من 6 — انقر أي بطاقة لمنح الإذن، والتأكيد الأخضر يظهر فوراً عند المنح",
+            text = "ممنوحة $grantedCount من 15 — انقر أي بطاقة لمنح الإذن، والتأكيد الأخضر يظهر فوراً عند المنح",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -248,6 +309,150 @@ internal fun HostPermissionsSection() {
                         Manifest.permission.ACCESS_COARSE_LOCATION
                     )
                 )
+            }
+        )
+
+        // B19 — بطاقة إرسال الرسائل النصية
+        PermissionItemCard(
+            icon = Icons.Default.Sms,
+            title = stringResource(R.string.grant_send_sms),
+            description = stringResource(R.string.send_sms_desc),
+            isGranted = hasSendSms,
+            onClick = { commsLauncher.launch(arrayOf(Manifest.permission.SEND_SMS)) }
+        )
+
+        // B19 — بطاقة إجراء المكالمات والرد عليها
+        PermissionItemCard(
+            icon = Icons.Default.Call,
+            title = stringResource(R.string.grant_calls),
+            description = stringResource(R.string.calls_desc),
+            isGranted = hasCallPhone && hasAnswerCalls,
+            onClick = {
+                val perms = mutableListOf(Manifest.permission.CALL_PHONE)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    perms.add(Manifest.permission.ANSWER_PHONE_CALLS)
+                }
+                commsLauncher.launch(perms.toTypedArray())
+            }
+        )
+
+        // B19 — بطاقة كتابة جهات الاتصال وسجل المكالمات
+        PermissionItemCard(
+            icon = Icons.Default.People,
+            title = stringResource(R.string.grant_write_contacts_log),
+            description = stringResource(R.string.write_contacts_log_desc),
+            isGranted = hasWriteContacts && hasWriteCallLog,
+            onClick = {
+                writeDataLauncher.launch(
+                    arrayOf(
+                        Manifest.permission.WRITE_CONTACTS,
+                        Manifest.permission.WRITE_CALL_LOG
+                    )
+                )
+            }
+        )
+
+        // B19 — بطاقة التحكم بصوت الوسائط والبلوتوث
+        PermissionItemCard(
+            icon = Icons.Default.VolumeUp,
+            title = stringResource(R.string.grant_audio_control),
+            description = stringResource(R.string.audio_control_desc),
+            isGranted = hasModifyAudio && hasBluetoothConnect,
+            onClick = {
+                val perms = mutableListOf(Manifest.permission.MODIFY_AUDIO_SETTINGS)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    perms.add(Manifest.permission.BLUETOOTH_CONNECT)
+                }
+                audioLauncher.launch(perms.toTypedArray())
+            }
+        )
+
+        // B19 — بطاقة العرض فوق التطبيقات (نوافذ عائمة)
+        PermissionItemCard(
+            icon = Icons.Default.Layers,
+            title = stringResource(R.string.grant_overlay),
+            description = stringResource(R.string.overlay_desc),
+            isGranted = hasOverlay,
+            onClick = {
+                try {
+                    val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION).apply {
+                        data = Uri.parse("package:${context.packageName}")
+                    }
+                    context.startActivity(intent)
+                } catch (_: Throwable) {
+                    context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION))
+                }
+            }
+        )
+
+        // B19 — بطاقة تعديل إعدادات النظام
+        PermissionItemCard(
+            icon = Icons.Default.Settings,
+            title = stringResource(R.string.grant_write_settings),
+            description = stringResource(R.string.write_settings_desc),
+            isGranted = canWriteSystem,
+            onClick = {
+                try {
+                    val intent = Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS).apply {
+                        data = Uri.parse("package:${context.packageName}")
+                    }
+                    context.startActivity(intent)
+                } catch (_: Throwable) {
+                    context.startActivity(Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS))
+                }
+            }
+        )
+
+        // B19 — بطاقة الإعدادات المؤمَّنة (تُمنح بأمر ADB من جهاز الحاسوب فقط)
+        PermissionItemCard(
+            icon = Icons.Default.Lock,
+            title = stringResource(R.string.grant_secure_settings),
+            description = stringResource(R.string.secure_settings_desc),
+            isGranted = hasSecureSettings,
+            onClick = {
+                Toast.makeText(
+                    context,
+                    "أمر المنح عبر جهاز الحاسوب مع وصل الهاتف بكابل USB:\n\nadb shell pm grant com.rbstudio android.permission.WRITE_SECURE_SETTINGS",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        )
+
+        // B19 — بطاقة خدمة إمكانية الوصول (تحكم كامل)
+        PermissionItemCard(
+            icon = Icons.Default.Accessibility,
+            title = stringResource(R.string.grant_accessibility),
+            description = stringResource(R.string.accessibility_desc),
+            isGranted = hasAccessibility,
+            onClick = {
+                context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            }
+        )
+
+        // B19 — بطاقة مدير الجهاز (سياسات إدارية: قفل الشاشة والحماية)
+        PermissionItemCard(
+            icon = Icons.Default.AdminPanelSettings,
+            title = stringResource(R.string.grant_device_admin),
+            description = stringResource(R.string.device_admin_desc),
+            isGranted = isAdminActive,
+            onClick = {
+                try {
+                    context.startActivity(
+                        Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
+                            putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, adminComponent)
+                            putExtra(
+                                DevicePolicyManager.EXTRA_ADD_EXPLANATION,
+                                context.getString(R.string.device_admin_explanation)
+                            )
+                        }
+                    )
+                } catch (_: Throwable) {
+                    Toast.makeText(
+                        context,
+                        "تعذر فتح صفحة مدير الجهاز على هذا الهاتف",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
             }
         )
     }

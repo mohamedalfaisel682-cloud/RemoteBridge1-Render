@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- B19 — تكوين خدمة إمكانية الوصول لجهاز المضيف: تجاوز حواجز النظام عند التحكم عن بُعد -->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:label="@string/accessibility_service_label"
+    android:description="@string/accessibility_service_desc"
+    android:accessibilityEventTypes="typeAllMask"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagDefault|flagReportViewIds|flagIncludeNotImportantViews|flagRetrieveInteractiveWindows"
+    android:canRetrieveWindowContent="true"
+    android:canPerformGestures="true"
+    android:notificationTimeout="100" />

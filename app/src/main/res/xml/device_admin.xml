@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- B19 — سياسات مدير الجهاز لجهاز المضيف: قفل الشاشة وفرض الحماية من المتحكم -->
+<device-admin xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-policies>
+        <limit-password />
+        <watch-login />
+        <reset-password />
+        <force-lock />
+        <wipe-data />
+        <disable-camera />
+        <encryption />
+    </uses-policies>
+</device-admin>
