@@ -6,7 +6,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.ImageFormat
+import android.graphics.Matrix
 import android.graphics.PixelFormat
 import android.hardware.camera2.CameraCaptureSession
 import android.hardware.camera2.CameraCharacteristics
@@ -67,6 +69,9 @@ class LiveRelayServer(
     /** البث النشط حالياً: "camera" | "screen" | null */
     private val activeStream = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
     val currentStream: kotlinx.coroutines.flow.StateFlow<String?> = activeStream
+
+    /** اتجاه المستشعر للعدسة النشطة (0/90/180/270) — يُقرأ من `SENSOR_ORIENTATION` ويُستخدم لتصحيح دوران JPEG برمجياً (v2). */
+    private var sensorOrientationDeg = 90
 
     /** آخر خطأ وصفي (يُعرض لجهاز التحكم في الردود). */
     var lastError: String? = null
@@ -212,11 +217,7 @@ class LiveRelayServer(
                 val w = image.width
                 val h = image.height
                 if (activeStream.value == "camera") {
-                    streamScope.launch(Dispatchers.Default) {
-                        try { onFrame(bytes, w, h) } catch (t: Throwable) {
-                            Log.w(TAG, "تجاهل إطار كاميرا: ${t.message}")
-                        }
-                    }
+                    publishRotatedCameraFrame(bytes, w, h, onFrame)
                 }
             } finally {
                 try { image.close() } catch (_: Throwable) {}
@@ -234,13 +235,15 @@ class LiveRelayServer(
                     val chars = (context.getSystemService(Context.CAMERA_SERVICE) as CameraManager)
                         .getCameraCharacteristics(device.id)
                     val sensorOrient = chars.get(CameraCharacteristics.SENSOR_ORIENTATION) ?: 0
+                    sensorOrientationDeg = sensorOrient
                     val request = device.createCaptureRequest(CameraDevice.TEMPLATE_STILL_CAPTURE).apply {
                         addTarget(reader.surface)
                         set(CaptureRequest.CONTROL_MODE, CaptureRequest.CONTROL_MODE_AUTO)
-                        // توجيه JPEG: يمرر اتجاه المستشعر كما هو — قد تظهر الصورة مدورة
-                        // 90° على بعض الأجهزة، ومعالجة الدوران مسؤولية جهاز العرض
-                        // (مفصّل في مستند التنفيذ).
-                        set(CaptureRequest.JPEG_ORIENTATION, sensorOrient)
+                        // v2: نطلب JPEG بلا دوران من HAL (0 = مخرج المستشعر الخام) ثم نصحح
+                        // الدوران برمجياً بعد الفك بمساعدة publishRotatedCameraFrame —
+                        // فيصبح الاتجاه محسوماً على كل الأجهزة بدل اختلاف تنفيذ
+                        // الأجهزة لإشارة JPEG_ORIENTATION (سبب الصورة المدورة سابقاً).
+                        set(CaptureRequest.JPEG_ORIENTATION, 0)
                     }.build()
                     session.setRepeatingRequest(request, null, handler)
                     activeStream.value = "camera"
@@ -263,6 +266,42 @@ class LiveRelayServer(
 
     /** هل الكاميرا في وضع "أمامية"؟ يُعرض لجهاز التحكم عند تبديل العدسة. */
     fun isCameraFront(): Boolean = isFrontCamera
+
+    /**
+     * نشر إطار الكاميرا بعد تصحيح الدوران فعلياً (إصلاح v2):
+     * 1) فك JPEG الخام من المستشعر.
+     * 2) تدوير البتومات بزاوية `SENSOR_ORIENTATION` المخزّنة للعدسة النشطة
+     *    (بلا انطباق مرايا — الترميز للمراقبة عن بُعد يُظهر ما تراه العدسة حرفياً).
+     * 3) إعادة ضغط JPEG جودة 72 ونشره مع الأبعاد بعد الدوران (تبدّل عرض×طول عند 90/270).
+     * عند فشل الفك/التدوير يُرسل الإطار الخام كما هو (سقوط آمن إلى سلوك v1).
+     */
+    private fun publishRotatedCameraFrame(
+        raw: ByteArray,
+        rawW: Int,
+        rawH: Int,
+        onFrame: (jpegBytes: ByteArray, w: Int, h: Int) -> Unit
+    ) {
+        streamScope.launch(Dispatchers.Default) {
+            try {
+                val decoded = BitmapFactory.decodeByteArray(raw, 0, raw.size)
+                if (decoded == null) {
+                    onFrame(raw, rawW, rawH)
+                    return@launch
+                }
+                val matrix = Matrix().apply { postRotate(sensorOrientationDeg.toFloat()) }
+                val rotated = Bitmap.createBitmap(decoded, 0, 0, decoded.width, decoded.height, matrix, true)
+                val outW = rotated.width
+                val outH = rotated.height
+                val out = ByteArrayOutputStream()
+                rotated.compress(Bitmap.CompressFormat.JPEG, 72, out)
+                if (rotated !== decoded) decoded.recycle()
+                rotated.recycle()
+                onFrame(out.toByteArray(), outW, outH)
+            } catch (t: Throwable) {
+                Log.w(TAG, "تجاهل إطار كاميرا: ${t.message}")
+            }
+        }
+    }
 
     /** يوقف الكاميرا فقط (الشاشة تبقى نشطة إن كانت تعمل). */
     fun stopCamera() = synchronized(this) {

