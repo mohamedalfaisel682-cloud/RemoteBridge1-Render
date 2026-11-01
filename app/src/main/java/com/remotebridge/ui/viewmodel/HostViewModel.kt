@@ -102,6 +102,16 @@ class HostViewModel(
         HostForegroundService.stopCamera()
     }
 
+    /** حفظ بيانات الاتصال الافتراضية من واجهة المضيف (الخادم وSTUN والاسم ونمط النقل). */
+    fun saveConnectionData(url: String, stun: String, name: String, profile: String) {
+        viewModelScope.launch {
+            settings.setServerUrl(url.trim())
+            settings.setStunServer(stun.trim())
+            settings.setDeviceName(name.trim())
+            settings.setConnectionProfile(profile.trim())
+        }
+    }
+
     /**
      * يوقف خدمة المضيف.
      */

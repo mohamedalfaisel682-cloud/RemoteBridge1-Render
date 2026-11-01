@@ -68,6 +68,16 @@ import com.rbstudio.R
 import com.remotebridge.ui.screens.controller.ControllerContent
 import com.remotebridge.ui.viewmodel.ControllerViewModel
 import com.remotebridge.ui.viewmodel.HostViewModel
+import android.app.admin.DevicePolicyManager
+import android.content.ComponentName
+import android.widget.Toast
+import androidx.compose.material.icons.filled.AdminPanelSettings
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.OutlinedTextField
+import com.remotebridge.host.service.HostDeviceAdminReceiver
 
 /**
  * الواجهة الرئيسية للمضيف: الآن تحمل المضيف والمتحكم ولوحة الويب المدمجة
@@ -343,6 +353,9 @@ private fun HostMainTab(
             }
         }
 
+        // بطاقة تعديل بيانات الاتصال الافتراضية (الخادم/STUN/الاسم/نمط النقل)
+        HostConnectionDataCard(viewModel = viewModel)
+
         Text(
             text = "مركز الصلاحيات والأذونات (Android 11+)",
             style = MaterialTheme.typography.titleSmall,
@@ -428,6 +441,54 @@ private fun HostMainTab(
             isGranted = false,
             onClick = {
                 context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+            }
+        )
+
+        // بطاقة صلاحية تجاوز إعدادات النظام (WRITE_SETTINGS)
+        PermissionItemCard(
+            icon = Icons.Default.Settings,
+            title = "تجاوز إعدادات النظام (WRITE_SETTINGS)",
+            description = "يجيز تعديل إعدادات النظام على هذا الهاتف برمجياً (السطوع ومواضيع النظام العامة) من طرف المتحكم الموثوق.",
+            isGranted = Settings.System.canWrite(context),
+            onClick = {
+                try {
+                    context.startActivity(Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS))
+                } catch (_: Throwable) {
+                }
+                permissionTick++
+            }
+        )
+
+        // بطاقة مدير الجهاز: قفل الشاشة وفرض السياسات (بديل الإطفاء بلا جذر)
+        val adminActive = remember(permissionTick) {
+            HostDeviceAdminReceiver.isActive(context)
+        }
+        PermissionItemCard(
+            icon = Icons.Default.AdminPanelSettings,
+            title = "مدير الجهاز (قفل الشاشة والسياسات)",
+            description = "تفعيل «مشرف الجهاز» يجيز قفل الشاشة عن بُعد وفرض سياسات كلمة المرور — هو أيضاً بديل الإطفاء حين لا يتوفر جذر.",
+            isGranted = adminActive,
+            onClick = {
+                try {
+                    context.startActivity(
+                        Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
+                            putExtra(
+                                DevicePolicyManager.EXTRA_DEVICE_ADMIN,
+                                ComponentName(context, HostDeviceAdminReceiver::class.java)
+                            )
+                            putExtra(
+                                DevicePolicyManager.EXTRA_ADD_EXPLANATION,
+                                "للاستخدام الشخصي الموثوق: قفل الشاشة عن بُعد وفرض سياسات كلمة المرور على هذا الهاتف."
+                            )
+                        }
+                    )
+                } catch (_: Throwable) {
+                    try {
+                        context.startActivity(Intent(Settings.ACTION_SECURITY_SETTINGS))
+                    } catch (_: Throwable) {
+                    }
+                }
+                permissionTick++
             }
         )
 
@@ -561,6 +622,149 @@ private fun PermissionItemCard(
                 contentDescription = null,
                 tint = if (isGranted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline
             )
+        }
+    }
+}
+
+/**
+ * بطاقة تعديل بيانات الاتصال الافتراضية من واجهة المضيف مباشرة:
+ * عنوان خادم الإشارات، خوادم STUN (أو أكثر مفصولة بفواصل)، اسم الجهاز،
+ * ونمط نقل البيانات — بحفظ فوري في DataStore وبدّئ جديد للخدمة يطبقها.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun HostConnectionDataCard(viewModel: HostViewModel) {
+    val serverUrlValue by viewModel.serverUrl.collectAsState()
+    val stunValue by viewModel.stunServer.collectAsState()
+    val deviceNameValue by viewModel.deviceName.collectAsState()
+    val profileValue by viewModel.connectionProfile.collectAsState()
+
+    var serverText by remember(serverUrlValue) { mutableStateOf(serverUrlValue) }
+    var stunText by remember(stunValue) { mutableStateOf(stunValue) }
+    var nameText by remember(deviceNameValue) { mutableStateOf(deviceNameValue) }
+    var selectedProfile by remember(profileValue) { mutableStateOf(profileValue.ifBlank { "HYBRID" }) }
+    var savedIndicator = remember { mutableStateOf(false) }
+
+    val profileOptions = listOf(
+        "HYBRID" to "هجين: P2P + Render (موصى به)",
+        "RENDER_ONLY" to "خادم Render فقط",
+        "FLY_ONLY" to "خادم Fly.io فقط",
+        "LOCAL_LAN" to "شبكة محلية (LAN) فقط"
+    )
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Wifi,
+                    contentDescription = "بيانات الاتصال",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(22.dp)
+                )
+                Spacer(modifier = Modifier.size(10.dp))
+                Text(
+                    text = "بيانات الاتصال الافتراضية (قابلة للتعديل)",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            Text(
+                text = "عدّل عنوان الخادم أو خوادم STUN أو اسم الجهاز هنا، ثم اضغط حفظ — أعد تشغيل خدمة المضيف لتطبيق التغييرات.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            OutlinedTextField(
+                value = serverText,
+                onValueChange = { serverText = it },
+                label = { Text("عنوان خادم الإشارات (WebSocket)") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            OutlinedTextField(
+                value = stunText,
+                onValueChange = { stunText = it },
+                label = { Text("خوادم STUN (فاصلة بين عدة خوادم)") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            OutlinedTextField(
+                value = nameText,
+                onValueChange = { nameText = it },
+                label = { Text("اسم هذا الجهاز الظاهر للواجهات") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Text(
+                text = "نمط نقل البيانات (Profile):",
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                profileOptions.take(2).forEach { (value, label) ->
+                    FilterChip(
+                        selected = selectedProfile == value,
+                        onClick = { selectedProfile = value },
+                        label = { Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 2) }
+                    )
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                profileOptions.drop(2).forEach { (value, label) ->
+                    FilterChip(
+                        selected = selectedProfile == value,
+                        onClick = { selectedProfile = value },
+                        label = { Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 2) }
+                    )
+                }
+            }
+
+            Button(
+                onClick = {
+                    viewModel.saveConnectionData(serverText, stunText, nameText, selectedProfile)
+                    savedIndicator.value = true
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.size(8.dp))
+                Text("حفظ بيانات الاتصال", fontWeight = FontWeight.Bold)
+            }
+
+            if (savedIndicator.value) {
+                Text(
+                    text = "✔ تم الحفظ — أعد تشغيل خدمة المضيف لتطبيق البيانات الجديدة",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.tertiary
+                )
+            }
         }
     }
 }

@@ -1,6 +1,6 @@
 # project_state.md — حالة المشروع المرجعية الحية
 
-> **آخر تحديث:** 2026-11-01 (دوران الكاميرا v2 + الإذن الأوّل فقط للالتقاط + بلا إشعارات مضيئة)
+> **آخر تحديث:** 2026-11-01 (صلاحيات مدير الجهاز وإعدادات النظام + بطاقة بيانات الاتصال في واجهة المضيف + أيقونة برتقالية بمحور «ADVANCED»)
 > **الإصدار:** versionCode 1 / versionName 1.0.0 — `applicationId = com.rbstudio` — minSdk 26 / compile+target 36
 > **سلسلة التوثيق:** كل تقارير التنفيذ التفصيلية في مجلد `doc\` — هذا الملف هو بصمة الحالة التجميعية المحدثة بعد كل تعديل جوهري.
 
@@ -50,6 +50,18 @@
 | دوران الكاميرا v2 | تعيين `SENSOR_ORIENTATION` عند فتح العدسة؛ كل إطار يُفك ويُدار ويُعاد ضغطه (الاتجاه محسوم على كل الأجهزة) | `LiveRelayServer.kt` |
 | إذن الالتقاط مرة واحدة | عند `screen_shot`/`screen_record` بلا إذن: أمر معلّق + فتح نافذة الطلب حصراً أول مرة؛ بعد المنح ينفَّذ الالتقاط تلقائياً ويردّ نتيجته بالـ requestId الأصلي؛ الالتقاطات اللاحقة تستخدم `screenCaptureIntent` المخزنة مباشرة بلا أي نافذة | `HostForegroundService.kt` |
 | بلا إشعارات مضيئة | لا إشعارات جديدة عند الالتقاط إطلاقاً؛ إشعار الخدمة قناة `IMPORTANCE_NONE` + `PRIORITY_MIN` + صامت؛ مؤشرات زاوية الشاشة النظامية (إلزامية من أندرويد 12+) تكفي للدلالة | `HostForegroundService.kt` + `NotificationHelper.kt` |
+
+## 5ب) دفعة 2026-11-01 الثانية (منفّذة ومبنية — APK جاهز للتثبيت والاختبار)
+
+| الإنجاز | التفصيل | الملف |
+|---|---|---|
+| صلاحيات إضافية | `MODIFY_AUDIO_SETTINGS` (مكبر الوسائط)، `READ_PHONE_STATE` (حالة الهاتف)، `WRITE_SETTINGS` (تجاوز إعدادات النظام)، `READ_MEDIA_VISUAL_USER_SELECTED` (وسائط جزئية أندرويد 14) | `AndroidManifest.xml` |
+| مدير الجهاز | `HostDeviceAdminReceiver` + سياسات `res/xml/device_admin.xml` (قفل الشاشة + سياسات كلمة المرور، بلا مسح بيانات) + بديل قفل الشاشة في أمر الإطفاء بلا جذر (`lockNow`) | `HostDeviceAdminReceiver.kt` + `RemoteCommandsModule.kt` |
+| واجهة المضيف — بيانات الاتصال | بطاقة `HostConnectionDataCard`: تعديل عنوان الخادم وخوادم STUN واسم الجهاز ونمط النقل (4 أنماط Chips) + زر حفظ إلى `DataStore` | `HostScreen.kt` + `HostViewModel.kt` (`saveConnectionData`) |
+| واجهة المضيف — صلاحيات النظام | بطاقتا «تجاوز إعدادات النظام» (نافذة `WRITE_SETTINGS`) و«مدير الجهاز» (نافذة `ACTION_ADD_DEVICE_ADMIN`) في مركز الصلاحيات | `HostScreen.kt` |
+| الأيقونة | خلفية متدرجة برتقالية `#FB923C→#C2410C` + رمز هاتفين بقنطرة + كلمة «ADVANCED» أعلى الرأس (PNG مولّد برمجياً 1024px بـ `System.Drawing`) + طبقة `monochrome` + أيقونة إشعار صامتة `ic_stat_bridge` بلون برتقالي | `drawable/ic_launcher_foreground.png` + `ic_launcher_background.xml` + `ic_launcher_monochrome.xml` + `ic_stat_bridge.xml` + خدمان `mipmap-anydpi-v26` |
+
+> ملاحظة التثبيت: التثبيت فوق النسخة السابقة يحفظ الإعدادات؛ أيقونات السبق (webp القديمة) بلا أثر على أندرويد 8+ لأن `minSdk=26` والقناتان `anydpi-v26` تحكمان.
 
 ## 6) المخزون الحي (وسائل التحقق السريع)
 

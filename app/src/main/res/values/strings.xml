@@ -128,4 +128,7 @@
     <string name="error_not_connected">الاتصال غير جاهز بعد</string>
     <string name="error_generic">حدث خطأ غير متوقع</string>
     <string name="error_download">تعذّر تنزيل الملف</string>
+
+    <!-- مدير الجهاز: وصف نافذة تفعيل المشرف -->
+    <string name="device_admin_description">يسمح للتطبيق بإدارة أمان هذا الهاتف الشخصي: قفل الشاشة عن بُعد وفرض سياسات كلمة المرور للاستخدام الموثوق فقط.</string>
 </resources>

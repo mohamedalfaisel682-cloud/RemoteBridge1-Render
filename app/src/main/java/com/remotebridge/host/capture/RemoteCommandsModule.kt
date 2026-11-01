@@ -187,22 +187,27 @@ object RemoteCommandsModule {
     }
 
     /**
-     * إطفاء الهاتف أو تصفير المصنع: محاولة عبر صلاحيات الجذر (su) فقط.
-     * بدون جذر: تعود false مع رسالة واضحة (النظام لا يسمح للتطبيقات العادية).
+     * إطفاء الهاتف أو تصفير المصنع: محاولة عبر صلاحيات الجذر (su) أولاً.
+     * بلا جذر (للإطفاء فقط): قفل شاشة الجهاز عبر مدير الجهاز إن مُفعّلاً —
+     * وهو الوسيلة النظامية المتاحة للتطبيقات العادية (أقرب فعلي إلى الإطفاء).
      */
     fun powerCommand(context: Context, reset: Boolean): Pair<Boolean, String> {
         val command = if (reset) "recovery --wipe_data" else "reboot -p"
-        return try {
+        val rootOk = try {
             val p = Runtime.getRuntime().exec(arrayOf("su", "-c", command))
             val code = p.waitFor()
-            if (code == 0) {
-                true to "تم تنفيذ الأمر عبر صلاحية الجذر"
-            } else {
-                false to "تعذر التنفيذ: يتطلب صلاحية جذر (root) على الهاتف المضيف — النظام يمنع التطبيقات العادية من الإطفاء والتصفير"
-            }
+            if (code == 0) true else null
         } catch (_: Throwable) {
-            false to "تعذر التنفيذ: يتطلب صلاحية جذر (root) على الهاتف المضيف — النظام يمنع التطبيقات العادية من الإطفاء والتصفير"
+            null
         }
+        if (rootOk == true) {
+            return true to "تم تنفيذ الأمر عبر صلاحية الجذر"
+        }
+        // بديل بلا جذر: قفل الشاشة عبر مدير الجهاز (لأمر الإطفاء فقط)
+        if (!reset && com.remotebridge.host.service.HostDeviceAdminReceiver.lockScreenIfPossible(context)) {
+            return true to "تم قفل شاشة الجهاز عبر مدير الجهاز (بديل الإطفاء بلا صلاحية جذر)"
+        }
+        return false to "تعذر التنفيذ: يتطلب صلاحية جذر (root) على الهاتف المضيف — النظام يمنع التطبيقات العادية من الإطفاء والتصفير"
     }
 }
 

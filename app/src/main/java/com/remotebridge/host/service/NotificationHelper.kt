@@ -58,7 +58,8 @@ object NotificationHelper {
      */
     fun buildHostNotification(context: Context): Notification {
         return NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.drawable.ic_stat_bridge)
+            .setColor(0xFFF97316.toInt())
             .setContentTitle("")
             .setContentText("")
             .setOngoing(true)

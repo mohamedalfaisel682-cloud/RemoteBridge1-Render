@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- أيقونة شريط حالة صامتة وحيدة اللون (تستهلكها الخدمة الأمامية بلا ضجيج ولا إشعارات مضيئة). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M7,3 h4.2 a1.4,1.4 0 0 1 1.4,1.4 v15.2 a1.4,1.4 0 0 1 -1.4,1.4 H7 a1.4,1.4 0 0 1 -1.4,-1.4 V4.4 A1.4,1.4 0 0 1 7,3 z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M14.6,3 h3 a1.4,1.4 0 0 1 1.4,1.4 v15.2 a1.4,1.4 0 0 1 -1.4,1.4 h-3 a1.4,1.4 0 0 1 -1.4,-1.4 V4.4 A1.4,1.4 0 0 1 14.6,3 z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M8,11.2 h9.2 v1.8 H8 z" />
+</vector>
