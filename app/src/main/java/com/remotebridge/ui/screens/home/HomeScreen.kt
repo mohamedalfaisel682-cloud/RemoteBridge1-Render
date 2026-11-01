@@ -64,7 +64,7 @@ import com.remotebridge.core.data.AppModePrefs
 import androidx.compose.ui.platform.LocalContext
 
 /**
- * الشاشة الرئيسية لنظام "جسر عن بعد": واجهة أنيقة، عصرية ومصممة بدقة لشاشات الهواتف بلمسات زجاجية وألوان Material 3.
+ * الشاشة الرئيسية لنظام "RBstudio": واجهة أنيقة، عصرية ومصممة بدقة لشاشات الهواتف بلمسات زجاجية وألوان Material 3.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.asSharedFlow
  * يلتقط إشعارات التطبيقات على الجهاز المضيف.
  *
  * ملاحظة: هذا يتطلب تفعيلاً يدوياً من المستخدم عبر:
- * الإعدادات → الوصول إلى الإشعارات → جسر عن بعد
+ * الإعدادات → الوصول إلى الإشعارات → RBstudio
  * لا يمكن تفعيله برمجياً (سياسة أندرويد).
  */
 class BridgeNotificationListenerService : NotificationListenerService() {

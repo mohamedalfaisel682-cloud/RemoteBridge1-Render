@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.Environment
 import android.os.PowerManager
 import android.provider.Settings
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -436,20 +437,39 @@ internal fun HostPermissionsSection() {
             description = stringResource(R.string.device_admin_desc),
             isGranted = isAdminActive,
             onClick = {
-                try {
-                    context.startActivity(
-                        Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
-                            putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, adminComponent)
-                            putExtra(
-                                DevicePolicyManager.EXTRA_ADD_EXPLANATION,
-                                context.getString(R.string.device_admin_explanation)
-                            )
-                        }
-                    )
-                } catch (_: Throwable) {
+                // 🔧 B21 — سلّم احتياطيّ حقيقي لقلبِ الأجهزة: بعض الهُوَاتف والمُصلّات
+                // ترفض النافذة المباشرة إما بصمت، فنتفاجر هذه الشاشات بالترتيب:
+                // (1) نافذة التفعيل المباشرة، (2) صفحة قائمة مديري الأجهزة (مكوّن صريح
+                // شائع في إعدادات `AOSP` الأصلية)، (3) شاشة الأمان البديلة.
+                var lastFailure = ""
+                val attempts = listOf(
+                    Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
+                        putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, adminComponent)
+                        putExtra(
+                            DevicePolicyManager.EXTRA_ADD_EXPLANATION,
+                            context.getString(R.string.device_admin_explanation)
+                        )
+                    },
+                    Intent().apply {
+                        setClassName("com.android.settings", "com.android.settings.DeviceAdminSettingsActivity")
+                    },
+                    Intent(Settings.ACTION_SECURITY_SETTINGS)
+                )
+                var opened = false
+                for (attemptIntent in attempts) {
+                    try {
+                        context.startActivity(attemptIntent)
+                        opened = true
+                        break
+                    } catch (t: Throwable) {
+                        lastFailure = t.message ?: t.javaClass.simpleName
+                        Log.w("PermissionsUI", "تعذّر فتح شاشة مدير الجهاز ($lastFailure) — تجربة الشاشة التالية")
+                    }
+                }
+                if (!opened) {
                     Toast.makeText(
                         context,
-                        "تعذر فتح صفحة مدير الجهاز على هذا الهاتف",
+                        "تعذر فتح صفحة مدير الجهاز على هذا الهاتف ($lastFailure)",
                         Toast.LENGTH_LONG
                     ).show()
                 }

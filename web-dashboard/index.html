@@ -809,7 +809,7 @@
             border-color: rgba(45, 212, 191, .75);
             box-shadow: 0 0 46px rgba(45, 212, 191, .16), inset 0 0 60px rgba(0, 0, 0, .6);
         }
-        .rbv3-stage video { width: 100%; height: 100%; object-fit: cover; background: transparent; }
+        .rbv3-stage video { width: 100%; height: 100%; object-fit: contain; background: transparent; transition: object-fit .25s ease; }
         .rbv3-vault {
             position: absolute; inset: 0; pointer-events: none; z-index: 4;
             background:
@@ -3985,14 +3985,14 @@
                     } else if (data.mode === 'screen') {
                         streamState.audioOnly = false;
                         streamState.mode = 'screen';
-                        // السياسة الجديدة: الكتم الافتراضي لكل البث المرئي
+                        // 🔧 B21 — الحالة تتبع ردّ المضيف الحقيقي عبر `stream_started`
                         streamState.audioEnabled = data.audioEnabled === true;
                         showToast("تم بدء بث شاشة الهاتف الحية!", "success");
                     } else {
                         streamState.audioOnly = false;
                         streamState.mode = 'camera';
                         streamState.audioEnabled = data.audioEnabled === true;
-                        showToast("تم بدء بث الكاميرا — الصوت مكتوم افتراضياً (انقر مكبر الصوت لتشغيله)", "info");
+                        showToast("تم بدء بث الكاميرا — الصوت مفعّل افتراضياً 🎧 (انقر مكبر الصوت للكتم متى شاءت)", "info");
                     }
                     applyStreamMuteToElements();
                     rbStreamRecoveryEnsure(); // 🔧 B17 — بدء البث يؤكد حرس التعافي
@@ -6177,7 +6177,7 @@
                     <button onclick="toggleScreenStream()" class="rb-stream-card ${isScreenActive ? 'rb-stream-card-on' : ''}" title="بث شاشة الهاتف المضيف مباشرة — يتطلب موافقة MediaProjection على الهاتف لحظة الطلب">
                         <span class="rb-stream-ico">🖥️</span>
                         <span class="rb-stream-t">${isScreenActive ? 'بث الشاشة نشط — انقر للإيقاف' : 'بث الشاشة'}</span>
-                        <span class="rb-stream-d">يبدأ مكتوماً (سياسة صامتة) ويمتد الصوت عبر stream_started</span>
+                        <span class="rb-stream-d">يبدأ بصوت الميكروفون مفعّلاً (RBstudio)، والمشغّل يحفظ النِّسَب كاملة للفيديو (object-fit: contain)</span>
                     </button>
                     <button onclick="toggleLiveCameraStream()" class="rb-stream-card ${isCamActive ? 'rb-stream-card-on' : ''}" title="بث الكاميرا الأمامية/الخلفية مباشرة عبر الربط الحي">
                         <span class="rb-stream-ico">${streamState.isFront ? '🤳' : '📷'}</span>
@@ -6227,6 +6227,19 @@
         }
 
         // تطبيق سياسة الكتم على عناصر الوسائط في الصفحة (B18 — كل مرايا الصوت عبر الواجهات الثلاث)
+        // 🔧 B21 — محاولة تشغيل مقاومة لسياسة التشغيل التلقائي: عند رفض `play`
+        // نُعيد المحاولة تلقائياً مع أول نقرة/لمسة للمستخدم حتى لا يظل الصوت عالقاً كتِمًّا.
+        function rbTryPlayUnmuted(el) {
+            if (!el || el.muted) return;
+            try {
+                const p = el.play();
+                if (p && p.catch) p.catch(() => {
+                    const rbAudioRetry = () => { try { el.play().catch(() => {}); } catch (_) {} };
+                    document.addEventListener('click', rbAudioRetry, { once: true });
+                    document.addEventListener('touchstart', rbAudioRetry, { once: true });
+                });
+            } catch (_) {}
+        }
         function applyStreamMuteToElements() {
             try {
                 const shouldMute = streamState.audioEnabled !== true;
@@ -6235,20 +6248,14 @@
                 for (const el of [globalAudio, studioAudio]) {
                     if (!el) continue;
                     el.muted = shouldMute;
-                    if (!shouldMute) {
-                        const p = el.play();
-                        if (p && p.catch) p.catch(() => {});
-                    }
+                    if (!shouldMute) rbTryPlayUnmuted(el);
                 }
                 // مرآة المحرك البرمجي تتبع سياسة صوتها المستقلة (rbBc.speakerOn)
                 const bcAudio = document.getElementById("bc-pro-audio");
                 if (bcAudio) {
                     const bcMute = !rbBc.speakerOn;
                     bcAudio.muted = bcMute;
-                    if (!bcMute) {
-                        const p = bcAudio.play();
-                        if (p && p.catch) p.catch(() => {});
-                    }
+                    if (!bcMute) rbTryPlayUnmuted(bcAudio);
                 }
             } catch (e) { console.warn('mute apply failed', e); }
         }
@@ -6341,16 +6348,16 @@
             try {
                 if (kind === 'screen') {
                     streamState.mode = 'screen';
-                    streamState.audioEnabled = false; // سياسة الكتم الافتراضي حتى لو كانت أيقونة الصوت مفعّلة سابقاً
+                    streamState.audioEnabled = true; // 🔧 B21 — الصوت مفعّل افتراضياً (بلا سياسة صمت قسرية)
                     applyStreamMuteToElements();
                     sendRPCCommand('start_screen_stream');
-                    showToast('تم إرسال طلب بدء بث شاشة الجوال المباشرة... (الصوت مكتوم افتراضياً)', 'info');
+                    showToast('تم إرسال طلب بدء بث شاشة الجوال المباشرة... (الصوت مفعّل افتراضياً 🎧)', 'info');
                 } else if (kind === 'camera') {
                     streamState.mode = 'camera';
-                    streamState.audioEnabled = false;
+                    streamState.audioEnabled = true; // 🔧 B21 — الصوت مفعّل افتراضياً (بلا سياسة صمت قسرية)
                     applyStreamMuteToElements();
                     sendRPCCommand('start_camera_stream', { front: streamState.isFront, audio: true });
-                    showToast('تم إرسال أمر بدء بث الكاميرا (' + (streamState.isFront ? 'الأمامية 🤳' : 'الخلفية 📷') + ') — الصوت مكتوم افتراضياً', 'success');
+                    showToast('تم إرسال أمر بدء بث الكاميرا (' + (streamState.isFront ? 'الأمامية 🤳' : 'الخلفية 📷') + ') — الصوت مفعّل افتراضياً 🎧', 'success');
                 } else if (kind === 'audio') {
                     streamState.mode = 'audio';
                     streamState.audioEnabled = true;
@@ -6645,7 +6652,7 @@
         // حالة خاصة (سجل تشغيل حي، مؤقت بلا إطارات 12 ثانية، إعادة تفاوض
         // تلقائية ثم إعادة تشغيل ICE، عناصر عرض منفصلة، قياس معدل البت عبر getStats)
         // ============================================================
-        const rbBc = { engineTimer: null, watchdogTimer: null, log: [], wantFramesAt: 0, lastBytes: 0, lastBitrateKbps: 0, framesSeen: false, speakerOn: false, restartsDone: 0 };
+        const rbBc = { engineTimer: null, watchdogTimer: null, log: [], wantFramesAt: 0, lastBytes: 0, lastBitrateKbps: 0, framesSeen: false, speakerOn: true, restartsDone: 0 }; // 🔧 B21 — الصوت مفعّل افتراضياً
         function rbBcLog(line) {
             try {
                 rbBc.log.push('[' + new Date().toLocaleTimeString('en-GB') + '] ' + line);

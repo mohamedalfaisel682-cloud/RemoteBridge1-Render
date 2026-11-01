@@ -97,8 +97,13 @@ class HostForegroundService : LifecycleService() {
 
         fun switchCamera() {
             val inst = activeInstance ?: return
-            inst.peerManager?.switchCamera { isFront ->
-                cameraStreamingState.value = cameraStreamingState.value.copy(isFrontCamera = isFront)
+            // 🔧 B21 — موقّع النداء الجديد: مؤشر نجاح/فشل + بيان فاعل الفشل
+            inst.peerManager?.switchCamera { success, _ ->
+                if (success) {
+                    cameraStreamingState.value = cameraStreamingState.value.copy(
+                        isFrontCamera = inst.peerManager?.isUsingFrontCamera() ?: false
+                    )
+                }
             }
         }
 
@@ -847,22 +852,26 @@ class HostForegroundService : LifecycleService() {
                 } else {
                     val front = request.params?.get("front")?.jsonPrimitive?.contentOrNull?.toBoolean() ?: false
                     val audio = request.params?.get("audio")?.jsonPrimitive?.contentOrNull?.toBoolean() ?: true
-                    val ok = manager?.startCameraStreaming(front, audio) ?: false
-                    // === سياسة الكتم الافتراضي: أي بث مرئي يبدأ صوته مكتوماً حتى لو طُلب تفعيله ===
-                    if (ok) manager?.setAudioEnabled(false)
-                    // 🔧 إصلاح البث: نبض جاهزية فوري ليتفاوض المتحكم ويستلم الإطارات
-                    if (ok) pushStreamStarted("camera", false)
+                    // 🔧 B21 — فحص إذن الميكروفون: عند غيابه نبدأ البث المرئي وحده بصدقٍ ونبلّغ
+                    // بحقل `audioNoPermission` بدلاً من النجاح الباذخ بلا صوت، ونبلّغ للتلميح.
+                    val micGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+                    val withAudio = audio && micGranted
+                    val ok = manager?.startCameraStreaming(front, withAudio) ?: false
+                    // 🔧 B21 — سياسة الصوت الجديدة: البث يبدأ بصوت الميكروفون مفعّلاً افتراضياً
+                    // (لا كتم قسري بعد البدء)، ويُقدَم النبض بالحالة الحقيقية للصوت فوراً.
+                    if (ok) pushStreamStarted("camera", withAudio)
                     cameraStreamingState.value = CameraStreamingState(
                         isStreaming = ok,
                         isFrontCamera = manager?.isUsingFrontCamera() ?: false,
-                        isAudioEnabled = false
+                        isAudioEnabled = ok && withAudio
                     )
                     buildJsonObject {
                         put("cmd", Commands.START_CAMERA_STREAM)
                         put("started", ok)
                         put("mode", "camera")
                         put("isFront", manager?.isUsingFrontCamera() ?: false)
-                        put("audioEnabled", false)
+                        put("audioEnabled", ok && withAudio)
+                        if (audio && !micGranted) put("audioNoPermission", true)
                         if (!ok) {
                             put("error", "تعذر بدء بث الكاميرا. يرجى التأكد من اكتمال اتصال WebRTC ومنح إذن الكاميرا على الهاتف المضيف")
                         }
@@ -910,18 +919,31 @@ class HostForegroundService : LifecycleService() {
             }
 
             Commands.SWITCH_CAMERA -> {
-                // 🔧 B17 — إجابة صادقة: التبديل ينجح فقط عند وجود التقاط كاميرا نشط
+                // 🔧 B17/B21 — إجابة صادقة: `switchCamera` ينتظر جواب قافلة `Camera2`
+                // داخلياً ويردّ بمؤشر نجاح/فشل حقيقيين، فلا يخرج «تم» كاذبة للمتحكم أبداً.
                 val streaming = manager?.isCameraStreaming() == true
                 if (streaming) {
-                    var frontResult = manager?.isUsingFrontCamera() ?: false
-                    manager?.switchCamera { isFront ->
-                        frontResult = isFront
-                        cameraStreamingState.value = cameraStreamingState.value.copy(isFrontCamera = isFront)
+                    var switchSucceeded = false
+                    var switchFailedReason: String? = null
+                    manager?.switchCamera { ok, err ->
+                        switchSucceeded = ok
+                        switchFailedReason = err
                     }
-                    buildJsonObject {
-                        put("cmd", Commands.SWITCH_CAMERA)
-                        put("switched", true)
-                        put("isFront", frontResult)
+                    val nowFront = manager?.isUsingFrontCamera() ?: false
+                    if (switchSucceeded) {
+                        cameraStreamingState.value = cameraStreamingState.value.copy(isFrontCamera = nowFront)
+                        buildJsonObject {
+                            put("cmd", Commands.SWITCH_CAMERA)
+                            put("switched", true)
+                            put("isFront", nowFront)
+                        }
+                    } else {
+                        buildJsonObject {
+                            put("cmd", Commands.SWITCH_CAMERA)
+                            put("switched", false)
+                            put("isFront", nowFront)
+                            put("error", switchFailedReason ?: "تعذر تبديل الكاميرا على الهاتف المضيف")
+                        }
                     }
                 } else {
                     buildJsonObject {
@@ -937,17 +959,18 @@ class HostForegroundService : LifecycleService() {
                 val intent = screenCaptureIntent
                 if (intent != null && manager != null) {
                     val ok = manager.startScreenStreaming(intent)
-                    if (ok) pushStreamStarted("screen", false)
+                    // 🔧 B21 — السياسة الجديدة: بث الشاشة يبدأ بصوت الميكروفون مفعّلاً افتراضياً
+                    if (ok) pushStreamStarted("screen", true)
                     cameraStreamingState.value = CameraStreamingState(
                         isStreaming = ok,
                         isFrontCamera = false,
-                        isAudioEnabled = false
+                        isAudioEnabled = ok
                     )
                     buildJsonObject {
                         put("cmd", Commands.START_SCREEN_STREAM)
                         put("started", ok)
                         put("mode", "screen")
-                        put("audioEnabled", false)
+                        put("audioEnabled", ok)
                     }
                 } else {
                     // إطلاق نشاط طلب الإذن من المستخدم
@@ -1370,11 +1393,12 @@ class HostForegroundService : LifecycleService() {
                         if (intent != null && peerManager != null) {
                             val ok = peerManager?.startScreenStreaming(intent) ?: false
                             if (ok) {
+                                // 🔧 B21 — السياسة الجديدة: صوت بث الشاشة مفعّل افتراضياً
                                 cameraStreamingState.value = CameraStreamingState(
                                     isStreaming = true,
-                                    isAudioEnabled = false
+                                    isAudioEnabled = true
                                 )
-                                pushStreamStarted("screen", false)
+                                pushStreamStarted("screen", true)
                             }
                         }
                     }

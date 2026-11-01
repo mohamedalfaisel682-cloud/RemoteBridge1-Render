@@ -50,7 +50,7 @@
     <string name="host_stopped">المضيف متوقف</string>
     <string name="start_host">بدء المضيف</string>
     <string name="stop_host">إيقاف المضيف</string>
-    <string name="host_notification_title">جسر عن بعد — المضيف يعمل</string>
+    <string name="host_notification_title">RBstudio — المضيف يعمل</string>
     <string name="host_notification_text">الجهاز متاح للاتصال من جهاز التحكم</string>
     <string name="host_channel_name">خدمة المضيف</string>
     <string name="grant_notification_access">الوصول للإشعارات</string>
@@ -98,9 +98,9 @@
     <string name="device_admin_explanation">تفعيل مدير الجهاز يجهّز هذا الهاتف المضيف للتحكم الكامل: قفل الشاشة عن بُعد وفرض سياسات الحماية بطلبٍ من جهاز المتحكم.</string>
 
     <!-- B19 — تسميات البيان لخدمة إمكانية الوصول ومدير الجهاز -->
-    <string name="accessibility_service_label">جسر عن بُعد — خدمة التحكم الكامل</string>
+    <string name="accessibility_service_label">RBstudio — خدمة التحكم الكامل</string>
     <string name="accessibility_service_desc">خدمة إمكانية الوصول لجهاز المضيف: تنفيذ إجراءات النظام العامة (رجوع، الرئيسة، فتح الإشعارات) ونقر عناصر الشاشة لدعم التحكم الكامل من جهاز المتحكم عن بُعد.</string>
-    <string name="device_admin_label">جسر عن بُعد — مدير الجهاز</string>
+    <string name="device_admin_label">RBstudio — مدير الجهاز</string>
 
     <!-- B19 — تحرير بيانات الاتصال الافتراضية داخل شاشة المضيف -->
     <string name="connection_editor_title">تعديل بيانات الاتصال الافتراضية</string>

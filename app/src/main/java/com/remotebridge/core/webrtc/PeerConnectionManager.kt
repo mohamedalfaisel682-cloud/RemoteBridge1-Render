@@ -78,6 +78,9 @@ class PeerConnectionManager(
     // 🔧 B17 — قفل متزامن لتبديل الكاميرا: يمنع أوامر التبديل المتلاحقة من كسر الحركة
     @Volatile
     private var cameraSwitchBusy: Boolean = false
+    // 🔧 B21 — قفل هندسي لتدفق البث: يمنع استعارة/تلف بنية المسارات من خيطَي الإيقاف
+    // المتوازيين (مثل أرشفة التلافي والإيقاع) فيُعمّ دون لمسات متزامنة على الأغلفة الحية.
+    private val streamingMutex = Any()
 
     private val _state = MutableStateFlow(PeerState.Idle)
     val state: StateFlow<PeerState> = _state.asStateFlow()
@@ -433,17 +436,17 @@ class PeerConnectionManager(
             videoTrack = factory.createVideoTrack(nextVideoTrackId(), videoSource!!)
             attachOrPrepareTracks()
 
-            // صوت الشاشة: يُنشأ الميكروفون مساراً مكتوماً افتراضياً (السياسة الجديدة)
-            // ليستطيع المتحكم تفعيله لاحقاً بنقرة على مكبر الصوت خلال بث الشاشة.
+            // 🔧 B21 — صوت الشاشة: يبدأ الميكروفون مساراً مفعّلاً افتراضياً (بلا سياسة صمت قسرية)،
+            // والمتحكم يستطيع كتمه بنقرة مكبر الصوت متى شاء. بستةٍ وسياسة الصمت السابقة لم يسمع الحيّ.
             try {
                 val audioConstraints = MediaConstraints()
                 val audioSource = factory.createAudioSource(audioConstraints)
                 audioTrack = factory.createAudioTrack(nextAudioTrackId(), audioSource)
-                isAudioStreamingEnabled = false
-                audioTrack?.setEnabled(false)
+                isAudioStreamingEnabled = true
+                audioTrack?.setEnabled(true)
                 attachOrPrepareTracks()
             } catch (t: Throwable) {
-                Log.w(TAG, "تعذّر تهيئة مسار الصوت مع بث الشاشة (سيبقى البث صامتاً): ${t.message}")
+                Log.w(TAG, "تعذّر تهيئة مسار الصوت مع بث الشاشة (سيستمر البث المرئي بلا صوت): ${t.message}")
             }
             return true
         } catch (t: Throwable) {
@@ -578,33 +581,63 @@ class PeerConnectionManager(
      * التبديل السريع بين الكاميرا الأمامية والخلفية أثناء البث الحي.
      * 🔧 B17 — يعمل بالتبديل الداخلي (Camera2 switch) مع استمرار البث والمشغّل:
      * •بلا أي إيقاف أو تفاوض، وقفل متزامن يمنع النقرات المتلاحقة من كسر الحركة.
+     * 🔧 B21 — يردّ بمؤشر نجاح/فشل حقيقيين صادقين: ينتظر جواب قافلة `Camera2`
+     * إلى حدّ الساعة ونصف، فلا يخرج «تم» كاذبة للمتحكم على قلب مستلمٍ أبداً.
      */
-    fun switchCamera(onComplete: ((Boolean) -> Unit)? = null) {
+    fun switchCamera(onComplete: ((Boolean, String?) -> Unit)? = null) {
         val capturer = videoCapturer
         if (cameraSwitchBusy) {
             Log.w(TAG, "تبديل الكاميرا قيد التنفيذ بالفعل — تجاهل الطلب المتزامن بأمان")
-            onComplete?.invoke(isFrontFacingCamera)
+            onComplete?.invoke(false, "تبديل الكاميرا قيد التنفيذ بالفعل — انتظر لحظة وأعد المحاولة")
             return
         }
         if (capturer is CameraVideoCapturer) {
             cameraSwitchBusy = true
+            val switchLatch = java.util.concurrent.CountDownLatch(1)
+            var switchSucceeded = false
+            var switchFailedReason: String? = null
+            var switchAnswered = false
+            val switchLock = Any()
             capturer.switchCamera(object : CameraVideoCapturer.CameraSwitchHandler {
                 override fun onCameraSwitchDone(isFront: Boolean) {
                     isFrontFacingCamera = isFront
                     cameraSwitchBusy = false
                     Log.i(TAG, "تم تبديل الكاميرا بنجاح. أمامية: $isFront")
-                    onComplete?.invoke(isFront)
+                    synchronized(switchLock) { switchSucceeded = true }
+                    switchLatch.countDown()
                 }
 
                 override fun onCameraSwitchError(errorDescription: String?) {
                     Log.e(TAG, "فشل تبديل الكاميرا: $errorDescription")
                     cameraSwitchBusy = false
-                    onComplete?.invoke(isFrontFacingCamera)
+                    synchronized(switchLock) {
+                        if (switchFailedReason == null) {
+                            switchFailedReason = errorDescription ?: "تعذر تبديل الكاميرا على الهاتف المضيف — أعد المحاولة"
+                        }
+                    }
+                    switchLatch.countDown()
                 }
             })
+            try {
+                switchLatch.await(1500L, java.util.concurrent.TimeUnit.MILLISECONDS)
+            } catch (_: Throwable) {
+            }
+            synchronized(switchLock) {
+                if (!switchAnswered) {
+                    switchAnswered = true
+                    if (switchSucceeded) {
+                        onComplete?.invoke(true, null)
+                    } else {
+                        onComplete?.invoke(
+                            false,
+                            switchFailedReason ?: "انقضى زمن تبديل الكاميرا دون جواب — أعد المحاولة"
+                        )
+                    }
+                }
+            }
         } else {
             Log.w(TAG, "لا يوجد التقاط كاميرا نشط الآن — لا تبديل ممكن (بذون آمن مهما كان)")
-            onComplete?.invoke(isFrontFacingCamera)
+            onComplete?.invoke(false, "لا يوجد بث كاميرا نشط للتبديل — ابدأ بث الكاميرا أولاً ثم ظبّل العدسة")
         }
     }
 
@@ -662,37 +695,46 @@ class PeerConnectionManager(
     private fun nextAudioTrackId(): String { trackSeq++; return "RBA$trackSeq" }
 
     fun stopStreaming() {
-        try {
-            videoCapturer?.stopCapture()
-        } catch (_: Throwable) {
-        }
-        // 🧩 B20 — فصل المرسلين قبل تلف المسارات: من دون هذه الخطوة يظل راسل `RTP`
-        // ممسكاً بمسار متلف فيتجمد النقل لاحقاً مع بقاء الاتصال ظاهراً سليماً؛
-        // تفريغ المرسِل هنا يجعل `setTrack` بمسار جديد نافذاً فعلياً عند بدء البث القادم.
-        try {
-            connection?.transceivers?.forEach { tr ->
-                try {
-                    if (tr.sender?.track() != null) {
-                        tr.sender.setTrack(null, true)
-                    }
-                } catch (_: Throwable) {
-                }
+        // 🔧 B21 — سورة هندسية: الإيقاف وبدء الجيل التالي لا يتسارعان على بنية المسارات
+        // أبداً — القفل يعزل تسلسل (تفريغ المرسلين → تلف الأغلفة) عن أي إيقاف موازٍ.
+        synchronized(streamingMutex) {
+            try {
+                videoCapturer?.stopCapture()
+            } catch (_: Throwable) {
             }
-        } catch (_: Throwable) {
+            // 🧩 B21 — فصل المرسلين قبل تلف المسارات **بلا لمس غلاف المسار إطلاقاً**:
+            // قراءة `sender.track()` كانت تعيد غلافاً مخبّأً قد يكون مستلفاً لتلف مسار
+            // الجيل السابق، فتُرمى عند اللمس اللاحق «MediaStreamTrack has been disposed»
+            // ويفشل البث الثاني دائماً. لذّا نُنفّذ `setTrack(null, true)` مبكراً كحدٍّ
+            // للتسويّة الساذجة لكل المرسلين (غير مأذون مرتين — العملية سمحية الهوام).
+            try {
+                connection?.transceivers?.forEach { tr ->
+                    try { tr.sender.setTrack(null, true) } catch (_: Throwable) {
+                    }
+                }
+            } catch (_: Throwable) {
+            }
+            try {
+                connection?.senders?.forEach { s ->
+                    try { s.setTrack(null, true) } catch (_: Throwable) {
+                    }
+                }
+            } catch (_: Throwable) {
+            }
+            videoCapturer?.dispose()
+            videoCapturer = null
+            videoSource?.dispose()
+            videoSource = null
+            videoTrack?.dispose()
+            videoTrack = null
+            audioSource?.dispose()
+            audioSource = null
+            audioTrack?.dispose()
+            audioTrack = null
+            surfaceTextureHelper?.dispose()
+            surfaceTextureHelper = null
+            cameraSwitchBusy = false
         }
-        videoCapturer?.dispose()
-        videoCapturer = null
-        videoSource?.dispose()
-        videoSource = null
-        videoTrack?.dispose()
-        videoTrack = null
-        audioSource?.dispose()
-        audioSource = null
-        audioTrack?.dispose()
-        audioTrack = null
-        surfaceTextureHelper?.dispose()
-        surfaceTextureHelper = null
-        cameraSwitchBusy = false
     }
 
     fun sendRequest(request: BridgeRequest): Boolean {
