@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -32,6 +34,13 @@ class SettingsRepository(private val context: Context) {
         val WEB_UI_ENABLED = booleanPreferencesKey("web_ui_enabled")
         // B12 — وضع الإخفاء: إشعار خدمة بأدنى أهمية ومحتوى محايد (الافتراضي: مفعّل)
         val STEALTH_NOTIFICATION = booleanPreferencesKey("stealth_notification")
+        // B26 — مزامنة الإعدادات (التعديل الأحدث يفوز): طابع زمني + سلوك الاستمرارية
+        val SETTINGS_SYNC_TIMESTAMP = longPreferencesKey("settings_sync_timestamp")
+        val RESTART_ON_KILL = booleanPreferencesKey("restart_on_kill")
+        val RESTART_DELAY_MINUTES = intPreferencesKey("restart_delay_minutes")
+        // B26 — مجلدا حفظ التنزيلات والتسجيلات عبر SAF (محليان: لا يُزامن across الأجهزة)
+        val DOWNLOADS_DIR_URI = stringPreferencesKey("downloads_dir_uri")
+        val RECORDINGS_DIR_URI = stringPreferencesKey("recordings_dir_uri")
     }
 
     companion object {
@@ -70,6 +79,24 @@ class SettingsRepository(private val context: Context) {
     val stealthNotification: Flow<Boolean> = context.settingsDataStore.data.map {
         it[Keys.STEALTH_NOTIFICATION] ?: true
     }
+    // B26 — مزامنة الإعدادات: طابع التبديل الزمني (التعديل الأحدث يفوز) وسلوك الاستمرارية
+    val settingsSyncTimestamp: Flow<Long> = context.settingsDataStore.data.map {
+        it[Keys.SETTINGS_SYNC_TIMESTAMP] ?: 0L
+    }
+    val restartOnKill: Flow<Boolean> = context.settingsDataStore.data.map {
+        it[Keys.RESTART_ON_KILL] ?: true
+    }
+    val restartDelayMinutes: Flow<Int> = context.settingsDataStore.data.map {
+        it[Keys.RESTART_DELAY_MINUTES] ?: 1
+    }
+    // B26 — مجلد حفظ التنزيلات (SAF tree URI أو فارغ للاحتياط داخل ملفات التطبيق)
+    val downloadsDirUri: Flow<String> = context.settingsDataStore.data.map {
+        it[Keys.DOWNLOADS_DIR_URI] ?: ""
+    }
+    // B26 — مجلد حفظ التسجيلات (SAF tree URI أو فارغ للاحتياط داخل ملفات التطبيق)
+    val recordingsDirUri: Flow<String> = context.settingsDataStore.data.map {
+        it[Keys.RECORDINGS_DIR_URI] ?: ""
+    }
 
     suspend fun setServerUrl(url: String) {
         context.settingsDataStore.edit { it[Keys.SERVER_URL] = url }
@@ -102,6 +129,29 @@ class SettingsRepository(private val context: Context) {
     /** B12 — تبديل وضع الإخفاء (يُطبَّق عند بدء الخدمة التالي). */
     suspend fun setStealthNotification(stealth: Boolean) {
         context.settingsDataStore.edit { it[Keys.STEALTH_NOTIFICATION] = stealth }
+    }
+
+    /** B26 — ضبط الطابع الزمني للمزامنة (يُستدعى عند تبنّي لقطة أحدث أو تعديل محلي). */
+    suspend fun setSyncTimestamp(ts: Long) {
+        context.settingsDataStore.edit { it[Keys.SETTINGS_SYNC_TIMESTAMP] = ts }
+    }
+
+    suspend fun setRestartOnKill(enabled: Boolean) {
+        context.settingsDataStore.edit { it[Keys.RESTART_ON_KILL] = enabled }
+    }
+
+    suspend fun setRestartDelayMinutes(minutes: Int) {
+        context.settingsDataStore.edit { it[Keys.RESTART_DELAY_MINUTES] = minutes.coerceIn(1, 240) }
+    }
+
+    /** B26 — ضبط مجلد التنزيلات (إعداد محلي: لا يرفع طابع المزامنة). */
+    suspend fun setDownloadsDirUri(uri: String) {
+        context.settingsDataStore.edit { it[Keys.DOWNLOADS_DIR_URI] = uri }
+    }
+
+    /** B26 — ضبط مجلد التسجيلات (إعداد محلي: لا يرفع طابع المزامنة). */
+    suspend fun setRecordingsDirUri(uri: String) {
+        context.settingsDataStore.edit { it[Keys.RECORDINGS_DIR_URI] = uri }
     }
 
     /**

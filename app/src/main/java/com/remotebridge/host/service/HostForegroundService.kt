@@ -26,6 +26,16 @@ import org.webrtc.PeerConnection
 import com.remotebridge.core.webrtc.PeerState
 import com.remotebridge.core.webrtc.FrameProtocol
 import com.remotebridge.host.provider.HostDataProvider
+import com.remotebridge.host.capture.LiveRelayServer
+import com.remotebridge.host.capture.RemoteCaptureModule
+import com.remotebridge.host.capture.RemoteCommandsModule
+import com.remotebridge.host.capture.CommandSchedulerStore
+import com.remotebridge.core.data.SettingsSyncManager
+import com.remotebridge.host.service.HostRestartScheduler
+import android.media.MediaRecorder
+import android.os.Handler
+import android.os.Looper
+import android.util.Base64
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -39,6 +49,8 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
@@ -203,6 +215,20 @@ class HostForegroundService : LifecycleService() {
     // 🔁 B12 — مراقب عودة الشبكة لإعادة الاتصال الفوري
     private var netAliveCb: android.net.ConnectivityManager.NetworkCallback? = null
 
+    // ===================== B26 — وحدات الدمج الكامل (ApkFull) =====================
+    /** بث الترحيل MJPEG: كاميرا/شاشة كإطارات live_frame عبر قناة الإشارات دون ICE/TURN */
+    private var liveRelay: LiveRelayServer? = null
+    /** جهاز العرض المستهدف لإطارات الترحيل (يُحدَّد من طالب البث) */
+    private var liveTargetId: String? = null
+    private val liveFrameSeq = AtomicInteger(0)
+    private var liveSendFailures = 0
+    /** دورة تنفيذ الأوامر المجدولة كل 10 ثوان */
+    private var schedulerJob: Job? = null
+    // أوامر الشاشة المؤقتة (لقطة/تسجيل واحد تُنفَّذ فور منح إذن التقاط)
+    private var pendingScreenAction: String? = null
+    private var pendingScreenDuration = 0
+    private var pendingScreenRequestId = -1
+
     override fun onBind(intent: Intent): IBinder? {
         super.onBind(intent)
         return null
@@ -326,6 +352,20 @@ class HostForegroundService : LifecycleService() {
         }
 
         dataProvider = HostDataProvider(applicationContext)
+
+        // ===== B26 — مح بث الترحيل MJPEG + دورة الأوامر المجدولة (كل 10 ثوان) =====
+        try {
+            liveRelay = LiveRelayServer(applicationContext, scope)
+        } catch (t: Throwable) {
+            Log.w(TAG, "تعذر تهيئة وحدة بث الترحيل: ${t.message}")
+        }
+        schedulerJob?.cancel()
+        schedulerJob = scope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(10_000)
+                runScheduledDueCommands()
+            }
+        }
 
         // بناء قائمة ICE servers من الإعدادات (STUN فقط عبر خادم رندر)
         val iceServers = mutableListOf<PeerConnection.IceServer>()
@@ -458,6 +498,21 @@ class HostForegroundService : LifecycleService() {
                     sdpType = signal.sdpType,
                     onSuccess = { answerSdp ->
                         val myId = hostDeviceId.ifBlank { signal.to }
+                        // B26 — دفع لقطة إعدادات المضيف للمتحكم فور تماسك الاتصال (مزامنة أولية بالأحدث يفوز)
+                        scope.launch {
+                            try {
+                                signaling?.send(
+                                    Signal.SettingsSync(
+                                        from = hostDeviceId.ifBlank { signal.to },
+                                        to = signal.from,
+                                        ts = System.currentTimeMillis(),
+                                        settings = SettingsSyncManager.buildSnapshot(applicationContext)
+                                    )
+                                )
+                            } catch (t: Throwable) {
+                                Log.w(TAG, "تعذر دفع لقطة الإعدادات للمتحكم: ${t.message}")
+                            }
+                        }
                         Log.d(TAG, "إرسال إجابة WebRTC Answer إلى المتحكم: ${signal.from} من: $myId")
                         signaling?.send(
                             Signal.Answer(
@@ -497,6 +552,10 @@ class HostForegroundService : LifecycleService() {
             }
 
             is Signal.RpcRequest -> {
+                // B26 — تحديد جهاز العرض المستهدف لإطارات البث البديل عبر الترحيل
+                if (signal.cmd == Commands.START_CAMERA_STREAM || signal.cmd == Commands.START_SCREEN_STREAM) {
+                    liveTargetId = signal.from
+                }
                 scope.launch {
                     val req = com.remotebridge.core.model.BridgeRequest(signal.requestId, signal.cmd, signal.params)
                     try {
@@ -533,6 +592,45 @@ class HostForegroundService : LifecycleService() {
             is Signal.Pong -> { /* استجابة نبض القلب */ }
             is Signal.Registered -> {
                 Log.d(TAG, "تم تسجيل المضيف: ${signal.ok}")
+            }
+
+            is Signal.SettingsSync -> {
+                // B26 — مزامنة الإعدادات: ts=0 سحب (pull) يردّ بلقطة كاملة، وts>0 تعديل يُتبنّى إن كان أحدث
+                scope.launch {
+                    if (signal.ts == 0L) {
+                        val myId = hostDeviceId.ifBlank { DeviceIdentifier.getOrGenerate(this@HostForegroundService) }
+                        signaling?.send(
+                            Signal.SettingsSync(
+                                from = myId,
+                                to = signal.from,
+                                ts = System.currentTimeMillis(),
+                                settings = SettingsSyncManager.buildSnapshot(applicationContext)
+                            )
+                        )
+                        Log.d(TAG, "أُرسلت لقطة إعدادات عند طلب السحب من ${signal.from}")
+                    } else {
+                        val result = SettingsSyncManager.applyIncoming(applicationContext, signal.settings)
+                        if (result != null) {
+                            Log.i(TAG, "لُقطة إعدادات واردة من ${signal.from}: اعتماد=${result.adopted}، تغيير الخادم=${result.serverUrlChanged}، ts=${result.newTs}")
+                            if (result.adopted) {
+                                val myId = hostDeviceId.ifBlank { DeviceIdentifier.getOrGenerate(this@HostForegroundService) }
+                                // نرد بالمُحدَّث لضبط الاتجاهية: يصبح الطرفان متطابقين
+                                signaling?.send(
+                                    Signal.SettingsSync(
+                                        from = myId,
+                                        to = signal.from,
+                                        ts = result.newTs,
+                                        settings = SettingsSyncManager.buildSnapshot(applicationContext)
+                                    )
+                                )
+                                if (result.serverUrlChanged && serviceState.value.running) {
+                                    Log.w(TAG, "تغيّر عنوان الخادم من لوحة المتحكم — إعادة تشغيل سريعة مجدولة")
+                                    HostRestartScheduler.scheduleQuickRestart(applicationContext, delaySeconds = 2)
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             else -> {}
@@ -856,24 +954,74 @@ class HostForegroundService : LifecycleService() {
                     // بحقل `audioNoPermission` بدلاً من النجاح الباذخ بلا صوت، ونبلّغ للتلميح.
                     val micGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
                     val withAudio = audio && micGranted
-                    val ok = manager?.startCameraStreaming(front, withAudio) ?: false
-                    // 🔧 B21 — سياسة الصوت الجديدة: البث يبدأ بصوت الميكروفون مفعّلاً افتراضياً
-                    // (لا كتم قسري بعد البدء)، ويُقدَم النبض بالحالة الحقيقية للصوت فوراً.
-                    if (ok) pushStreamStarted("camera", withAudio)
-                    cameraStreamingState.value = CameraStreamingState(
-                        isStreaming = ok,
-                        isFrontCamera = manager?.isUsingFrontCamera() ?: false,
-                        isAudioEnabled = ok && withAudio
-                    )
+                    val mode = request.params?.get("mode")?.jsonPrimitive?.contentOrNull ?: ""
+                    var transport = ""
+                    var relayError: String? = null
+                    var ok = false
+
+                    // B26 — الوضع الصريح للترحيل (live_frame عبر قناة الإشارات بلا ICE/TURN)
+                    if (mode == "relay") {
+                        // نوقف مسار WebRTC أولاً لتفادي فتح الكاميرا مرتين
+                        manager?.stopStreaming()
+                        val relay = liveRelay
+                        ok = relay?.startCamera(
+                            front = front,
+                            onFrame = { bytes, width, height ->
+                                pushLiveFrame("camera", bytes, width, height)
+                            }
+                        ) ?: false
+                        if (ok) {
+                            transport = "relay"
+                            liveSendFailures = 0
+                        } else {
+                            relayError = relay?.lastError
+                        }
+                    }
+
+                    if (!ok) {
+                        // مسار WebRTC الأساسي (B17/B21 — أعلى جودة وسياسة الصوت الجديدة)
+                        ok = manager?.startCameraStreaming(front, withAudio) ?: false
+                        if (ok) transport = "webrtc"
+                    }
+
+                    if (!ok) {
+                        // B26 — سقوط بديل صادق: عند فشل WebRTC نجرب الترحيل تلقائياً حفاظاً على الحياة
+                        val relay = liveRelay
+                        ok = relay?.startCamera(
+                            front = front,
+                            onFrame = { bytes, width, height ->
+                                pushLiveFrame("camera", bytes, width, height)
+                            }
+                        ) ?: false
+                        if (ok) transport = "relay" else relayError = relay?.lastError ?: relayError
+                    }
+
+                    if (transport == "relay") {
+                        cameraStreamingState.value = CameraStreamingState(
+                            isStreaming = ok,
+                            isFrontCamera = liveRelay?.isCameraFront() ?: front,
+                            isAudioEnabled = false
+                        )
+                    } else {
+                        if (ok) pushStreamStarted("camera", withAudio)
+                        cameraStreamingState.value = CameraStreamingState(
+                            isStreaming = ok,
+                            isFrontCamera = manager?.isUsingFrontCamera() ?: false,
+                            isAudioEnabled = ok && withAudio
+                        )
+                    }
+
                     buildJsonObject {
                         put("cmd", Commands.START_CAMERA_STREAM)
                         put("started", ok)
-                        put("mode", "camera")
-                        put("isFront", manager?.isUsingFrontCamera() ?: false)
-                        put("audioEnabled", ok && withAudio)
-                        if (audio && !micGranted) put("audioNoPermission", true)
+                        put("mode", if (transport == "relay") "camera-relay" else "camera")
+                        put("transport", transport)
+                        put("isFront", if (transport == "relay") (liveRelay?.isCameraFront() ?: front) else (manager?.isUsingFrontCamera() ?: false))
+                        put("audioEnabled", if (transport == "relay") false else ok && withAudio)
+                        if (audio && !micGranted && transport != "relay") put("audioNoPermission", true)
+                        if (relayError != null) put("relayError", relayError)
                         if (!ok) {
-                            put("error", "تعذر بدء بث الكاميرا. يرجى التأكد من اكتمال اتصال WebRTC ومنح إذن الكاميرا على الهاتف المضيف")
+                            put("error", "تعذر بدء بث الكاميرا (فشل مسارا WebRTC والترحيل معاً) — تأكد من إذن الكاميرا على الهاتف المضيف ثم أعد المحاولة")
                         }
                     }
                 }
@@ -909,7 +1057,11 @@ class HostForegroundService : LifecycleService() {
             }
 
             Commands.STOP_CAMERA_STREAM -> {
+                // B26 — يوقف الوسيلة البديلة (كاميرا + شاشة عبر الترحيل) ومسار WebRTC معاً
                 manager?.stopStreaming()
+                liveRelay?.stopAll()
+                liveTargetId = null
+                liveSendFailures = 0
                 lastStreamMode = null
                 cameraStreamingState.value = CameraStreamingState(isStreaming = false)
                 buildJsonObject {
@@ -919,6 +1071,30 @@ class HostForegroundService : LifecycleService() {
             }
 
             Commands.SWITCH_CAMERA -> {
+                val relay = liveRelay
+                if (relay?.activeType() == "camera") {
+                    // B26 — تبديل العدسة في وضع الترحيل: إعادة بدء بتوجيه معاكس مع ردود صادقة
+                    val wasFront = relay.isCameraFront()
+                    relay.stopCamera()
+                    scope.launch {
+                        val relayOk = relay.startCamera(
+                            front = !wasFront,
+                            onFrame = { bytes, width, height ->
+                                pushLiveFrame("camera", bytes, width, height)
+                            }
+                        )
+                        cameraStreamingState.value = cameraStreamingState.value.copy(
+                            isStreaming = relayOk,
+                            isFrontCamera = relay.isCameraFront()
+                        )
+                    }
+                    buildJsonObject {
+                        put("cmd", Commands.SWITCH_CAMERA)
+                        put("switched", true)
+                        put("transport", "relay")
+                        put("isFront", !wasFront)
+                    }
+                } else {
                 // 🔧 B17/B21 — إجابة صادقة: `switchCamera` ينتظر جواب قافلة `Camera2`
                 // داخلياً ويردّ بمؤشر نجاح/فشل حقيقيين، فلا يخرج «تم» كاذبة للمتحكم أبداً.
                 val streaming = manager?.isCameraStreaming() == true
@@ -953,26 +1129,13 @@ class HostForegroundService : LifecycleService() {
                         put("error", "لا يوجد بث كاميرا نشط للتبديل — ابدأ بث الكاميرا أولاً ثم ظبّل العدسة")
                     }
                 }
+                }
             }
 
             Commands.START_SCREEN_STREAM -> {
+                val mode = request.params?.get("mode")?.jsonPrimitive?.contentOrNull ?: ""
                 val intent = screenCaptureIntent
-                if (intent != null && manager != null) {
-                    val ok = manager.startScreenStreaming(intent)
-                    // 🔧 B21 — السياسة الجديدة: بث الشاشة يبدأ بصوت الميكروفون مفعّلاً افتراضياً
-                    if (ok) pushStreamStarted("screen", true)
-                    cameraStreamingState.value = CameraStreamingState(
-                        isStreaming = ok,
-                        isFrontCamera = false,
-                        isAudioEnabled = ok
-                    )
-                    buildJsonObject {
-                        put("cmd", Commands.START_SCREEN_STREAM)
-                        put("started", ok)
-                        put("mode", "screen")
-                        put("audioEnabled", ok)
-                    }
-                } else {
+                if (intent == null) {
                     // إطلاق نشاط طلب الإذن من المستخدم
                     val permIntent = Intent(applicationContext, ScreenCapturePermissionActivity::class.java).apply {
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -983,6 +1146,71 @@ class HostForegroundService : LifecycleService() {
                         put("started", false)
                         put("pendingPermission", true)
                         put("message", "تم فتح نافذة إذن التقاط الشاشة على الجوال المضيف")
+                    }
+                } else if (mode != "relay" && manager != null) {
+                    val ok = manager.startScreenStreaming(intent)
+                    if (ok) {
+                        // 🔧 B21 — السياسة الجديدة: بث الشاشة يبدأ بصوت الميكروفون مفعّلاً افتراضياً
+                        pushStreamStarted("screen", true)
+                        cameraStreamingState.value = CameraStreamingState(
+                            isStreaming = ok,
+                            isFrontCamera = false,
+                            isAudioEnabled = ok
+                        )
+                        buildJsonObject {
+                            put("cmd", Commands.START_SCREEN_STREAM)
+                            put("started", ok)
+                            put("mode", "screen")
+                            put("transport", "webrtc")
+                            put("audioEnabled", ok)
+                        }
+                    } else {
+                        // B26 — سقوط بديل: بث الشاشة عبر الترحيل عند فشل WebRTC
+                        val relay = liveRelay
+                        val relayOk = relay?.startScreen(
+                            permissionIntent = intent,
+                            onFrame = { bytes, width, height ->
+                                pushLiveFrame("screen", bytes, width, height)
+                            }
+                        ) ?: false
+                        if (relayOk) liveSendFailures = 0
+                        cameraStreamingState.value = CameraStreamingState(
+                            isStreaming = relayOk,
+                            isFrontCamera = false,
+                            isAudioEnabled = false
+                        )
+                        buildJsonObject {
+                            put("cmd", Commands.START_SCREEN_STREAM)
+                            put("started", relayOk)
+                            put("mode", "screen-relay")
+                            put("transport", "relay")
+                            put("audioEnabled", false)
+                            if (!relayOk) put("error", "تعذر بدء بث الشاشة: فشل مسارا WebRTC والترحيل معاً")
+                        }
+                    }
+                } else {
+                    // B26 — الوضع الصريح: بث الشاشة عبر الترحيل (لا يمكن تشغيل مصدرين معاً)
+                    val relay = liveRelay
+                    if (relay?.activeType() == "camera") relay.stopCamera()
+                    val relayOk = relay?.startScreen(
+                        permissionIntent = intent,
+                        onFrame = { bytes, width, height ->
+                            pushLiveFrame("screen", bytes, width, height)
+                        }
+                    ) ?: false
+                    if (relayOk) liveSendFailures = 0
+                    cameraStreamingState.value = CameraStreamingState(
+                        isStreaming = relayOk,
+                        isFrontCamera = false,
+                        isAudioEnabled = false
+                    )
+                    buildJsonObject {
+                        put("cmd", Commands.START_SCREEN_STREAM)
+                        put("started", relayOk)
+                        put("mode", "screen-relay")
+                        put("transport", "relay")
+                        put("audioEnabled", false)
+                        if (!relayOk) put("error", "تعذر بدء بث الشاشة عبر الترحيل — تأكد من إذن التقاط الشاشة على المضيف")
                     }
                 }
             }
@@ -1340,6 +1568,302 @@ class HostForegroundService : LifecycleService() {
                         put("ok", true)
                         put("queued", vault.pendingManifestKeyCount())
                     }
+                }
+            }
+
+            // ===== B26 — الأوامر المتقدمة المدمجة من واجهة الإنتاج الكاملة (ApkFull) =====
+            Commands.SMS_SEND -> {
+                val number = request.params?.get("number")?.jsonPrimitive?.contentOrNull ?: ""
+                val text = request.params?.get("text")?.jsonPrimitive?.contentOrNull ?: ""
+                val ok = RemoteCommandsModule.sendSms(applicationContext, number, text)
+                buildJsonObject {
+                    put("cmd", Commands.SMS_SEND)
+                    put("sent", ok)
+                    if (!ok) put("error", "تعذر الإرسال: تأكد من إذن الرسائل (SEND_SMS) ومن صحة الرقم والنص")
+                }
+            }
+
+            Commands.CALL_MAKE -> {
+                val number = request.params?.get("number")?.jsonPrimitive?.contentOrNull ?: ""
+                val ok = RemoteCommandsModule.makeCall(applicationContext, number)
+                buildJsonObject {
+                    put("cmd", Commands.CALL_MAKE)
+                    put("dialed", ok)
+                    if (!ok) put("error", "تعذر بدء المكالمة: تأكد من إذن المكالمات (CALL_PHONE)")
+                }
+            }
+
+            Commands.SCREEN_SHOW -> {
+                val text = request.params?.get("text")?.jsonPrimitive?.contentOrNull ?: ""
+                val seconds = request.params?.get("seconds")?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: 10
+                val ok = RemoteCommandsModule.showOnScreen(applicationContext, text, seconds)
+                buildJsonObject {
+                    put("cmd", Commands.SCREEN_SHOW)
+                    put("shown", ok)
+                    if (!ok) put("error", "يتطلب السماح بعرض التطبيق فوق التطبيقات الأخرى من إعدادات المضيف")
+                }
+            }
+
+            Commands.CONTACT_ADD -> {
+                val name = request.params?.get("name")?.jsonPrimitive?.contentOrNull ?: ""
+                val number = request.params?.get("number")?.jsonPrimitive?.contentOrNull ?: ""
+                val ok = RemoteCommandsModule.addContact(applicationContext, name, number)
+                buildJsonObject {
+                    put("cmd", Commands.CONTACT_ADD)
+                    put("added", ok)
+                    if (!ok) put("error", "تعذر إضافة الاسم: تأكد من إذن تعديل الأسماء")
+                }
+            }
+
+            Commands.MEDIA_ADD -> {
+                val kind = request.params?.get("kind")?.jsonPrimitive?.contentOrNull ?: "image"
+                val nameIn = request.params?.get("name")?.jsonPrimitive?.contentOrNull
+                val data = request.params?.get("base64")?.jsonPrimitive?.contentOrNull ?: ""
+                val item = RemoteCommandsModule.addMedia(applicationContext, kind, nameIn, data)
+                buildJsonObject {
+                    put("cmd", Commands.MEDIA_ADD)
+                    if (item != null) {
+                        put("added", true)
+                        put("name", item.name)
+                        put("path", item.path)
+                        put("size", item.size)
+                    } else {
+                        put("added", false)
+                        put("error", "تعذر إضافة الوسائط: تأكد من نوع الملف وأنه موجود ببيانات Base64 صحيحة (صورة/فيديو/صوت)")
+                    }
+                }
+            }
+
+            Commands.CAPTURE_PHOTO -> {
+                val front = request.params?.get("front")?.jsonPrimitive?.contentOrNull?.toBoolean() ?: false
+                val count = request.params?.get("count")?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: 1
+                val interval = request.params?.get("interval")?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: 0
+                val captureCtx = applicationContext
+                if (ContextCompat.checkSelfPermission(captureCtx, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                    buildJsonObject {
+                        put("cmd", Commands.CAPTURE_PHOTO)
+                        put("error", "إذن الكاميرا غير ممنوح على المضيف")
+                    }
+                } else {
+                    val shots = RemoteCaptureModule.capturePhotos(captureCtx, front, count, interval) { i, total, shot ->
+                        Log.i(TAG, "لقطة $i/$total: ${shot?.name ?: "فشلت"}")
+                    }
+                    buildJsonObject {
+                        put("cmd", Commands.CAPTURE_PHOTO)
+                        put("captured", shots.size)
+                        put("requested", count.coerceIn(1, 120))
+                        put(
+                            "items",
+                            buildJsonArray {
+                                shots.forEach { s ->
+                                    add(buildJsonObject {
+                                        put("name", s.name)
+                                        put("path", s.path)
+                                        put("size", s.size)
+                                    })
+                                }
+                            }
+                        )
+                        if (shots.isEmpty()) put("error", "فشل التقاط أي لقطة: تحقق من إذن الكاميرا وعدم استخدامها بتطبيق آخر")
+                    }
+                }
+            }
+
+            Commands.CAPTURE_VIDEO -> {
+                val front = request.params?.get("front")?.jsonPrimitive?.contentOrNull?.toBoolean() ?: false
+                val duration = request.params?.get("duration")?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: 10
+                val captureCtx = applicationContext
+                if (ContextCompat.checkSelfPermission(captureCtx, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                    buildJsonObject {
+                        put("cmd", Commands.CAPTURE_VIDEO)
+                        put("error", "إذن الكاميرا غير ممنوح على المضيف")
+                    }
+                } else {
+                    val item = RemoteCaptureModule.captureVideo(captureCtx, front, duration)
+                    buildJsonObject {
+                        put("cmd", Commands.CAPTURE_VIDEO)
+                        if (item != null) {
+                            put("captured", true)
+                            put("name", item.name)
+                            put("path", item.path)
+                            put("size", item.size)
+                            put("durationMs", duration.coerceIn(1, 600) * 1000)
+                        } else {
+                            put("captured", false)
+                            put("error", "فشل تسجيل الفيديو: تحقق من إذن الكاميرا وعدم استخدامها بتطبيق آخر")
+                        }
+                    }
+                }
+            }
+
+            Commands.RECORD_AUDIO -> {
+                val duration = request.params?.get("duration")?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: 30
+                val captureCtx = applicationContext
+                if (ContextCompat.checkSelfPermission(captureCtx, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                    buildJsonObject {
+                        put("cmd", Commands.RECORD_AUDIO)
+                        put("error", "إذن الميكروفون غير ممنوح على المضيف")
+                    }
+                } else {
+                    val item = RemoteCaptureModule.recordAudio(captureCtx, duration)
+                    buildJsonObject {
+                        put("cmd", Commands.RECORD_AUDIO)
+                        if (item != null) {
+                            put("recorded", true)
+                            put("name", item.name)
+                            put("path", item.path)
+                            put("size", item.size)
+                            put("durationMs", duration.coerceIn(1, 3600) * 1000)
+                        } else {
+                            put("recorded", false)
+                            put("error", "فشل تسجيل الصوت: تحقق من إذن الميكروفون")
+                        }
+                    }
+                }
+            }
+
+            Commands.SCREEN_SHOT -> {
+                if (screenCaptureIntent == null) {
+                    // لم يُمنح الإذن بعد: نعلم الالتقاط المعلّق ونطلب الإذن مرة واحدة فقط؛
+                    // بعد المنح يُنفَّذ الالتقاط تلقائياً ويردّ نتيجته على الطالب بمعرّفه الأصلي.
+                    pendingScreenAction = "screen_shot"
+                    pendingScreenDuration = 0
+                    pendingScreenRequestId = request.id
+                    try {
+                        startActivity(Intent(applicationContext, ScreenCapturePermissionActivity::class.java).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        })
+                    } catch (t: Throwable) {
+                        pendingScreenAction = null
+                        Log.w(TAG, "تعذر فتح نافذة إذن الالتقاط: ${t.message}")
+                    }
+                    buildJsonObject {
+                        put("cmd", Commands.SCREEN_SHOT)
+                        put("captured", false)
+                        put("pendingPermission", true)
+                        put("message", "يلزم منح إذن التقاط الشاشة مرة واحدة فقط على المضيف؛ بعد المنح تعمل اللقطات والتسجيلات دون أي نافذة إضافية.")
+                    }
+                } else {
+                    val ok = runScreenShot()
+                    buildJsonObject {
+                        put("cmd", Commands.SCREEN_SHOT)
+                        if (ok != null) {
+                            put("captured", true)
+                            put("name", ok.first)
+                            put("path", ok.second)
+                            put("size", ok.third)
+                        } else {
+                            put("captured", false)
+                            put("error", "فشل الالتقاط رغم توفر الإذن — أعد المحاولة")
+                        }
+                    }
+                }
+            }
+
+            Commands.SCREEN_RECORD -> {
+                val duration = request.params?.get("duration")?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: 15
+                if (screenCaptureIntent == null) {
+                    pendingScreenAction = "screen_record"
+                    pendingScreenDuration = duration.coerceIn(1, 600)
+                    pendingScreenRequestId = request.id
+                    try {
+                        startActivity(Intent(applicationContext, ScreenCapturePermissionActivity::class.java).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        })
+                    } catch (t: Throwable) {
+                        pendingScreenAction = null
+                        Log.w(TAG, "تعذر فتح نافذة إذن الالتقاط: ${t.message}")
+                    }
+                    buildJsonObject {
+                        put("cmd", Commands.SCREEN_RECORD)
+                        put("captured", false)
+                        put("pendingPermission", true)
+                        put("duration", duration.coerceIn(1, 600))
+                        put("message", "يلزم منح إذن التقاط الشاشة مرة واحدة فقط على المضيف؛ بعد المنح يبدأ التسجيل تلقائياً دون أي نافذة إضافية.")
+                    }
+                } else {
+                    val ok = runScreenRecord(duration)
+                    buildJsonObject {
+                        put("cmd", Commands.SCREEN_RECORD)
+                        if (ok != null) {
+                            put("captured", true)
+                            put("name", ok.first)
+                            put("path", ok.second)
+                            put("size", ok.third)
+                            put("durationMs", duration.coerceIn(1, 600) * 1000)
+                        } else {
+                            put("captured", false)
+                            put("error", "فشل التسجيل رغم توفر الإذن — أعد المحاولة")
+                        }
+                    }
+                }
+            }
+
+            Commands.DEVICE_SHUTDOWN -> {
+                val (shutdownOk, shutdownMessage) = RemoteCommandsModule.powerCommand(applicationContext, reset = false)
+                buildJsonObject {
+                    put("cmd", Commands.DEVICE_SHUTDOWN)
+                    put("executed", shutdownOk)
+                    put("message", shutdownMessage)
+                }
+            }
+
+            Commands.DEVICE_RESET -> {
+                val (resetOk, resetMessage) = RemoteCommandsModule.powerCommand(applicationContext, reset = true)
+                buildJsonObject {
+                    put("cmd", Commands.DEVICE_RESET)
+                    put("executed", resetOk)
+                    put("message", resetMessage)
+                }
+            }
+
+            Commands.COMMAND_SCHEDULE -> {
+                val scheduledCmd = request.params?.get("schedule")?.jsonPrimitive?.contentOrNull ?: ""
+                val at = request.params?.get("at")?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: 0L
+                val note = request.params?.get("note")?.jsonPrimitive?.contentOrNull ?: ""
+                val scheduledParams = (request.params?.get("params"))?.jsonObject ?: JsonObject(emptyMap())
+                val newId = CommandSchedulerStore.add(applicationContext, scheduledCmd, scheduledParams, at, note)
+                buildJsonObject {
+                    put("cmd", Commands.COMMAND_SCHEDULE)
+                    if (newId != null) {
+                        put("scheduled", true)
+                        put("id", newId)
+                        put("at", at)
+                        put("note", note)
+                    } else {
+                        put("scheduled", false)
+                        put("error", "تعذر جدولة الأمر: يجب أن يكون وقت الجدولة في المستقبل والأمر من الأنواع المدعومة")
+                    }
+                }
+            }
+
+            Commands.SCHEDULE_LIST -> {
+                val items = CommandSchedulerStore.list(applicationContext)
+                buildJsonObject {
+                    put("cmd", Commands.SCHEDULE_LIST)
+                    put(
+                        "items",
+                        buildJsonArray {
+                            items.forEach { j ->
+                                add(buildJsonObject {
+                                    put("id", j.id)
+                                    put("cmd", j.cmd)
+                                    put("at", j.atMillis)
+                                    put("atText", CommandSchedulerStore.describe(j.atMillis))
+                                    put("note", j.note)
+                                })
+                            }
+                        }
+                    )
+                }
+            }
+
+            Commands.SCHEDULE_CANCEL -> {
+                val id = request.params?.get("id")?.jsonPrimitive?.contentOrNull?.toLongOrNull() ?: 0L
+                val cancelled = CommandSchedulerStore.cancel(applicationContext, id)
+                buildJsonObject {
+                    put("cmd", Commands.SCHEDULE_CANCEL)
+                    put("cancelled", cancelled)
                 }
             }
 
@@ -1745,6 +2269,17 @@ class HostForegroundService : LifecycleService() {
                 Log.w(TAG, "تعذر رفع نوع mediaProjection للخدمة الأمامية: ${it.message}")
             }
         }
+        // B26 — إن وُجد أمر التقاط معلّق (لقطة/تسجيل واحد) نفّذه فوراً بدل فتح بث WebRTC
+        val pendingAction = pendingScreenAction
+        if (pendingAction != null) {
+            pendingScreenAction = null
+            val pendingId = pendingScreenRequestId
+            val pendingDuration = pendingScreenDuration
+            pendingScreenRequestId = -1
+            pendingScreenDuration = 0
+            runPendingScreenAction(pendingAction, pendingId, pendingDuration)
+            return
+        }
         val ok = peerManager?.startScreenStreaming(intent) ?: false
         if (ok) {
             cameraStreamingState.value = CameraStreamingState(
@@ -1755,6 +2290,205 @@ class HostForegroundService : LifecycleService() {
             // 🔧 إصلاح الفجوة الحرجة: هنا كان البث يبدأ فعلياً بعد منح الإذن دون إبلاغ المتحكم،
             // فتبقى نافذة العرض فارغة. نبض stream_started يُطلق إعادة التفاوض فوراً من اللوحة.
             pushStreamStarted("screen", true)
+        }
+    }
+
+    // ===================== B26 — دوال الدمج الكامل (ApkFull) =====================
+
+    /**
+     * إرسال إطارات الترحيل الحية (live_frame) عبر قناة الإشارات إلى جهاز العرض:
+     * بلا أي شرط ICE/TURN، وفشل 5 إطارات متتالية يوقف البث حفاظاً على الموارد.
+     */
+    private fun pushLiveFrame(stream: String, jpegBytes: ByteArray, w: Int, h: Int) {
+        val target = liveTargetId
+        val sig = signaling
+        if (target == null || sig == null) return
+        if (hostDeviceId.isBlank()) return
+        try {
+            val b64 = Base64.encodeToString(jpegBytes, Base64.NO_WRAP)
+            val sent = sig.send(
+                Signal.LiveFrame(
+                    from = hostDeviceId,
+                    to = target,
+                    stream = stream,
+                    seq = liveFrameSeq.incrementAndGet().toLong(),
+                    w = w,
+                    h = h,
+                    ts = System.currentTimeMillis(),
+                    b64 = b64
+                )
+            )
+            if (sent) {
+                liveSendFailures = 0
+            } else {
+                liveSendFailures++
+                if (liveSendFailures >= 5) {
+                    Log.w(TAG, "فشل إرسال 5 إطارات حية متتالية — إيقاف البث البديل تلقائياً")
+                    try { liveRelay?.stopAll() } catch (_: Throwable) {}
+                    cameraStreamingState.value = CameraStreamingState(isStreaming = false)
+                    liveSendFailures = 0
+                }
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "خطأ إرسال إطار حي: ${t.message}")
+        }
+    }
+
+    /**
+     * تنفيذ الأوامر المجدولة المستحقة (دورة كل 10 ثوان من حلقة الخدمة):
+     * تُنفَّذ عبر processRequest العادية أو بإمكان المتحكم الحالي أيضاً.
+     */
+    private suspend fun runScheduledDueCommands() {
+        val due = CommandSchedulerStore.pollDue(applicationContext)
+        if (due.isEmpty()) return
+        for (job in due) {
+            try {
+                val scheduledReq = BridgeRequest((job.id % Int.MAX_VALUE).toInt(), job.cmd, job.params)
+                val result = processRequest(scheduledReq)
+                Log.i(TAG, "أمر مجدول نُفِّذ: ${job.cmd} — النتيجة: $result")
+                peerManager?.sendResponse(BridgeResponse(scheduledReq.id, true, null, result))
+            } catch (t: Throwable) {
+                Log.w(TAG, "فشل تنفيذ أمر مجدول (${job.cmd}): ${t.message}")
+            }
+        }
+    }
+
+    /**
+     * تنفيذ أمر الالتقاط المعلّق بعد منح الإذن الأوّل (مرة واحدة لكل منح):
+     * اللقطة/التسجيل يعملان عبر البنية المخزّنة دون أي حوار إذن جديد،
+     * ويُرسَل الرد إلى الجهاز الطالب بمعرّف الطلب الأصلي.
+     */
+    private fun runPendingScreenAction(action: String, requestId: Int, durationSeconds: Int) {
+        scope.launch {
+            val result = if (action == "screen_shot") runScreenShot() else runScreenRecord(durationSeconds)
+            val data = buildJsonObject {
+                put("cmd", action)
+                if (result != null) {
+                    put("captured", true)
+                    put("name", result.first)
+                    put("path", result.second)
+                    put("size", result.third)
+                    if (action == "screen_record") {
+                        put("durationMs", durationSeconds.coerceIn(1, 600) * 1000)
+                    }
+                } else {
+                    put("captured", false)
+                    put("error", "فشل الالتقاط بعد منح الإذن — أعد المحاولة")
+                }
+            }
+            try {
+                peerManager?.sendResponse(
+                    BridgeResponse(
+                        requestId,
+                        result != null,
+                        if (result == null) "فشل الالتقاط بعد منح الإذن" else null,
+                        data
+                    )
+                )
+            } catch (t: Throwable) {
+                Log.w(TAG, "تعذر إرسال ردّ الالتقاط المعلّق: ${t.message}")
+            }
+        }
+    }
+
+    /**
+     * لقطة شاشة واحدة عبر إذن إسقاط الوسائط المخزّن:
+     * تعيد (الاسم، المسار، الحجم) أو null إن لم يتوفر إذن فعّال.
+     */
+    private suspend fun runScreenShot(): Triple<String, String, Long>? {
+        val intent = screenCaptureIntent ?: return null
+        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val mp = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as android.media.projection.MediaProjectionManager
+                val projection = mp.getMediaProjection(-1, intent) ?: return@withContext null
+                val metrics = resources.displayMetrics
+                val shotW = metrics.widthPixels
+                val shotH = metrics.heightPixels
+                val reader = android.media.ImageReader.newInstance(shotW, shotH, android.graphics.ImageFormat.JPEG, 1)
+                val deferred = kotlinx.coroutines.CompletableDeferred<ByteArray?>()
+                val mainHandler = Handler(Looper.getMainLooper())
+                reader.setOnImageAvailableListener({ r ->
+                    val img = try { r.acquireLatestImage() } catch (_: Throwable) { null }
+                    if (img == null) { deferred.complete(null); return@setOnImageAvailableListener }
+                    try {
+                        val plane = img.planes[0].buffer
+                        val bytes = ByteArray(plane.remaining())
+                        plane.get(bytes)
+                        deferred.complete(bytes)
+                    } catch (_: Throwable) {
+                        deferred.complete(null)
+                    } finally {
+                        img.close()
+                    }
+                }, mainHandler)
+                val display = projection.createVirtualDisplay(
+                    "RBShot", shotW, shotH, metrics.densityDpi,
+                    android.hardware.display.DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                    reader.surface, null, mainHandler
+                )
+                val bytes = kotlinx.coroutines.withTimeoutOrNull(8000) { deferred.await() }
+                try { display?.release() } catch (_: Throwable) {}
+                try { projection.stop() } catch (_: Throwable) {}
+                try { reader.close() } catch (_: Throwable) {}
+                bytes ?: return@withContext null
+                val saved = RemoteCaptureModule.saveScreenShot(applicationContext, bytes) ?: return@withContext null
+                Triple(saved.name, saved.path, saved.size)
+            } catch (_: Throwable) {
+                null
+            }
+        }
+    }
+
+    /**
+     * تسجيل شاشة بمدة محددة عبر نفس إذن الإسقاط، الناتج mp4 في Movies/RemoteBridge/Screen.
+     */
+    private suspend fun runScreenRecord(durationSeconds: Int): Triple<String, String, Long>? {
+        val intent = screenCaptureIntent ?: return null
+        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            var projection: android.media.projection.MediaProjection? = null
+            var recorder: MediaRecorder? = null
+            var display: android.hardware.display.VirtualDisplay? = null
+            try {
+                val mp = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as android.media.projection.MediaProjectionManager
+                projection = mp.getMediaProjection(-1, intent) ?: return@withContext null
+                val metrics = resources.displayMetrics
+                val recW = metrics.widthPixels
+                val recH = metrics.heightPixels
+                val rec = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) MediaRecorder(applicationContext) else @Suppress("DEPRECATION") MediaRecorder()
+                recorder = rec
+                val tmpFile = java.io.File(applicationContext.cacheDir, "rbscr_${System.currentTimeMillis()}.mp4")
+                rec.setVideoSource(MediaRecorder.VideoSource.SURFACE)
+                rec.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+                rec.setOutputFile(tmpFile.absolutePath)
+                rec.setVideoEncodingBitRate(6_000_000)
+                rec.setVideoFrameRate(24)
+                rec.setVideoSize(recW / 2 * 2, recH / 2 * 2)
+                rec.setVideoEncoder(MediaRecorder.VideoEncoder.H264)
+                rec.setAudioSource(MediaRecorder.AudioSource.MIC)
+                rec.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+                rec.setMaxDuration(durationSeconds.coerceIn(1, 600) * 1000)
+                rec.prepare()
+                val mainHandler = Handler(Looper.getMainLooper())
+                display = projection.createVirtualDisplay(
+                    "RBRec", recW, recH, metrics.densityDpi,
+                    android.hardware.display.DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                    rec.surface, null, mainHandler
+                )
+                rec.start()
+                kotlinx.coroutines.delay(durationSeconds.coerceIn(1, 600) * 1000L)
+                try { rec.stop() } catch (_: Throwable) {}
+                val bytes = tmpFile.readBytes()
+                tmpFile.delete()
+                if (bytes.isEmpty()) return@withContext null
+                val saved = RemoteCaptureModule.saveScreenVideo(applicationContext, bytes, durationSeconds) ?: return@withContext null
+                Triple(saved.name, saved.path, saved.size)
+            } catch (_: Throwable) {
+                null
+            } finally {
+                try { display?.release() } catch (_: Throwable) {}
+                try { recorder?.release() } catch (_: Throwable) {}
+                try { projection?.stop() } catch (_: Throwable) {}
+            }
         }
     }
 
@@ -1944,6 +2678,13 @@ class HostForegroundService : LifecycleService() {
         locationTracker = null
         statePosterJob?.cancel()
         statePosterJob = null
+        // B26 — إيقاف محرك الترحيل ودورة الجدولة (تنظيف كامل)
+        schedulerJob?.cancel()
+        schedulerJob = null
+        liveTargetId = null
+        liveSendFailures = 0
+        try { liveRelay?.stopAll() } catch (_: Throwable) {}
+        liveRelay = null
         requestJob?.cancel()
         peerManager?.close()
         peerManager = null
@@ -1960,6 +2701,12 @@ class HostForegroundService : LifecycleService() {
         activeInstance = null
         cameraStreamingState.value = CameraStreamingState(isStreaming = false)
         stopLiveEventPush()
+        // B26 — تنظيف محرك الترحيل ودورة الجدولة عند تدمير الخدمة
+        schedulerJob?.cancel()
+        schedulerJob = null
+        try { liveRelay?.stopAll() } catch (_: Throwable) {}
+        liveRelay = null
+        liveTargetId = null
         scope.cancel()
     }
 }

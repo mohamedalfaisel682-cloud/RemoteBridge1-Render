@@ -116,6 +116,38 @@ sealed class Signal {
         val payload: kotlinx.serialization.json.JsonObject? = null
     ) : Signal()
 
+    /**
+     * B26 — مزامنة الإعدادات بين المضيف والمتحكم (واجهة الويب أو التطبيق)،
+     * منقولة حالياً من واجهة الإنتاج. إلى = null يعني بثاً عاماً أو طلب سحب،
+     * وطابع `ts` = 0 يعني طلب سحب لقطة كاملة (pull)، والتعديل الأحدث يفوز.
+     */
+    @Serializable
+    @SerialName("settings_sync")
+    data class SettingsSync(
+        val from: String,
+        val to: String? = null,
+        val ts: Long = 0,
+        val settings: kotlinx.serialization.json.JsonObject = kotlinx.serialization.json.JsonObject(emptyMap())
+    ) : Signal()
+
+    /**
+     * B26 — إطار بث حي بوسيلة الترحيل (MJPEG-over-Relay): صورة JPEG مضغوطة
+     * مرمّزة Base64 تُرحَّل عبر خادم الإشارات من المضيف إلى جهاز العرض
+     * (متحكم / لوحة ويب) — تعمل على أي شبكة دون أي شرط ICE/TURN.
+     */
+    @Serializable
+    @SerialName("live_frame")
+    data class LiveFrame(
+        val from: String,
+        val to: String,
+        val stream: String, // camera | screen
+        val seq: Long,
+        val w: Int = 0,
+        val h: Int = 0,
+        val ts: Long = 0,
+        val b64: String
+    ) : Signal()
+
     @Serializable
     @SerialName("ping")
     data class Ping(

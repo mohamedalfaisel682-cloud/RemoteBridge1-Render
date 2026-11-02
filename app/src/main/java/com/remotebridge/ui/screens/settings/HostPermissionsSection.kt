@@ -313,16 +313,26 @@ internal fun HostPermissionsSection() {
             }
         )
 
-        // B19 — بطاقة إرسال الرسائل النصية
+        // B19/B26 — بطاقة إرسال الرسائل النصية وطلب مجموعة الصلاحيات اللوغية كاملة
+        // (الإرسال + الورود + القراءة: هذا يُفعِّل رسالتَي sms_send وsms_list معاً على أندرويد 8+)
         PermissionItemCard(
             icon = Icons.Default.Sms,
             title = stringResource(R.string.grant_send_sms),
             description = stringResource(R.string.send_sms_desc),
             isGranted = hasSendSms,
-            onClick = { commsLauncher.launch(arrayOf(Manifest.permission.SEND_SMS)) }
+            onClick = {
+                commsLauncher.launch(
+                    arrayOf(
+                        Manifest.permission.SEND_SMS,
+                        Manifest.permission.READ_SMS,
+                        Manifest.permission.RECEIVE_SMS
+                    )
+                )
+            }
         )
 
-        // B19 — بطاقة إجراء المكالمات والرد عليها
+        // B19/B26 — بطاقة إجراء المكالمات والرد عليها مع حالة الهاتف والرقم
+        // (CALL_PHONE للاتصال التصالبي وREAD_PHONE_STATE/READ_PHONE_NUMBERS لمعرفة الهوية)
         PermissionItemCard(
             icon = Icons.Default.Call,
             title = stringResource(R.string.grant_calls),
@@ -330,8 +340,12 @@ internal fun HostPermissionsSection() {
             isGranted = hasCallPhone && hasAnswerCalls,
             onClick = {
                 val perms = mutableListOf(Manifest.permission.CALL_PHONE)
+                perms.add(Manifest.permission.READ_PHONE_STATE)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                     perms.add(Manifest.permission.ANSWER_PHONE_CALLS)
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    perms.add(Manifest.permission.READ_PHONE_NUMBERS)
                 }
                 commsLauncher.launch(perms.toTypedArray())
             }

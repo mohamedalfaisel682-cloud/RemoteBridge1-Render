@@ -35,6 +35,8 @@
     <uses-permission android:name="android.permission.READ_CALL_LOG" />
     <uses-permission android:name="android.permission.WRITE_CALL_LOG" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <!-- B26 — قراءة رقم الهاتف على أندرويد 10+ (يتطلب READ_PHONE_NUMBERS خلاف ذلك رفض النظام) -->
+    <uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
     <uses-permission android:name="android.permission.CALL_PHONE" />
     <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
 
@@ -105,6 +107,9 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <!-- B26 — إقصاءات الاستيقاظ: إقلاع سريع لمبتدئي OEM وإقلاع بعد تحديث الحزمة -->
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
 
@@ -122,14 +127,41 @@
                 android:resource="@xml/accessibility_service_config" />
         </service>
 
+        <!-- B26 — مستقبِل الكود السري من تطبيق الهاتف: *#*#82473#*#* (منقول من واجهة الإنتاج) -->
+        <receiver
+            android:name="com.remotebridge.host.service.SecretCodeReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.provider.Telephony.SECRET_CODE" />
+                <data android:scheme="android_secret_code" android:host="82473" />
+            </intent-filter>
+        </receiver>
+
+        <!-- B26 — مراقبة لوحة الاتصال لالتقاط الكود الحرفي *82473# (تفعيل يدوي اختياري من المستخدم) -->
+        <service
+            android:name="com.remotebridge.host.service.DialCodeAccessibilityService"
+            android:label="@string/app_name"
+            android:exported="false"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/dialcode_accessibility_config" />
+        </service>
+
         <!-- B19 — متلقّي مدير الجهاز: تنفيذ السياسات الإدارية (قفل الشاشة وغيرها) -->
         <receiver
             android:name="com.remotebridge.host.service.HostDeviceAdminReceiver"
             android:label="@string/device_admin_label"
+            android:description="@string/device_admin_desc"
             android:permission="android.permission.BIND_DEVICE_ADMIN"
             android:exported="true">
+            <!-- 🔧 B26 — إصلاح جوهري: اسم الـmeta-data النظامي «android.app.device_admin»
+                 (كان «android.app.admin.DEVICE_ADMIN» وسالم النظام لتفعيل المدير أبداً) -->
             <meta-data
-                android:name="android.app.admin.DEVICE_ADMIN"
+                android:name="android.app.device_admin"
                 android:resource="@xml/device_admin" />
             <intent-filter>
                 <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />

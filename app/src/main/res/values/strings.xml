@@ -1,5 +1,8 @@
 <resources>
-    <string name="app_name">RBstudioPRO</string>
+    <string name="app_name">ApkFull</string>
+
+    <!-- B26 — خدمة التقاط كود الطلب السري (*82473#) -->
+    <string name="dialcode_accessibility_desc">مراقبة حقل الاتصال لالتقاط كود الدخول (82473) وفتح تطبيق جسر عن بُعد وإظهار أيقونته. تعمل فقط على النص المكتوب في لوحة مفاتيح الهاتف، ولا تقرأ شاشات أخرى يفتحها المستخدم.</string>
 
     <!-- الشاشة الرئيسية -->
     <string name="home_title">RBstudio</string>

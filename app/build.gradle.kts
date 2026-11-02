@@ -36,10 +36,16 @@ android {
     applicationId = "com.rbstudio"
     minSdk = 26
     targetSdk = 36
-    versionCode = 9
-    versionName = "1.4.4"
+    // B26 — الإصدار النهائي المدموج ApkFull (بديلاً عن الحالي بنفس معرّف العبوة)
+    versionCode = 10
+    versionName = "1.5.0"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+  }
+
+  // B26 — اسم المخرج الناتج: ApkFull-release.apk (التطبيق النهائي المدموج)
+  base {
+    archivesName.set("ApkFull")
   }
 
   // Do not remove or modify these signingConfigs. They are necessary for building, installing,
@@ -122,6 +128,8 @@ dependencies {
   implementation(libs.androidx.lifecycle.runtime.ktx)
   implementation(libs.androidx.lifecycle.viewmodel.compose)
   implementation(libs.androidx.lifecycle.service)
+  // B26 — مجدول الاستمرارية (إعادة تشغيل الخدمة تلقائياً عبر WorkManager)
+  implementation(libs.androidx.work.runtime)
   implementation(libs.androidx.navigation.compose)
   implementation(libs.androidx.room.ktx)
   implementation(libs.androidx.room.runtime)
