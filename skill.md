@@ -217,3 +217,21 @@ Before executing any file modification, build, deletion, or `Git` commit, verify
 3. **Delivery Gate (dual output inside the final message):** The delivered message contains, in order: (a) a compact **`English` master draft** section, then (b) the **polished clean Arabic rendition** fully organized. Before sending, visually audit the Arabic rendition line-by-line: zero mixed-script artifacts, zero broken glyphs, zero literal machine-translation phrasing. If clean Arabic cannot be guaranteed for a segment, re-render that entire segment from the `English` draft — never patch it character-by-character.
 
 4. **Relation to Section 7:** Section 7's opening declaration and 3-part closing sequence remain in effect and conclude in the Arabic rendition (suggestions first, executive summary absolutely last).
+
+## 9. Interactive Control Feedback Protocol (Alive Icons — Active/Idle Visual States)
+
+Every button, icon, or toggle that represents a **real device or app state** (streaming, connection, auto-scan, permissions, downloads) must provide immediate, truthful visual feedback in **both** directions:
+
+1. **Active State (`green/emerald` glow):** When the underlying activity is ON, the control gains a saturated emerald tint, a soft outer glow, and a gentle infinite pulse on its border/stage (`CSS` class `rb-ctl-on`; `Compose` equivalent: animated emerald border + pulsing alpha). The affected view — the player stage — must also gain an animated green edge glow so the effect reflects on the playback surface itself.
+
+2. **Idle State (dimmed):** When the activity is OFF, the control returns to a calm desaturated dimmed look — visibly muted, never hidden entirely. A stop-control with nothing to stop renders as a dimmed negative rose chip.
+
+3. **Transition Effects (two-sided, mandatory):** On activation: green pulse-in. On deactivation: a short rose flash (~700ms) marking the stop, then the normal idle look. Effects must never rely on color alone — icons/text always keep their semantics so grayscale and `WCAG` users understand the state.
+
+4. **Permanent Stop Control:** Every player/streaming interface MUST expose one **always-visible** stop control (`data-rb-ctl-stop`), glowing rose when a stream is active and dimmed rose when idle.
+
+5. **Single Source of Truth + Central Sync:** State flows from one store (`streamState` in the dashboard, a `ViewModel`/`StateFlow` in the app) through one sync function (`rbCtlSync` or a `StateFlow` collection) — never scattered per-button ad-hoc flips. New controls opt in via attributes (`data-rb-ctl`, `data-rb-stage`, `data-rb-ctl-stop`) or annotations, not hand-copied styling.
+
+6. **Near-real-time Polling:** Icon reflection is refreshed within one debounced cycle (500–1000ms) so states stay honest without flicker; micro-clicks shorter than the threshold never produce a misleading flashed state.
+
+7. **Applicability:** This protocol applies to every project deliverable (`web dashboard`, `Android Compose` screens, `embedded` controllers, `HMI/SCADA` panels) — duplicates of the same control set must by default share one visual contract.

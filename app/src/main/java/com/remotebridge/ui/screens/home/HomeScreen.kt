@@ -43,6 +43,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -274,10 +275,30 @@ private fun WebUiQuickCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // 🔧 B23 — ميزة التفعيل التفاعلي: البطاقة تُنبض عند الضغط وتُضيء حدودها ثم تعود إلى السكون
+    val interactionSource = remember { MutableInteractionSource() }
+    val pressed by interactionSource.collectIsPressedAsState()
+    val pulse = rememberInfiniteTransition(label = "webuiCardPulse")
+    val glow by pulse.animateFloat(
+        initialValue = 0.82f,
+        targetValue = 1.06f,
+        animationSpec = infiniteRepeatable(tween(700), RepeatMode.Reverse),
+        label = "webuiCardGlow"
+    )
+    val targetScale = if (pressed) 0.955f else 1f
+    val scale by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = targetScale,
+        label = "webuiCardScale"
+    )
     Card(
         shape = RoundedCornerShape(18.dp),
         colors = CardDefaults.cardColors(containerColor = containerColor),
-        modifier = modifier.clickable { onClick() }
+        modifier = modifier
+            .graphicsLayer(
+                scaleX = scale,
+                scaleY = scale
+            )
+            .clickable(interactionSource = interactionSource, indication = null) { onClick() }
     ) {
         Column(
             modifier = Modifier
@@ -289,7 +310,7 @@ private fun WebUiQuickCard(
             Icon(
                 imageVector = icon,
                 contentDescription = title,
-                tint = accentColor,
+                tint = accentColor.copy(alpha = if (pressed) glow.coerceIn(0.6f, 1f) else 1f),
                 modifier = Modifier.size(28.dp)
             )
             Text(

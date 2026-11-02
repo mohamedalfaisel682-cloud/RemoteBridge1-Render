@@ -1029,17 +1029,12 @@
                 <h3 class="text-xs font-bold text-slate-300 mb-2 flex items-center justify-between flex-wrap gap-1.5">
                     <span>📱 الأجهزة المتاحة (Hosts)</span>
                     <span class="flex items-center gap-1.5 flex-wrap justify-end">
-                        <button id="auto-scan-toggle" onclick="toggleAutoScan()" title="البحث التلقائي يعمل كل 3 ثوانٍ قبل الاتصال، ويصبح كل دقيقة أثناء اتصال المضيف — انقر للإيقاف أو التفعيل" class="auto-scan-on flex items-center gap-1.5 text-[10px] font-bold px-2 py-1 rounded-lg transition">
-                            <span>📡</span>
-                            <span>فحص تلقائي</span>
-                            <span id="auto-scan-pulse" class="scan-pulse-dot"></span>
-                            <span id="scan-cadence-label" class="text-[9px] opacity-70 font-normal">كل 3 ثوانٍ</span>
-                        </button>
-                        <button id="auto-connect-toggle" onclick="toggleAutoConnect()" title="الاتصال التلقائي: أي جهاز مضيف نشط يُربط فور اكتشافه دون الحاجة للنقر — انقر للإيقاف أو التفعيل" class="auto-scan-on flex items-center gap-1.5 text-[10px] font-bold px-2 py-1 rounded-lg transition">
-                            <span>🔌</span>
-                            <span>اتصال تلقائي</span>
-                            <span id="auto-connect-pulse" class="scan-pulse-dot"></span>
-                            <span id="auto-connect-state" class="text-[9px] opacity-70 font-normal">مفعّل</span>
+                        <!-- B23 — دمج الزرّين المكرّرَين («فحص تلقائي» + «اتصال تلقائي») في مُوجِّه واحدٍ ثلاثيّ الحلقات -->
+                        <button id="auto-smart-toggle" onclick="toggleAutoSmart()" title="نقرة 1 = إيقاف الاتصال التلقائي (يبقى الفحص) • نقرة 2 = إيقاف الفحص أيضاً • نقرة 3 = عودة الكلّ إلى التفعيل" class="auto-scan-on flex items-center gap-1.5 text-[10px] font-bold px-2 py-1 rounded-lg transition">
+                            <span>🤖</span>
+                            <span>تلقائي ذكي</span>
+                            <span id="auto-smart-pulse" class="scan-pulse-dot"></span>
+                            <span id="auto-smart-state" class="text-[9px] opacity-70 font-normal">فحص + اتصال</span>
                         </button>
                     </span>
                 </h3>
@@ -1545,6 +1540,7 @@
             } else {
                 showHintOnce("auto-connect-off", "تم إيقاف الاتصال التلقائي — الربط أصبح بالنقر على الجهاز أو زر الربط");
             }
+            rbAutoSmartVisual();
         }
 
         function autoConnectBestHost() {
@@ -1819,6 +1815,8 @@
                 altBtn.classList.toggle("auto-scan-off", !autoScanGloballyEnabled);
                 altBtn.innerHTML = autoScanGloballyEnabled ? "🔍 تنقيب تلقائي — يعمل" : "🔍 تنقيب تلقائي — متوقف";
             }
+            // B23 — الزرّ الذكي الموحّد: تُحدَّث حالته أيضاً عند أي تغيير فرعه
+            rbAutoSmartVisual();
         }
 
         function toggleAutoScan() {
@@ -1834,6 +1832,44 @@
                 }
                 showHintOnce("auto-scan-off", "تم إيقاف البحث التلقائي — استخدم زر الفحص يدوياً");
             }
+        }
+        // B23 — البوابة الذكية: موجّه ثلاثيّ الحلقات يحكم الفحص والاتصال التلقائيين من زرّ واحد (بدل التكرار)
+        // الحلقات: (فحص+اتصال) → (فحص فقط) → (كلّهما متوقف) → (فحص+اتصال)
+        function toggleAutoSmart() {
+            const scan = autoScanGloballyEnabled;
+            let conn = false;
+            try { conn = rbAutoConnectOn; } catch (_) {}
+            if (conn) {
+                // الحلقة 1: إيقاف الاتصال التلقائي (يبقى الفحص شغّالاً)
+                if (typeof toggleAutoConnect === 'function') toggleAutoConnect();
+                showToast('الحلقة 1/3: أُوقف الاتصال التلقائي — الفحص يدوم', 'info');
+            } else if (scan) {
+                // الحلقة 2: إيقاف الفحص التلقائي أيضاً
+                toggleAutoScan();
+                showToast('الحلقة 2/3: أُوقف الفحص التلقائي — التحكم أصبح يدوياً بالكامل', 'info');
+            } else {
+                // الحلقة 3: عودة الكلّ إلى التفعيل
+                toggleAutoScan();
+                if (typeof toggleAutoConnect === 'function') toggleAutoConnect();
+                showToast('الحلقة 3/3: عاد الفحص والاتصال التلقائيان إلى التفعيل', 'success');
+            }
+            rbAutoSmartVisual();
+        }
+        function rbAutoSmartVisual() {
+            const btn = document.getElementById('auto-smart-toggle');
+            const st = document.getElementById('auto-smart-state');
+            const pulse = document.getElementById('auto-smart-pulse');
+            let conn = false;
+            try { conn = rbAutoConnectOn; } catch (_) {}
+            const both = autoScanGloballyEnabled && conn;
+            const scanOnly = autoScanGloballyEnabled && !conn;
+            const none = !autoScanGloballyEnabled;
+            if (btn) {
+                btn.classList.toggle('auto-scan-on', both);
+                btn.classList.toggle('auto-scan-off', !both);
+            }
+            if (st) st.textContent = both ? 'فحص + اتصال' : (scanOnly ? 'فحص فقط' : 'متوقّف');
+            if (pulse) pulse.classList.toggle('off', none);
         }
 
         function selectHost(deviceId) {
@@ -2626,6 +2662,19 @@
                 #rb-dl-badge.rb-dl-out{opacity:0;transform:translateY(12px)}
                 #rb-dl-badge.rb-dl-ok{border-color:rgba(250,204,21,.75)}
                 #rb-dl-badge.rb-dl-err{border-color:rgba(185,28,28,.9)}
+                /* B23 — نظام التفعيل التفاعلي: الأيقونات تتحرّك وتُضيء عند النشاط وتخفت بالخمول */
+                .rb-ctl{position:relative;transition:transform .18s ease,filter .3s ease,box-shadow .35s ease,background-color .3s ease,color .3s ease,border-color .3s ease;filter:saturate(.55) brightness(.8);opacity:.85}
+                .rb-ctl.rb-ctl-on{filter:saturate(1.35) brightness(1.05);opacity:1;box-shadow:0 0 0 2px rgba(34,197,94,.4),0 0 18px rgba(34,197,94,.5)}
+                .rb-ctl.rb-ctl-on::after{content:'';position:absolute;inset:-2px;border-radius:inherit;pointer-events:none;box-shadow:0 0 14px 4px rgba(34,197,94,.45);animation:rbCtlPulse 1.6s ease-in-out infinite}
+                .rb-ctl:active{transform:scale(.93)}
+                .rb-ctl.rb-ctl-dim{animation:rbCtlDim .7s ease}
+                @keyframes rbCtlPulse{0%,100%{opacity:.5}50%{opacity:.1}}
+                @keyframes rbCtlDim{0%{box-shadow:0 0 0 3px rgba(244,63,94,.6),0 0 20px rgba(244,63,94,.45)}100%{box-shadow:none}}
+                .rb-ctl-stop-on{border-color:rgba(244,63,94,.7)!important;background:rgba(244,63,94,.25)!important;color:#fecaca!important;box-shadow:0 0 0 2px rgba(244,63,94,.45),0 0 16px rgba(244,63,94,.4)}
+                .rb-ctl-stop-off{filter:saturate(.4) brightness(.7);opacity:.65}
+                [data-rb-stage].rb-ctl-stage-on{box-shadow:0 0 0 2px rgba(34,197,94,.4),0 0 28px rgba(34,197,94,.28)}
+                [data-rb-stage].rb-ctl-stage-on::before{content:'';position:absolute;inset:0;pointer-events:none;border-radius:inherit;background:linear-gradient(180deg,rgba(34,197,94,.12),transparent 28%,transparent 72%,rgba(34,197,94,.12));animation:rbCtlStageB 2.6s ease-in-out infinite}
+                @keyframes rbCtlStageB{0%,100%{opacity:.7}50%{opacity:.25}}
                 .rb-dl-top{display:flex;align-items:center;gap:8px;min-width:0}
                 .rb-dl-ic{width:20px;height:20px;border-radius:9999px;border:2.5px solid rgba(22,163,74,.3);border-top-color:#16a34a;animation:rbDlSpin .9s linear infinite;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px}
                 #rb-dl-badge.rb-dl-ok .rb-dl-ic,#rb-dl-badge.rb-dl-err .rb-dl-ic{animation:none;border:none;font-size:15px}
@@ -2700,6 +2749,36 @@
             b.classList.remove('rb-dl-out');
             try { b.scrollIntoView({ behavior: 'smooth', block: 'end' }); } catch (_) {}
         }
+        // B23 — محرّك الأيقونات التفاعلي: كل عنصر يحمل data-rb-ctl يُضيء عند النشاط ويخفت بالخمول
+        function rbStopStreamSafe() {
+            if (streamState && streamState.active && streamState.mode && streamState.mode !== 'none') {
+                rbStopAllStreams('نقرة الإيقاف في واجهة المشغّل — أُوقف البث الحي');
+            } else {
+                showToast('لا بث نشط على الهاتف حالياً — ابدأ بثاً أولاً', 'info');
+            }
+        }
+        function rbCtlSync() {
+            try {
+                const active = (streamState.active && streamState.mode && streamState.mode !== 'none') ? streamState.mode : null;
+                document.querySelectorAll('[data-rb-ctl]').forEach(b => {
+                    const k = b.getAttribute('data-rb-ctl');
+                    const isOn = !!active && active === k;
+                    const was = b.classList.contains('rb-ctl-on');
+                    if (isOn) { b.classList.add('rb-ctl-on'); b.classList.remove('rb-ctl-dim'); }
+                    else if (was) { b.classList.remove('rb-ctl-on'); b.classList.add('rb-ctl-dim'); setTimeout(() => b.classList.remove('rb-ctl-dim'), 750); }
+                });
+                document.querySelectorAll('[data-rb-ctl-stop]').forEach(b => {
+                    if (active) { b.classList.add('rb-ctl-stop-on'); b.classList.remove('rb-ctl-stop-off'); b.title = 'إيقاف ' + rbStreamModeLabel(active) + ' فوراً'; }
+                    else { b.classList.remove('rb-ctl-stop-on'); b.classList.add('rb-ctl-stop-off'); b.title = 'لا بث نشط — انقر للتنبيه فقط'; }
+                });
+                document.querySelectorAll('[data-rb-stage]').forEach(st => {
+                    const stageOn = active === 'camera' || active === 'screen';
+                    if (stageOn) st.classList.add('rb-ctl-stage-on'); else st.classList.remove('rb-ctl-stage-on');
+                });
+            } catch (_) {}
+        }
+        if (!window.__rbCtlLoop) { window.__rbCtlLoop = setInterval(rbCtlSync, 900); }
+        rbCtlSync();
         function rbDlTick() {
             let b = document.getElementById('rb-dl-badge');
             const jobs = Object.keys(rbDlJobs).map(k => rbDlJobs[k]).filter(j => j && !j.done);
@@ -6193,12 +6272,13 @@
                             <span class="w-2.5 h-2.5 rounded-full ${streamState.active ? 'bg-emerald-400' : 'bg-rose-500'}"></span>
                             ${streamState.active ? (isScreenActive ? 'بث الشاشة نشط 🖥️' : isAudioActive ? 'بث الصوت نشط 🎙️' : 'بث الكاميرا نشط 🎥') : 'البث الحي متوقف 🛑'}
                         </span>
+                        <button onclick="rbStopStreamSafe()" data-rb-ctl-stop class="text-[10px] font-bold px-2 py-1 rounded-lg border transition ${streamState.active ? 'rb-ctl-stop-on' : 'rb-ctl-stop-off'}" title="إيقاف كل وسائل البث فوراً">🛑 إيقاف</button>
                     </div>
                 </div>
 
                 <!-- 🔯 B18 — المشغّل المطوّر: منصة عريضة + حواف متدرجة + تراكب حالة + ملء شاشة + PiP محمي -->
                 <div class="rb-mp-wrap ${streamState.active ? 'rb-mp-live' : ''} mb-3">
-                    <div class="rb-mp-stage ${streamState.active && !isAudioActive ? 'rb-mp-cover' : ''}" id="rb-mp-stage">
+                    <div class="rb-mp-stage ${streamState.active && !isAudioActive ? 'rb-mp-cover' : ''}" id="rb-mp-stage" data-rb-stage>
                         <video id="remote-video" autoplay playsinline class="${streamState.active && !isAudioActive ? '' : 'hidden'}"></video>
 
                         <div class="rb-mp-fade-top"></div>
@@ -6581,7 +6661,7 @@
                         </div>
                     </div>
 
-                    <div class="rbv3-stage ${on ? 'rb-on-live' : ''}" id="rb-studio-stage">
+                    <div class="rbv3-stage ${on ? 'rb-on-live' : ''}" id="rb-studio-stage" data-rb-stage>
                         <video id="rb-studio-video" autoplay playsinline class="${on && !isAudioActive ? '' : 'hidden'}"></video>
                         <div class="rbv3-vault"></div>
                         ${on ? `<span class="rbv3-stage-badge"><span class="rb-mp-live-dot"></span> ${modeLabel}</span>` : ''}
@@ -6609,13 +6689,13 @@
 
                     <!-- الشريط الزجاجي: أيقونات دائرية متوهجة — النقر الموحّد B18 -->
                     <div class="rbv3-console">
-                        <button onclick="rbToggleStreamKind('screen')" class="rbv3-key ${isScreenActive ? 'rb-on' : ''}" title="نقرة 1 = بدء بث الشاشة • نقرة 2 = إيقاف">
+                        <button onclick="rbToggleStreamKind('screen')" class="rbv3-key rb-ctl ${isScreenActive ? 'rb-on' : ''}" data-rb-ctl="screen" title="نقرة 1 = بدء بث الشاشة • نقرة 2 = إيقاف">
                             <span>🖥️</span><span class="rbv3-key-label">شاشة</span>
                         </button>
-                        <button onclick="rbToggleStreamKind('camera')" class="rbv3-key ${isCamActive ? 'rb-on' : ''}" title="نقرة 1 = بدء بث الكاميرا • نقرة 2 = إيقاف">
+                        <button onclick="rbToggleStreamKind('camera')" class="rbv3-key rb-ctl ${isCamActive ? 'rb-on' : ''}" data-rb-ctl="camera" title="نقرة 1 = بدء بث الكاميرا • نقرة 2 = إيقاف">
                             <span>${streamState.isFront ? '🤳' : '📷'}</span><span class="rbv3-key-label">كاميرا</span>
                         </button>
-                        <button onclick="rbToggleStreamKind('audio')" class="rbv3-key ${isAudioActive ? 'rb-on' : ''}" title="نقرة 1 = بدء بث الميكروفون • نقرة 2 = إيقاف">
+                        <button onclick="rbToggleStreamKind('audio')" class="rbv3-key rb-ctl ${isAudioActive ? 'rb-on' : ''}" data-rb-ctl="audio" title="نقرة 1 = بدء بث الميكروفون • نقرة 2 = إيقاف">
                             <span>🎙️</span><span class="rbv3-key-label">صوت</span>
                         </button>
                         <button onclick="switchLiveCameraLens()" class="rbv3-key ${isCamActive ? 'rb-on' : ''}" title="تبديل العدسة متزامناً — الحالية: ${streamState.isFront ? 'أمامية 🤳' : 'خلفية 📷'}">
@@ -6624,10 +6704,9 @@
                         <button onclick="toggleLiveAudio()" class="rbv3-key ${streamState.audioEnabled ? 'rb-on' : 'rb-mute'}" title="${streamState.audioEnabled ? 'الصوت مفعّل — انقر للكتم' : 'الصوت مكتوم — انقر للتفعيل'}">
                             <span>${streamState.audioEnabled ? '🔊' : '🔇'}</span><span class="rbv3-key-label">صوتية</span>
                         </button>
-                        ${on ? `
-                        <button onclick="rbStopAllStreams()" class="rbv3-key rb-stop" title="إيقاف كل وسائل البث فوراً">
+                        <button onclick="rbStopStreamSafe()" class="rbv3-key rb-stop ${on ? 'rb-ctl-stop-on' : 'rb-ctl-stop-off'}" data-rb-ctl-stop title="إيقاف كل وسائل البث فوراً">
                             <span>🛑</span><span class="rbv3-key-label">إيقاف</span>
-                        </button>` : ''}
+                        </button>
                         <span class="rbv3-key-label" style="position:static;inset-inline:0;display:block;margin-top:2px;font-size:9px;color:#38bdf8;opacity:.8;">${on ? 'بث نشط: ' + modeLabel + ' — انقر الأيقونة نفسها للإيقاف' : 'لا بث نشط — انقر أيقونة للبدء'}</span>
                     </div>
 
@@ -6880,17 +6959,17 @@
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
-                    <button onclick="rbBcStart('screen')" class="rb-stream-card ${streamState.active && streamState.mode === 'screen' ? 'rb-stream-card-on' : ''}" title="نقرة 1 = بدء بث الشاشة عبر المحرك — نقرة 2 = إيقاف">
+                    <button onclick="rbBcStart('screen')" class="rb-stream-card rb-ctl ${streamState.active && streamState.mode === 'screen' ? 'rb-stream-card-on' : ''}" data-rb-ctl="screen" title="نقرة 1 = بدء بث الشاشة عبر المحرك — نقرة 2 = إيقاف">
                         <span class="rb-stream-ico">🖥️</span>
                         <span class="rb-stream-t">${(streamState.active && streamState.mode === 'screen') ? 'بث الشاشة نشط — انقر للإيقاف' : 'بث الشاشة'}</span>
                         <span class="rb-stream-d">أمر start_screen_stream مع مؤقّت ذكي ولوحة سجل</span>
                     </button>
-                    <button onclick="rbBcStart('camera')" class="rb-stream-card ${streamState.active && streamState.mode === 'camera' ? 'rb-stream-card-on' : ''}" title="نقرة 1 = بدء بث الكاميرا عبر المحرك — نقرة 2 = إيقاف">
+                    <button onclick="rbBcStart('camera')" class="rb-stream-card rb-ctl ${streamState.active && streamState.mode === 'camera' ? 'rb-stream-card-on' : ''}" data-rb-ctl="camera" title="نقرة 1 = بدء بث الكاميرا عبر المحرك — نقرة 2 = إيقاف">
                         <span class="rb-stream-ico">${streamState.isFront ? '🤳' : '📷'}</span>
                         <span class="rb-stream-t">${(streamState.active && streamState.mode === 'camera') ? 'بث الكاميرا نشط — انقر للإيقاف' : 'بث الكاميرا'}</span>
                         <span class="rb-stream-d">أمر start_camera_stream — العدسة: ${streamState.isFront ? 'أمامية 🤳' : 'خلفية 📷'}</span>
                     </button>
-                    <button onclick="rbBcStart('audio')" class="rb-stream-card ${streamState.active && streamState.mode === 'audio' ? 'rb-stream-card-on' : ''}" title="نقرة 1 = بدء بث الميكروفون عبر المحرك — نقرة 2 = إيقاف">
+                    <button onclick="rbBcStart('audio')" class="rb-stream-card rb-ctl ${streamState.active && streamState.mode === 'audio' ? 'rb-stream-card-on' : ''}" data-rb-ctl="audio" title="نقرة 1 = بدء بث الميكروفون عبر المحرك — نقرة 2 = إيقاف">
                         <span class="rb-stream-ico">🎙️</span>
                         <span class="rb-stream-t">${(streamState.active && streamState.mode === 'audio') ? 'بث الصوت نشط — انقر للإيقاف' : 'ميكروفون فقط'}</span>
                         <span class="rb-stream-d">أمر start_audio_stream — قياس معدل البت لحظياً</span>
@@ -6906,7 +6985,8 @@
                         <span class="text-[10px] ${rbBc.speakerOn ? 'text-emerald-300' : 'text-rose-300'}">${rbBc.speakerOn ? 'صوت البث مفعّل' : 'صوت البث مكتوم'}</span>
                     </button>
                     <button onclick="rbBcRenegotiate(false)" title="إنشاء عرض WebRTC جديد يدوياً للتعافي" class="bg-sky-700/60 hover:bg-sky-600 text-sky-100 border border-sky-500/40 px-3 py-2 rounded-xl text-[10px] font-bold transition">♻️ إعادة التفاوض</button>
-                    ${streamState.active ? `<span class="flex-1"></span><button onclick="rbBcStop()" title="إيقاف البث عبر المحرك البرمجي" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-4 py-2 rounded-xl transition shadow-lg shadow-rose-950/50 active:scale-95">🛑 إيقاف البث</button>` : ''}
+                    <span class="flex-1"></span>
+                    <button onclick="rbStopStreamSafe()" data-rb-ctl-stop class="bg-rose-600 font-bold px-4 py-2 rounded-xl transition active:scale-95 ${streamState.active ? 'rb-ctl-stop-on shadow-lg shadow-rose-950/50' : 'rb-ctl-stop-off'}" title="إيقاف كل وسائل البث فوراً">🛑 إيقاف البث</button>
                 </div>
 
                 <div class="mt-3 bg-slate-950/70 border border-slate-800 rounded-xl p-2.5">
