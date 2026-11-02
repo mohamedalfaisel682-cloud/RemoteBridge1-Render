@@ -527,9 +527,14 @@ func main() {
 			}
 		}
 		if target == "" {
-			index := filepath.Join("web-dashboard", "index.html")
-			if _, err := os.Stat(index); err == nil {
-				target = index
+			// B25 — التبنّي: الواجهة النهائية indexMergeFull.html هي المرجع الأساسي للجذر،
+			// والأساس index.html احتياطٌ في غيابها (ظل الواجهات القديمة متاحة على مساراتها).
+			for _, fallback := range []string{"indexMergeFull.html", "index.html"} {
+				index := filepath.Join("web-dashboard", fallback)
+				if _, err := os.Stat(index); err == nil {
+					target = index
+					break
+				}
 			}
 		}
 		if target != "" {

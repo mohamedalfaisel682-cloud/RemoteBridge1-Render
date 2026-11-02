@@ -27,6 +27,9 @@ const b24Keys = [
     'maybeInitialSettingsSync', 'pushQuickOptsSync', 'pullHostSettingsSync',
     'handleIncomingSettingsSync', 'QUICK_OPTS_CARD_HTML', 'cmd-sms-number', 'schedules-box',
     'seedFromHostApp', 'case "settings_sync":',
+    // B25 — آليات الاتصال المنقولة: عارض الترحيل + مبدّل الواجهات القديمة
+    'case "live_frame":', 'function handleLiveFrame(',
+    'legacy-iface-select', 'mrgLegacyIfaceSwitch',
 ];
 
 let failed = 0;

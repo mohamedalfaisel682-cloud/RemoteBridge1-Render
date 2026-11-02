@@ -62,6 +62,141 @@ const blockCommands =
 
 const blockHelpers = helpersPart + "\n" + blobToBase64;
 
+// B25 — كتلة بث الترحيل (MJPEG) المنقولة من واجهة الدمج القديمة ومكيَّفة للأساس:
+// العارض ينشأ ديناميكياً داخل حاوية remote-video، وأولوية فيديو WebRTC تُحسب كل نبضة دون تعديل نواة الأساس.
+const blockRelay = `
+        // ================================================================
+        // B25 — آلية البث المباشر عبر الترحيل (MJPEG) المنقولة من واجهة الدمج القديمة:
+        // الإطارات تصل كرسائل live_frame (JPEG بترميز Base64) عبر قناة wss نفسها
+        // دون الحاجة إلى WebRTC/STUN، ولفيديو WebRTC النشط الأولوية في العرض دائماً.
+        // ================================================================
+        let relayStreamActive = false;
+        let relayLastDataURL = null;
+        let relayFrameCount = 0;
+        let webrtcVideoActive = false;
+
+        /** هل يوجد مسار فيديو WebRTC حي داخل العنصر الرئيسي remote-video (يُحسب لحظياً في كل نبضة). */
+        function mrgHasLiveWebRtcVideo() {
+            try {
+                const v = document.getElementById('remote-video');
+                if (!v || !v.srcObject) return false;
+                const ts = v.srcObject.getVideoTracks ? v.srcObject.getVideoTracks() : [];
+                return ts.some(t => t.readyState === 'live');
+            } catch (_) { return false; }
+        }
+
+        /** ضمان وجود عارض الإطارات relay-frame داخل حاوية الفيديو (يُنشأ مرة واحدة). */
+        function mrgEnsureRelayImg() {
+            try {
+                let img = document.getElementById('relay-frame');
+                if (img) return img;
+                const srcEl = document.getElementById('remote-video') || document.getElementById('video-placeholder');
+                if (!srcEl || !srcEl.parentElement) return null;
+                img = document.createElement('img');
+                img.id = 'relay-frame';
+                img.alt = 'البث الحي عبر خادم الإشارات (وضع الترحيل)';
+                img.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:contain;z-index:20;display:none;';
+                let holder = srcEl.parentElement;
+                try { if (holder && getComputedStyle(holder).position === 'static') holder.style.position = 'relative'; } catch (_) {}
+                holder.appendChild(img);
+                return img;
+            } catch (_) { return null; }
+        }
+
+        function handleLiveFrame(msg) {
+            try {
+                if (!msg || !msg.b64) return;
+                relayFrameCount++;
+                if (mrgHasLiveWebRtcVideo()) {
+                    console.log('[Relay] تجاهل إطار ' + (msg.seq || '') + ': فيديو WebRTC النشط له الأولوية');
+                    return;
+                }
+                relayLastDataURL = 'data:image/jpeg;base64,' + msg.b64;
+                const firstFrame = !relayStreamActive;
+                relayStreamActive = true;
+                if (firstFrame) {
+                    showToast('بدأ استقبال البث الحي عبر خادم الإشارات (وضع الترحيل) 📡', 'success');
+                    try {
+                        if (typeof renderCameraStreamView === 'function' && activeTab === 'camera') renderCameraStreamView();
+                    } catch (_) {}
+                }
+                const img = mrgEnsureRelayImg();
+                if (img) {
+                    img.style.display = 'block';
+                    if (img.getAttribute('src') !== relayLastDataURL) img.src = relayLastDataURL;
+                }
+            } catch (e) {
+                console.warn('[Relay Frame Error]', e);
+            }
+        }
+
+        function clearRelayViewer() {
+            relayStreamActive = false;
+            relayLastDataURL = null;
+            relayFrameCount = 0;
+            try {
+                const img = document.getElementById('relay-frame');
+                if (img) { img.style.display = 'none'; img.removeAttribute('src'); }
+            } catch (_) {}
+        }
+
+        function clearWebRtcVideoForRelayStart() {
+            // عند بدء بث الترحيل: نُصفّي فيديو WebRTC القديم المنتهي كي لا يغطي عارض الإطارات
+            try {
+                const videoEl = document.getElementById('remote-video');
+                if (!videoEl || !videoEl.srcObject) { webrtcVideoActive = false; return; }
+                const vt = videoEl.srcObject.getVideoTracks ? videoEl.srcObject.getVideoTracks() : [];
+                if (!vt.length || vt.every(t => t.readyState === 'ended')) {
+                    videoEl.srcObject = null;
+                    videoEl.classList.add('hidden');
+                    webrtcVideoActive = false;
+                }
+            } catch (_) {}
+        }
+
+        /** نبضة الترحيل كل ثانية: تجديد أولوية WebRTC وإعادة آخر إطار بعد أي إعادة رسم للوحة. */
+        function mrgRelayTick() {
+            try {
+                webrtcVideoActive = mrgHasLiveWebRtcVideo();
+                if (!relayStreamActive || !relayLastDataURL) return;
+                const img = mrgEnsureRelayImg();
+                if (!img) return;
+                if (webrtcVideoActive) { img.style.display = 'none'; return; }
+                img.style.display = 'block';
+                if (img.getAttribute('src') !== relayLastDataURL) img.src = relayLastDataURL;
+            } catch (_) {}
+        }
+        try { setInterval(mrgRelayTick, 1000); } catch (_) {}
+`;
+
+// B25 — قائمة «واجهات الاتصال القديمة» وخياراتها بأسماء ملفات الواجهات الموجودة في المجلد
+// (تُفتح من اللوحة الرئيسية جوار زر «تحديث البيانات»، ويحمل الانتقال الحالةَ عبر remotebridge_config المشترك)
+const legacySelect = `
+                        <select id="legacy-iface-select" onchange="mrgLegacyIfaceSwitch(this)" title="التبديل إلى واجهات الاتصال القديمة (آليات الربط الأصلية في المجلد)" class="bg-slate-800 border border-slate-700 text-slate-200 text-xs px-2.5 py-2 rounded-xl font-bold cursor-pointer outline-none focus:border-emerald-500/60">
+                            <option value="" selected disabled>🧭 واجهات الاتصال القديمة</option>
+                            <option value="indexMergeFull.html">indexMergeFull.html — الواجهة النهائية (هذه)</option>
+                            <option value="index.html">index.html — الإصدار الأصلي (معيار البث والاتصال)</option>
+                            <option value="indexMerge.html">indexMerge.html — واجهة الدمج القديمة (ترحيل MJPEG)</option>
+                        </select>`;
+
+const blockLegacySwitch = `
+        // B25 — منطق مبدّل واجهات الاتصال القديمة: فتح ملف الواجهة المختار مع تمرير الحالة عبر remotebridge_config المشترك
+        function mrgLegacyIfaceSwitch(sel) {
+            let target = '';
+            try { target = (sel && sel.value) ? sel.value : ''; if (sel) sel.selectedIndex = 0; } catch (_) {}
+            if (!target) return;
+            const here = (location.pathname.split('/').pop() || 'indexMergeFull.html');
+            if (target === here) { try { showToast('أنت على الواجهة النهائية أصلاً — لا داعي للتبديل', 'info'); } catch (_) {} return; }
+            try {
+                const hand = { from: here, to: target, at: Date.now(),
+                    serverUrl: (typeof appConfig !== 'undefined' && appConfig.serverUrl) || '',
+                    targetDeviceId: (typeof appConfig !== 'undefined' && appConfig.targetDeviceId) || '' };
+                localStorage.setItem('rb_legacy_handoff_v1', JSON.stringify(hand));
+            } catch (_) {}
+            const dir = location.pathname.replace(/[^/]*$/, '');
+            location.href = location.origin + dir + target + location.search;
+        }`;
+
 // ————— 2) فحوص السلامة: تقاطعُ الأسماء قبلَ الدمج —————
 const allInjected = [blockSeed, blockEngine, blockHelpers, blockCommands, quickCard].join("\n");
 
@@ -190,7 +325,17 @@ out = insertBefore(out,
     "                    try { handleIncomingSettingsSync(msg); } catch (e) { console.warn('settings_sync error:', e); }\n" +
     "                    break;\n");
 
-// (5) الكتلة المجمّعة قبيل قسم التبديل
+// (4b) B25 — حالة live_frame في الموزع نفسه (عارض بث الترحيل MJPEG)
+out = insertBefore(out,
+    '                case "push_event":\n',
+    '                case "live_frame":\n' +
+    "                    // B25 — عارض بث الترحيل القادم من واجهة الدمج القديمة (فيديو WebRTC له الأولوية)\n" +
+    "                    try { handleLiveFrame(msg); } catch (e) { console.warn('live_frame error:', e); }\n" +
+    "                    break;\n");
+
+// (5) كتلة ترحيل MJPEG (B25) ثم منطق المبدّل ثم الكتلة المجمّعة قبيل قسم التبديل
+out = insertBefore(out, "        // Tab Switching\n", blockRelay + "\n\n");
+out = insertBefore(out, "        // Tab Switching\n", blockLegacySwitch + "\n\n");
 out = insertBefore(out, "        // Tab Switching\n", megablock);
 
 // (6) حالات switchTab الجديدة (الأوامر + المزامنة)
@@ -239,6 +384,9 @@ out = insertAfter(out,
     "                </button>\n");
 
 // ————— 4) فحوص الخروج (شواهد الشمول السليم) —————
+// (9) B25 — قائمة «واجهات الاتصال القديمة» بجانب زر تحديث البيانات في رأس اللوحة الرئيسية
+out = insertAfter(out, '<span>تحديث البيانات</span> 🔄\n                        </button>', legacySelect + "\n");
+
 const verify = [
     ["case \"settings_sync\":", 1],
     ["function renderQuickPane(", 1],
@@ -272,6 +420,19 @@ const verify = [
     ["openSettingsGroupTab('connection')", 2],
     ["openSettingsGroupTab('ui')", 2],
     ["openSettingsGroupTab('quick')", 2],
+    // (B25) شواهد آليات الاتصال المنقولة: الترحيل + المبدّل
+    ["case \"live_frame\":", 1],
+    ["function handleLiveFrame(", 1],
+    ["function clearRelayViewer(", 1],
+    ["function clearWebRtcVideoForRelayStart(", 1],
+    ["function mrgHasLiveWebRtcVideo(", 1],
+    ["function mrgEnsureRelayImg(", 1],
+    ["function mrgRelayTick(", 1],
+    ["function mrgLegacyIfaceSwitch(", 1],
+    ["mrgHasLiveWebRtcVideo()", 3],
+    ["id=\"legacy-iface-select\"", 1],
+    ["rb_legacy_handoff_v1", 1],
+    ["واجهات الاتصال القديمة", 3],
 ];
 const failures = verify.filter(([n, e]) => countNeedle(out, n) !== e)
     .map(([n, e]) => "«" + n + "» = " + countNeedle(out, n) + " والمتوقع " + e);
