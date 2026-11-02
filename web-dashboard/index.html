@@ -419,6 +419,8 @@
         .rb-lightwin .lw-row.lw-click:hover { background: rgba(15, 23, 42, 0.06); }
         .rb-lightwin .lw-copy-btn { border: 1px solid #94a3b8; background: #f1f5f9; border-radius: 8px; padding: 1px 7px; font-size: 10px; line-height: 1.5; cursor: pointer; color: #0f172a; transition: all .15s; }
         .rb-lightwin .lw-copy-btn:hover { background: #0284c7; color: #fff; border-color: #0284c7; }
+        .rb-lightwin .lw-play-btn { border: 1px solid #16a34a; background: #dcfce7; border-radius: 8px; padding: 1px 9px; font-size: 10px; line-height: 1.5; cursor: pointer; color: #14532d; font-weight: bold; transition: all .15s; flex-shrink: 0; }
+        .rb-lightwin .lw-play-btn:hover { background: #16a34a; color: #fff; border-color: #14532d; }
         /* B16 — فقاعات الدردشة داخل النافذة الفاتحة: نمط واتساب نهاري (واردة رمادية فاتحة، صادرة خضراء) تمنح الملاءمة والتباين */
         .rb-lightwin .bubble.in { background: #e2e8f0; border: 1px solid #cbd5e1; color: #0f172a; }
         .rb-lightwin .bubble.out { background: #dcfce7; border: 1px solid #86efac; color: #064e3b; }
@@ -2635,6 +2637,12 @@
                 .rb-dl-eta{color:#cbd5e1}
                 .rb-dl-flash{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700}
                 @keyframes rbDlSpin{to{transform:rotate(360deg)}}
+                #rb-dl-mini{position:fixed;top:96px;right:12px;z-index:41;display:inline-flex;align-items:center;gap:6px;direction:rtl;background:rgba(15,23,42,.92);border:1px solid rgba(22,163,74,.55);border-radius:9999px;padding:4px 10px;color:#dcfce7;font:700 11px/1.3 'Segoe UI',Tahoma,Arial,sans-serif;box-shadow:0 2px 10px rgba(0,0,0,.45);cursor:pointer;max-width:210px;white-space:nowrap;animation:rbDlPulse 1.5s ease-in-out infinite}
+                @media(min-width:767px){#rb-dl-mini{top:64px}}
+                #rb-dl-mini.rb-mini-off{display:none}
+                #rb-dl-mini .rb-mini-ic{width:13px;height:13px;border-radius:9999px;border:2px solid rgba(148,163,184,.35);border-top-color:#22c55e;animation:rbDlSpin .9s linear infinite;flex-shrink:0}
+                #rb-dl-mini .rb-mini-txt{overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+                @keyframes rbDlPulse{0%,100%{box-shadow:0 2px 10px rgba(0,0,0,.45),0 0 0 0 rgba(34,197,94,.5)}50%{box-shadow:0 2px 10px rgba(0,0,0,.45),0 0 0 6px rgba(34,197,94,0)}}
                 .rb-loc-numwrap{background:transparent;border:none}
                 .rb-loc-num{width:20px;height:20px;border-radius:9999px;background:rgba(20,83,45,.94);border:1px solid #16a34a;color:#f0fdf4;font:700 10.5px/19px Segoe UI,Tahoma,Arial;text-align:center;box-shadow:0 1px 5px rgba(0,0,0,.6)}
                 .rb-loc-cap{background:rgba(15,23,42,.9);border:1px solid rgba(22,163,74,.6);border-radius:9999px;padding:1px 7px;font-size:13px;box-shadow:0 1px 6px rgba(0,0,0,.55)}`;
@@ -2670,6 +2678,28 @@
             document.body.appendChild(b);
             return b;
         }
+        // B22 — الشارة المصغّرة المتحركة في إطار الواجهة: تُنشأ مرة واحدة وتُخفى افتراضياً
+        function rbDlBindMini() {
+            let m = document.getElementById('rb-dl-mini');
+            if (m) return m;
+            if (!document.body) return null;
+            m = document.createElement('button');
+            m.id = 'rb-dl-mini';
+            m.type = 'button';
+            m.classList.add('rb-mini-off');
+            m.setAttribute('onclick', 'rbDlMiniFocus()');
+            m.setAttribute('aria-label', 'شارة مصغّرة متحركة لنسبة التنزيل والوقت المتوقع — انقر لتمييز شارة التنزيل الرئيسية');
+            m.title = 'ملفات جارٍ سحبها الآن';
+            m.innerHTML = '<span class="rb-mini-ic" aria-hidden="true"></span><span class="rb-mini-txt" id="rb-dl-mini-txt">0%</span>';
+            document.body.appendChild(m);
+            return m;
+        }
+        function rbDlMiniFocus() {
+            const b = rbDlBindBadge();
+            if (!b) return;
+            b.classList.remove('rb-dl-out');
+            try { b.scrollIntoView({ behavior: 'smooth', block: 'end' }); } catch (_) {}
+        }
         function rbDlTick() {
             let b = document.getElementById('rb-dl-badge');
             const jobs = Object.keys(rbDlJobs).map(k => rbDlJobs[k]).filter(j => j && !j.done);
@@ -2690,8 +2720,9 @@
                 if (pctEl) pctEl.textContent = pct === null ? '⟳' : (pct + '%');
                 if (nameEl) nameEl.textContent = (newest && newest.name) || 'جارٍ السحب من الهاتف…';
                 if (bar) bar.style.width = (pct === null ? ((Number(newest && newest.got) > 0) ? 40 : 12) : pct) + '%';
+                let etaTxt = '';
                 if (etaEl) {
-                    if (pct === null) etaEl.textContent = 'جارٍ السحب: ' + rbFmtMB(gotAll);
+                    if (pct === null) { etaTxt = 'جارٍ السحب: ' + rbFmtMB(gotAll); etaEl.textContent = etaTxt; }
                     else {
                         let eta = null;
                         if (newest && Number(newest.total) > 0 && Number(newest.got) > 0) {
@@ -2699,12 +2730,24 @@
                             const rate = Number(newest.got) / el;
                             eta = Math.max(0, (Number(newest.total) - Number(newest.got)) / rate);
                         }
-                        etaEl.textContent = pct >= 100 ? 'أوشكت على الانتهاء' : (eta !== null
+                        etaTxt = pct >= 100 ? 'أوشكت على الانتهاء' : (eta !== null
                             ? 'الزمن المتوقع: ' + rbDlFmtSec(eta)
                             : rbFmtMB(gotAll) + ' من ' + rbFmtMB(totalAll));
+                        etaEl.textContent = etaTxt;
                     }
                 }
                 if (cntEl) cntEl.textContent = jobs.length > 1 ? ('مهام: ' + jobs.length) : '';
+                // B22 — الشارة المصغّرة في رأس الإطار: تُبنى وتُحدَّث داخل الدورة الزمنية نفسها (500ms)
+                const mini = rbDlBindMini();
+                if (mini) {
+                    mini.classList.remove('rb-mini-off');
+                    const mt = document.getElementById('rb-dl-mini-txt');
+                    if (mt) {
+                        const compact = (etaTxt || '').replace('الزمن المتوقع: ', '').replace('جارٍ السحب: ', '');
+                        mt.textContent = (pct === null ? '⟳' : pct + '%') + ' • ' + compact + (jobs.length > 1 ? ' • ' + jobs.length + ' مهام' : '');
+                    }
+                    mini.title = ((newest && newest.name) || 'سحب من الهاتف') + (pct === null ? '' : ' — ' + pct + '%');
+                }
                 return;
             }
             // لا مهام نشطة — وميض الإتمام/الفشل قصيراً ثم إخفاء الشارة
@@ -2714,9 +2757,13 @@
                 b.classList.remove('rb-dl-out');
                 b.classList.add(fl.ok ? 'rb-dl-ok' : 'rb-dl-err');
                 b.innerHTML = '<div class="rb-dl-flash" style="color:' + (fl.ok ? '#bbf7d0' : '#fecaca') + '"><span aria-hidden="true">' + (fl.ok ? '✅' : '❌') + '</span><span>' + (fl.ok ? 'اكتمل التنزيل ✓' : 'فشل التنزيل ✖') + (fl.name ? ' — ' + escapeHtml2(fl.name) : '') + '</span></div>';
+                const miniF = document.getElementById('rb-dl-mini');
+                if (miniF) miniF.classList.add('rb-mini-off');
                 return;
             }
             rbDlFlash = null;
+            const miniN = document.getElementById('rb-dl-mini');
+            if (miniN) miniN.classList.add('rb-mini-off');
             if (b) {
                 b.classList.add('rb-dl-out');
                 setTimeout(() => { const el = document.getElementById('rb-dl-badge'); if (el && el.classList.contains('rb-dl-out')) el.remove(); }, 400);
@@ -2769,6 +2816,12 @@
                             <canvas id="mp-wave" class="w-full cursor-pointer" style="height:110px"></canvas>
                             <div id="mp-needle" class="absolute top-4 bottom-9 w-0.5 bg-amber-400/90 pointer-events-none opacity-0" style="left:0%"></div>
                         </div>
+                        <iframe id="mp-doc" class="hidden w-full rounded-xl bg-white" style="max-height:56vh;height:56vh;border:0" title="عارض المستندات"></iframe>
+                        <div id="mp-other" style="display:none;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:36px 20px;text-align:center;width:100%">
+                            <div style="font-size:44px;line-height:1" aria-hidden="true">📦</div>
+                            <p style="font-size:13px;font-weight:700;color:#cbd5e1;margin:0">العرض المباشر غير متاح لهذا النوع من الملفات</p>
+                            <p style="font-size:11px;color:#94a3b8;margin:0">استخدم زر «⬇️ تنزيل» في الأسفل لحفظ النسخة الأصلية على جهازك</p>
+                        </div>
                         <p id="mp-status" class="absolute bottom-2 right-3 text-[10px] text-slate-400 ts-en">—</p>
                     </div>
                     <div id="mp-controls" class="px-3 py-2.5 bg-slate-950/70 border-t border-slate-800 flex flex-wrap items-center gap-2 text-[11px]">
@@ -2795,6 +2848,7 @@
             try {
                 const v = document.getElementById('mp-video'); if (v) { v.pause(); v.removeAttribute('src'); v.load(); }
                 const a = document.getElementById('mp-audio'); if (a) { a.pause(); a.removeAttribute('src'); a.load(); }
+                const d = document.getElementById('mp-doc'); if (d) { d.src = 'about:blank'; }
             } catch (_) {}
             try { if (mpState.url) { URL.revokeObjectURL(mpState.url); } } catch (_) {}
             mpState = { blob: null, url: null, name: '', mime: '', kind: '', waveBars: null, waveDrawn: false };
@@ -2870,21 +2924,27 @@
             const overlay = document.getElementById('mp-overlay');
             const v = document.getElementById('mp-video'), img = document.getElementById('mp-img'),
                 au = document.getElementById('mp-audio'), wrap = document.getElementById('mp-wave-wrap'),
-                seek = document.getElementById('mp-seek'), shot = document.getElementById('mp-shot');
+                seek = document.getElementById('mp-seek'), shot = document.getElementById('mp-shot'),
+                doc = document.getElementById('mp-doc'), other = document.getElementById('mp-other');
             try { if (mpState.url) URL.revokeObjectURL(mpState.url); } catch (_) {}
             mpState = { blob: null, url: null, name: o.name || '', mime: o.mime || '', kind: '', waveBars: null, waveDrawn: false };
             v.classList.add('hidden'); img.classList.add('hidden'); wrap.classList.add('hidden'); au.removeAttribute('src');
+            if (doc) { doc.classList.add('hidden'); doc.src = 'about:blank'; }
+            if (other) other.style.display = 'none';
             if (seek) seek.value = 0; mpStatus('جارٍ سحب المحتوى من الهاتف…');
             const mime = o.mime || rbMimeFromName(o.name || '');
             const m = String(mime);
-            let kind = 'image';
+            // B22 — طبقة النوع: صورة/فيديو/صوت كما هي + مستند `doc` (PDF والنصوص) + غير قابل للعرض `other`
+            let kind = 'other';
             if (m.startsWith('video/')) kind = 'video';
             else if (m.startsWith('audio/') || m === 'application/ogg') kind = 'audio';
             else if (m.startsWith('image/')) kind = 'image';
+            else if (m === 'application/pdf' || m.startsWith('text/') || m === 'application/json' || m === 'application/xml' || m === 'application/xhtml+xml') kind = 'doc';
             else {
                 const ext = String(o.name || '').toLowerCase().split('.').pop();
                 if (['mp4', 'webm', '3gp', 'mkv', 'mov'].includes(ext)) kind = 'video';
                 else if (['mp3', 'm4a', 'aac', 'ogg', 'opus', 'wav', 'flac', 'amr'].includes(ext)) kind = 'audio';
+                else if (['pdf', 'txt', 'text', 'log', 'md', 'json', 'xml', 'csv', 'ini', 'yml', 'yaml', 'srt', 'vtt', 'html', 'htm'].includes(ext)) kind = 'doc';
             }
             mpState.kind = kind;
             const titleEl = document.getElementById('mp-title');
@@ -2893,7 +2953,14 @@
             document.getElementById('mp-controls').style.display = '';
             if (kind === 'audio') { wrap.classList.remove('hidden'); mpStatus('جارٍ سحب الصوت ثم تحليل الموجة…'); }
             try {
-                const res = await pullHostContent({ fileId: o.fileId, bucket: o.bucket, path: o.path, vaultKind: o.vaultKind, vaultName: o.vaultName, name: o.name, mime: mime });
+                // B22 — قناة السحب الموحّدة: `target` بدل حقول القديمة، مع فكّ `kind`
+                const tgt = o.target || null;
+                const res = await pullHostContent({
+                    fileId: tgt ? (tgt.kind === 'fileId' ? tgt.fileId : undefined) : o.fileId,
+                    bucket: tgt ? (tgt.kind === 'fileId' ? (tgt.bucket || 'file') : undefined) : o.bucket,
+                    path: tgt ? (tgt.kind === 'path' ? tgt.path : undefined) : o.path,
+                    vaultKind: o.vaultKind, vaultName: o.vaultName, name: o.name, mime: mime
+                });
                 mpState.blob = res.blob;
                 mpState.mime = mime;
                 mpState.name = res.name || o.name || mpState.name;
@@ -2905,6 +2972,12 @@
                     v.src = mpState.url; v.classList.remove('hidden'); mpWireMedia(v);
                     mpStatus('فيديو • ' + rbFmtMB(res.size), false);
                     v.play().catch(() => {});
+                } else if (kind === 'doc') {
+                    doc.src = mpState.url; doc.classList.remove('hidden');
+                    mpStatus('مستند • ' + rbFmtMB(res.size), false);
+                } else if (kind === 'other') {
+                    if (other) other.style.display = 'flex';
+                    mpStatus('نوع غير قابل للعرض المباشر • ' + rbFmtMB(res.size) + ' — استخدم زر التنزيل', false);
                 } else {
                     au.src = mpState.url; mpWireMedia(au);
                     mpStatus('صوت • ' + rbFmtMB(res.size) + ' • جارٍ التحليل…', false);
@@ -5462,16 +5535,12 @@
             const f = (window.__filesViewItems || [])[idx];
             if (!f) return;
             if (isDirectory(f)) { enterFileFolder(idx); return; }
-            const isImage = (f.mimeType || '').startsWith('image/');
-            const isVideo = (f.mimeType || '').startsWith('video/');
-            const cached = fileThumbnailCache.get(f.id);
-            if ((isImage || isVideo) && cached) {
-                openModal(f.name, cached);
-            } else if ((isImage || isVideo)) {
-                showToast("بانتظار تحميل المصغرة الحقيقية... حاول المعاينة بعد لحظات", "info");
-                requestFileThumbnail(f);
-            } else {
-                showToast("معاينة مباشرة متاحة للصور والفيديوهات فقط حالياً", "info");
+            // B22 — تشغيل كل الأنواع عبر المشغّل الموحّد: صور وفيديو وصوت ومستندات وغير قابل للعرض
+            // والسحب يمرّ عبر هدف التنزيل الموحّد (مسار مطلق أو معرّف MediaStore) — لا منع ولا عرض وهميّ
+            try {
+                openMediaPlayer({ target: rbDownloadTarget(f), name: f.name || '', mime: f.mimeType || rbMimeFromName(f.name || '') });
+            } catch (e) {
+                showToast('تعذر فتح المشغّل: ' + String((e && e.message) || e), 'error');
             }
         }
 
@@ -9879,10 +9948,16 @@
                 const k = String(it.kind || '');
                 const icon = k === 'video' ? '🎥' : (k === 'image' ? '📷' : '🎙️');
                 const pth = String(it.path || '');
+                const nmA = escapeHtml2(String(it.name || '')).replace(/'/g, '&#39;');
+                const pthA = escapeHtml2(pth).replace(/'/g, '&#39;');
                 return `<div class="lw-row">
                     <div class="lw-title">${icon} ${escapeHtml2(it.name || '—')}</div>
                     <div class="lw-meta">${rbFmtMB(Number(it.size || 0))} • ${recFmtDate(Number(it.dateMs || 0))}</div>
-                    ${pth ? `<div class="lw-sub"><span class="lw-link" onclick="rbJumpToExplorerDir('${escapeHtml2(pth).replace(/'/g, '&#39;')}')">📂 ${escapeHtml2(pth)}</span> — انقر للانتقال إلى المجلد في مستكشف الملفات</div>` : ''}
+                    ${pth ? `<div class="lw-sub" style="display:flex;align-items:center;justify-content:space-between;gap:6px;min-width:0">
+                        <span class="lw-link" style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" onclick="rbJumpToExplorerDir('${pthA}')">📂 ${escapeHtml2(pth)}</span>
+                        <button class="lw-play-btn" onclick="srvPlayByName('${nmA}','${pthA}')" title="تشغيل عبر المشغّل الموحّد">▶ تشغيل</button>
+                    </div>
+                    <div class="lw-sub">انقر على المسار للانتقال إلى المجلد في مستكشف الملفات</div>` : ''}
                 </div>`;
             }
             if (cmd === 'media_items') {
@@ -9890,10 +9965,16 @@
                 const icon = k === 'video' ? '🎬' : (k === 'audio' ? '🎵' : '🖼️');
                 const dur = Number(it.durationMs || 0);
                 const pth = String(it.path || '');
+                const nmA = escapeHtml2(String(it.name || '')).replace(/'/g, '&#39;');
+                const pthA = escapeHtml2(pth).replace(/'/g, '&#39;');
                 return `<div class="lw-row">
                     <div class="lw-title">${icon} ${escapeHtml2(it.name || '—')}</div>
                     <div class="lw-meta">${rbFmtMB(Number(it.size || 0))}${dur > 0 ? ' • المدة: ' + Math.floor(dur / 60000) + ':' + String(Math.floor((dur % 60000) / 1000)).padStart(2, '0') : ''} • ${recFmtDate(Number(it.dateMs || 0))}</div>
-                    ${pth ? `<div class="lw-sub"><span class="lw-link" onclick="rbJumpToExplorerDir('${escapeHtml2(pth).replace(/'/g, '&#39;')}')">📂 ${escapeHtml2(pth)}</span> — انقر للانتقال إلى المجلد في مستكشف الملفات</div>` : ''}
+                    ${pth ? `<div class="lw-sub" style="display:flex;align-items:center;justify-content:space-between;gap:6px;min-width:0">
+                        <span class="lw-link" style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" onclick="rbJumpToExplorerDir('${pthA}')">📂 ${escapeHtml2(pth)}</span>
+                        <button class="lw-play-btn" onclick="srvPlayByName('${nmA}','${pthA}')" title="تشغيل عبر المشغّل الموحّد">▶ تشغيل</button>
+                    </div>
+                    <div class="lw-sub">انقر على المسار للانتقال إلى المجلد في مستكشف الملفات</div>` : ''}
                 </div>`;
             }
             if (cmd === 'locations_get') {
@@ -9905,6 +9986,13 @@
                 </div>`;
             }
             return `<div class="lw-row"><div class="lw-title">${escapeHtml2(JSON.stringify(it || {})).slice(0, 200)}</div></div>`;
+        }
+
+        // B22 — تشغيل عناصر الأرشيف (التسجيلات واستوديو الوسائط) من نافذة تخزين الخادم عبر المشغّل الموحّد
+        function srvPlayByName(name, path) {
+            const nm = String(name || ''), pth = String(path || '');
+            if (!pth) { showToast('لا مسار متاح لهذا العنصر لتشغيله', 'warning'); return; }
+            openMediaPlayer({ target: { kind: 'path', path: pth }, name: nm, mime: rbMimeFromName(nm) });
         }
 
         function renderServerCacheWindow() {
