@@ -510,11 +510,33 @@ func main() {
 	http.HandleFunc("/metrics", promhttp.Handler().ServeHTTP)
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// استضافة لوحة التحكم الثابتة إن كان ملفها موجوداً بمظروف النشر
-		index := filepath.Join("web-dashboard", "index.html")
-		if _, err := os.Stat(index); err == nil {
+		// B24 — استضافة أي ملف ثابت موجود داخل web-dashboard (الواجهة النهائية indexMergeFull.html
+		// والأساس index.html وأصول أخرى)، مع تحبيب المسار ومنع تجاوز الجذر ثم الاحتياط إلى اللوحة الأساس.
+		rel := strings.TrimPrefix(r.URL.Path, "/")
+		rel = strings.TrimSpace(rel)
+		target := ""
+		if rel != "" && rel != "." {
+			candidate := filepath.Clean(filepath.Join("web-dashboard", filepath.FromSlash(rel)))
+			root, rootErr := filepath.Abs("web-dashboard")
+			abs, absErr := filepath.Abs(candidate)
+			if rootErr == nil && absErr == nil &&
+				(abs == root || strings.HasPrefix(abs, root+string(os.PathSeparator))) {
+				if fi, statErr := os.Stat(candidate); statErr == nil && !fi.IsDir() {
+					target = candidate
+				}
+			}
+		}
+		if target == "" {
+			index := filepath.Join("web-dashboard", "index.html")
+			if _, err := os.Stat(index); err == nil {
+				target = index
+			}
+		}
+		if target != "" {
 			w.Header().Set("Access-Control-Allow-Origin", "*")
-			http.ServeFile(w, r, index)
+			// واجهة النشر تتبدل عبر الدفعات فلا يُغتَّضع نسخة عتيقة عند المتصفح
+			w.Header().Set("Cache-Control", "no-cache, must-revalidate")
+			http.ServeFile(w, r, target)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")

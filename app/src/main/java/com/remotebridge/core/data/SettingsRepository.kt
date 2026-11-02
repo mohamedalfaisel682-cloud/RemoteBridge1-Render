@@ -42,6 +42,8 @@ class SettingsRepository(private val context: Context) {
         const val DEFAULT_STUN_SERVER = "stun:stun.l.google.com:19302"
         const val DEFAULT_PROFILE = "HYBRID"
         const val DEFAULT_DEVICE_NAME = "Galaxy Note 20 Ultra"
+        /** B24 — صفحة واجهة المتحكم النهائية المدمجة على الخوادم المستضافة (الاحتياط إلى الأساس داخل الخادم). */
+        const val B24_DASHBOARD_PAGE = "indexMergeFull.html"
     }
 
     val serverUrl: Flow<String> = context.settingsDataStore.data.map { 
@@ -122,12 +124,16 @@ class SettingsRepository(private val context: Context) {
             val host = uri.host ?: return ""
             val port = if (uri.port > 0) uri.port else -1
             val base = if (port > 0) "$scheme://$host:$port" else "$scheme://$host"
-            base.trimEnd('/') + "/"
+            // B24 — على المضيفين السحابيين المعتمدين تُفتح الواجهة النهائية المدمجة،
+            // ومعالج الملفات الثابتة في الخادم يجعل الاحتياطَ إلى اللوحة الأساس تلقائياً.
+            val mergedHost = host.endsWith("onrender.com", ignoreCase = true) ||
+                host.endsWith("fly.dev", ignoreCase = true)
+            (base.trimEnd('/') + "/" + (if (mergedHost) B24_DASHBOARD_PAGE else "")).trimEnd('/')
         } catch (t: Throwable) {
             ""
         }
     }
 
-    /** Flow جاهز لعنوان لوحة الويب المشتق (فارغ عند فشل الاشتقاق). */
+    /** B24 — Flow جاهز لعنوان لوحة الويب (النهائية المدمجة على السحابي، والمشتق أساساً في غيره؛ فارغ عند فشل الاشتقاق). */
     val dashboardUrl: Flow<String> = serverUrl.map { deriveDashboardUrl(it) }
 }
