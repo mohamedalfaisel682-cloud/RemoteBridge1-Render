@@ -30,6 +30,10 @@ const b24Keys = [
     // B25 — آليات الاتصال المنقولة: عارض الترحيل + مبدّل الواجهات القديمة
     'case "live_frame":', 'function handleLiveFrame(',
     'legacy-iface-select', 'mrgLegacyIfaceSwitch',
+    // B27 — آليات البث الحيّ المستعادة: المسجّل والقوائم وأدوات المسرح والنقّاب
+    'function toggleRecordStream(', 'function enhanceCameraTab(',
+    'function refreshCameraRecordsBox(', 'function addCallRecordingsSection(',
+    'onclick="toggleRecordStream()"', 'id="records-cam-box"', 'mrgEnhanceSweep',
 ];
 
 let failed = 0;

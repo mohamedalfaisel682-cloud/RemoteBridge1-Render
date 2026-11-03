@@ -9,6 +9,7 @@ import android.provider.MediaStore
 import android.util.Base64
 import android.webkit.JavascriptInterface
 import android.webkit.WebResourceRequest
+import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
@@ -209,6 +210,8 @@ private fun DashboardWebView(
                 settings.allowFileAccess = false
                 settings.loadWithOverviewMode = true
                 settings.useWideViewPort = true
+                // B27 — بلا ذاكرة مؤقتة: كل فتح يجلب أحدث نسخة من الخادم (مزامنة تعديلات الموقعين فوراً)
+                settings.cacheMode = WebSettings.LOAD_NO_CACHE
                 settings.setSupportMultipleWindows(false)
                 settings.mediaPlaybackRequiresUserGesture = false
                 webViewClient = object : WebViewClient() {

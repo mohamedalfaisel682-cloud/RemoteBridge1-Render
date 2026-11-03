@@ -36,9 +36,9 @@ android {
     applicationId = "com.rbstudio"
     minSdk = 26
     targetSdk = 36
-    // B26 — الإصدار النهائي المدموج ApkFull (بديلاً عن الحالي بنفس معرّف العبوة)
-    versionCode = 10
-    versionName = "1.5.0"
+    // B27 — الإصدار بعد الاستعادة: واجهة البث الحي المستعادة وبلا ذاكرة مؤقتة للوحة
+    versionCode = 11
+    versionName = "1.5.1"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }

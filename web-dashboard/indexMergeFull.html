@@ -4773,7 +4773,7 @@
         // المعيار: إعدادات البث الحي والاتصال لقاعدة الأساس تُتَّبَع كما هي ولا تُستبدَل بالكتل المنقولة
         // ================================================================
         // B24 — حاجز التوافق: دوال أُسقطت عمداً من الدونور (الأساس أقوى في بدائلها) تُستبدَل بنداء صمّاء آمن (بلا ReferenceError)
-        const __rbDroppedNames = ['refreshCameraRecordsBox', 'refreshScreenRecordsBox', 'cycleCameraRecords', 'cycleScreenRecords', 'recordItemHtml', 'enhanceCameraTab', 'enhanceCameraTabForced', 'addCallRecordingsSection', 'loadCallRecordings', 'refreshSavedSessions', 'openSavedSession', 'closeSavedSession', 'showStatusModal', 'closeStatusModal', 'updateStatusModalIfOpen', 'autoSaveSessionSnapshot', 'saveTextViaNative', 'ensureDownloadCard', 'updateDownloadCard', 'removeDownloadCard', 'beginFileDownload', 'finalizeFileDownload', 'startFileDownloadByIndex', 'waitForFileInfoResponse', 'handleLiveFrame', 'clearRelayViewer', 'clearWebRtcVideoForRelayStart', 'setAutoDiscoveryInterval', 'activeNativeSaver'];
+        const __rbDroppedNames = ['refreshSavedSessions', 'openSavedSession', 'closeSavedSession', 'showStatusModal', 'closeStatusModal', 'updateStatusModalIfOpen', 'autoSaveSessionSnapshot', 'saveTextViaNative', 'ensureDownloadCard', 'updateDownloadCard', 'removeDownloadCard', 'beginFileDownload', 'finalizeFileDownload', 'startFileDownloadByIndex', 'waitForFileInfoResponse', 'setAutoDiscoveryInterval', 'activeNativeSaver'];
         __rbDroppedNames.forEach(n => { try { if (typeof window[n] === 'undefined') window[n] = function () {}; } catch (_) {} });
 
         function fmtKb(n) {
@@ -5342,6 +5342,253 @@
         }
 
         // ================================================================
+        // B27 — استعادة آليات البث الحي من الدونور (كانت أسقطةً بحاجز التوافق):
+        // تسجيل البث الآلي (MediaRecorder) حفظُه عبر saveArtifact، وقوائم تسجيلات الكاميرا (عدساتها)
+        // والشاشة (لقطاتها/فيديوهاتها) والمكالمات (صوتُها) من مجلدات أرشيف الهاتف المضيف.
+        // ================================================================
+        let recCamFront = true;      // تبديل تسجيلات الكاميرا: أمامية/خلفية
+        let recScreenMode = 'shots'; // تبديل تسجيلات الشاشة: shots (لقطات) أو video (فيديو)
+        let remoteRecorder = null;   // مسجّل بث المتحكم من الفيديو المعروض
+        let remoteRecorderChunks = [];
+        // ——— مشغّل البث الحي: تكبير الشاشة + لقطة + تسجيل آلي ———
+
+        function openStageFullscreen() {
+            const stage = document.getElementById('stream-stage');
+            if (!stage) return;
+            try {
+                if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                    if (stage.requestFullscreen) stage.requestFullscreen();
+                    else if (stage.webkitRequestFullscreen) stage.webkitRequestFullscreen();
+                } else if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                }
+            } catch (_) {}
+        }
+
+        function captureStreamSnapshot() {
+            const v = document.getElementById('remote-video');
+            if (!v || !v.srcObject || v.videoWidth === 0 || v.classList.contains('hidden')) {
+                showToast('لا يوجد بث مرئي نشط لالتقاط صورة منه — شغّل بث الكاميرا أو الشاشة أولاً', 'warning');
+                return;
+            }
+            try {
+                const c = document.createElement('canvas');
+                c.width = v.videoWidth; c.height = v.videoHeight;
+                const ctx = c.getContext('2d');
+                ctx.drawImage(v, 0, 0, c.width, c.height);
+                const dataUrl = c.toDataURL('image/jpeg', 0.92);
+                const base64 = dataUrl.split(',')[1];
+                const name = 'RBCamShot_' + new Date().toISOString().replace(/[:.]/g, '-') + '.jpg';
+                saveArtifact(name, 'image/jpeg', base64);
+            } catch (e) {
+                showToast('فشلت اللقطة: ' + e.message, 'error');
+            }
+        }
+
+        function toggleRecordStream() {
+            const btn = document.getElementById('rec-record-btn');
+            if (remoteRecorder) {
+                try { remoteRecorder.stop(); } catch (_) {}
+                showToast('جارٍ إنهاء التسجيل وحفظه…', 'info');
+                return;
+            }
+            let tracks = [];
+            try {
+                if (window.remoteMediaStream && remoteMediaStream.getTracks) {
+                    tracks = remoteMediaStream.getTracks().filter(t => t.readyState === 'live');
+                }
+                if (!tracks.length) {
+                    const vEl = document.getElementById('remote-video');
+                    if (vEl && vEl.srcObject) tracks = vEl.srcObject.getTracks().filter(t => t.readyState === 'live');
+                }
+            } catch (_) {}
+            if (!tracks.length) {
+                showToast('لا يوجد تدفق نشط للتسجيل — شغّل البث أولاً', 'warning');
+                return;
+            }
+            const stream = new MediaStream(tracks);
+            const isAudioOnly = tracks.every(t => t.kind === 'audio');
+            const mime = isAudioOnly ? 'audio/webm;codecs=opus' : 'video/webm;codecs=vp8,opus';
+            try {
+                remoteRecorderChunks = [];
+                remoteRecorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 2500000 });
+                remoteRecorder.ondataavailable = (e) => { if (e.data && e.data.size) remoteRecorderChunks.push(e.data); };
+                remoteRecorder.onstop = async () => {
+                    remoteRecorder = null;
+                    const btn2 = document.getElementById('rec-record-btn');
+                    if (btn2) { const sp = btn2.querySelector('span'); if (sp) sp.textContent = 'تسجيل آلي'; }
+                    if (!remoteRecorderChunks.length) { showToast('لم يُسجَّل أي محتوى', 'warning'); return; }
+                    try {
+                        const blob = new Blob(remoteRecorderChunks, { type: mime });
+                        const base64 = await blobToBase64(blob);
+                        const name = (isAudioOnly ? 'RBAudRec_' : 'RBVidRec_') + new Date().toISOString().replace(/[:.]/g, '-') + (isAudioOnly ? '.weba' : '.webm');
+                        saveArtifact(name, blob.type, base64);
+                    } finally {
+                        remoteRecorderChunks = [];
+                    }
+                };
+                remoteRecorder.onerror = () => { showToast('تعذر التسجيل من قناة البث', 'error'); };
+                remoteRecorder.start(1000);
+                if (btn) { const sp = btn.querySelector('span'); if (sp) sp.textContent = 'إنهاء التسجيل ⏺'; }
+                showToast('بدأ التسجيل الآلي للبث عليه الآن — يُحفظ في مجلدات الأرشيف عند الإنهاء', 'success');
+            } catch (e) {
+                remoteRecorder = null;
+                showToast('تعذر بدء التسجيل: ' + e.message, 'error');
+            }
+        }
+
+        // ——— حقن أدوات المشغّل وقوائم التسجيلات داخل تبويب البث ———
+
+        function enhanceCameraTab() {
+            const panel = document.getElementById('panel-content');
+            if (!panel || activeTab !== 'camera') return;
+            const stage = panel.querySelector('.aspect-video, .rb-mp-stage');
+            if (stage) {
+                if (!stage.id) stage.id = 'stream-stage';
+                if (!stage.querySelector('#stream-stage-tools')) {
+                    stage.insertAdjacentHTML('beforeend', `
+                        <div id="stream-stage-tools" class="absolute top-2 right-2 z-20 flex items-center gap-1.5">
+                            <button onclick="toggleRecordStream()" id="rec-record-btn" title="تسجيل آلي مستمر للفيديو المعروض — يُحفظ تلقائياً عند الإنهاء" class="stream-btn flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-bold backdrop-blur bg-black/50 border border-slate-700">
+                                <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4" fill="currentColor"/></svg>
+                                <span>تسجيل آلي</span>
+                            </button>
+                        </div>
+                    `);
+                }
+            }
+
+            // قوائم التسجيلات أسفل شبكة أزرار البث مباشرة
+            if (!panel.querySelector('#recordings-anchor')) {
+                panel.insertAdjacentHTML('beforeend', `
+                    <div id="recordings-anchor">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs mt-2">
+                            <!-- تسجيلات الكاميرا: النقر على العنوان يبدّل بين العدسات -->
+                            <div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-3">
+                                <button onclick="cycleCameraRecords()" title="انقر للتبديل بين ملفات العدسة الأمامية والخلفية" class="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-xl stream-btn font-bold cursor-pointer">
+                                    <span class="flex items-center gap-2">🎥 تسجيلات الكاميرا (${recCamFront ? 'أمامية' : 'خلفية'})</span>
+                                    <span class="flex items-center gap-1 text-[10px] text-amber-300 font-mono">⟲ تبديل</span>
+                                </button>
+                                <div id="records-cam-box" class="mt-2 text-[11px] text-slate-300">بانتظار الجلب…</div>
+                            </div>
+                            <!-- تسجيلات الشاشة: النقر على العنوان يبدّل بين لقطات الصور وفيديوهات التسجيل -->
+                            <div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-3">
+                                <button onclick="cycleScreenRecords()" title="انقر للتبديل بين لقطات الصور وتسجيلات الفيديو للشاشة" class="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-xl stream-btn font-bold cursor-pointer">
+                                    <span class="flex items-center gap-2">${recScreenMode === 'shots' ? '🖼️ لقطات الشاشة (صور)' : '🖥️ تسجيلات الشاشة (فيديو)'}</span>
+                                    <span class="flex items-center gap-1 text-[10px] text-amber-300 font-mono">⟲ تبديل</span>
+                                </button>
+                                <div id="records-scr-box" class="mt-2 text-[11px] text-slate-300">بانتظار الجلب…</div>
+                            </div>
+                        </div>
+                        <p class="text-[10px] text-slate-500 mt-1.5">تُملأ القوائم من مجلدات أرشيف الهاتف المضيف (Pictures و Movies و Music داخل RemoteBridge) بعد تنفيذ اللقطات والتسجيلات من تبويب الأوامر.</p>
+                    </div>
+                `);
+                refreshCameraRecordsBox();
+                refreshScreenRecordsBox();
+            }
+            try { MGB.mountStreamExtras(); } catch (_) {} // MERGE_B: أدوات البث الإضافية
+        }
+
+        function cycleCameraRecords() {
+            recCamFront = !recCamFront;
+            enhanceCameraTabForced();
+        }
+
+        function cycleScreenRecords() {
+            recScreenMode = recScreenMode === 'shots' ? 'video' : 'shots';
+            enhanceCameraTabForced();
+        }
+
+        function enhanceCameraTabForced() {
+            const anchor = document.getElementById('recordings-anchor');
+            if (anchor) anchor.remove();
+            enhanceCameraTab();
+        }
+
+        function recordItemHtml(f) {
+            return `<div class="flex items-center justify-between gap-2 py-1 border-b border-slate-800/60 last:border-0">
+                <span class="truncate font-mono text-slate-200" title="${f.name}">${f.name}</span>
+                <span class="shrink-0 text-[10px] text-slate-400">${fmtKb(f.size)} • ${fmtWhen(f.dateAdded)}</span>
+            </div>`;
+        }
+
+        async function refreshCameraRecordsBox() {
+            const box = document.getElementById('records-cam-box');
+            if (!box) return;
+            const leaf = recCamFront ? 'Front' : 'Back';
+            const resp = await rpcWait('storage_explore', { path: 'Pictures/RemoteBridge/' + leaf }, 15000);
+            const resp2 = await rpcWait('storage_explore', { path: 'Movies/RemoteBridge/' + leaf }, 15000);
+            const items = [].concat(
+                (resp && resp.ok && resp.data && resp.data.items) || [],
+                (resp2 && resp2.ok && resp2.data && resp2.data.items) || []
+            );
+            if (!items.length) {
+                box.innerHTML = `<div class="text-slate-500 py-2">لا توجد تسجيلات للعدسة ${leaf === 'Front' ? 'الأمامية' : 'الخلفية'} بعد — نفّذ لقطات أو فيديو من تبويب الأوامر</div>`;
+                return;
+            }
+            const sorted = items.sort((a, b) => (b.dateAdded || 0) - (a.dateAdded || 0)).slice(0, 12);
+            box.innerHTML = sorted.map(recordItemHtml).join('');
+        }
+
+        async function refreshScreenRecordsBox() {
+            const box = document.getElementById('records-scr-box');
+            if (!box) return;
+            const path = recScreenMode === 'shots' ? 'Pictures/RemoteBridge/Screen' : 'Movies/RemoteBridge/Screen';
+            const resp = await rpcWait('storage_explore', { path: path }, 15000);
+            const items = (resp && resp.ok && resp.data && resp.data.items) || [];
+            if (!items.length) {
+                box.innerHTML = `<div class="text-slate-500 py-2">${recScreenMode === 'shots' ? 'لا توجد لقطات شاشة بعد — نفّذ «لقطة شاشة» من تبويب الأوامر' : 'لا توجد تسجيلات شاشة بعد — نفّذ «تسجيل شاشة» من تبويب الأوامر'}</div>`;
+                return;
+            }
+            const sorted = items.sort((a, b) => (b.dateAdded || 0) - (a.dateAdded || 0)).slice(0, 12);
+            box.innerHTML = sorted.map(recordItemHtml).join('');
+        }
+
+        // ——— قسم تسجيلات المكالمات في تبويب سجل المكالمات ———
+
+        function addCallRecordingsSection() {
+            const panel = document.getElementById('panel-content');
+            if (!panel || activeTab !== 'calls' || panel.querySelector('#call-records-anchor')) return;
+            panel.insertAdjacentHTML('beforeend', `
+                <div id="call-records-anchor" class="mt-3 bg-slate-900/70 border border-slate-800 rounded-2xl p-3">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="flex items-center gap-2 text-sm font-bold text-emerald-300">🎙️ تسجيلات صوتية مرتبطة بالمكالمات</span>
+                        <button onclick="loadCallRecordings()" class="stream-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold">
+                            <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>
+                            <span>جلب التسجيلات</span>
+                        </button>
+                    </div>
+                    <p class="text-[10px] text-slate-500 mt-1">تُجلب من مجلد Music/RemoteBridge/Calls على الهاتف المضيف.</p>
+                    <div id="call-records-box" class="mt-2 text-[11px] text-slate-300"></div>
+                </div>
+            `);
+        }
+
+        async function loadCallRecordings() {
+            const box = document.getElementById('call-records-box');
+            if (!box) return;
+            box.innerHTML = '<span class="text-slate-500">جارٍ الجلب…</span>';
+            const resp = await rpcWait('storage_explore', { path: 'Music/RemoteBridge/Calls' }, 15000);
+            const items = (resp && resp.ok && resp.data && resp.data.items) || [];
+            if (!items.length) {
+                box.innerHTML = '<div class="text-slate-500 py-2">لا توجد تسجيلات مكالمات محفوظة بعد على المضيف</div>';
+                return;
+            }
+            const sorted = items.sort((a, b) => (b.dateAdded || 0) - (a.dateAdded || 0)).slice(0, 20);
+            box.innerHTML = sorted.map(recordItemHtml).join('');
+        }
+        /** نقّابُ إعادة الإرفاق: بعد أي إعادة رسمٍ من القاعدة لتبويبَي الكاميرا/المكالمات تُعاد الأدواتُ والقوائم */
+        function mrgEnhanceSweep() {
+            try {
+                if (activeTab === 'camera' && (!document.getElementById('recordings-anchor') || !document.getElementById('stream-stage-tools'))) enhanceCameraTab();
+                if (activeTab === 'calls') { const p = document.getElementById('panel-content'); if (p && !p.querySelector('#call-records-anchor')) addCallRecordingsSection(); }
+            } catch (_) {}
+        }
+        try { setInterval(mrgEnhanceSweep, 1200); } catch (_) {}
+
+
+        // ================================================================
         // B24 — تبويب محرك المزامنة السريعة (🛰️) وتبويب مجموعات الإعدادات علوياً كتبويبَات مستقلة
         // ================================================================
         const QUICK_OPTS_CARD_HTML = `                    <div class="p-3 bg-emerald-950/20 border border-emerald-500/30 rounded-xl space-y-2.5">
@@ -5450,6 +5697,7 @@
                 sendRPCCommand('storage_explore', { path: currentExplorerPath });
             } else if (tab === 'camera') {
                 renderCameraStreamView();
+                setTimeout(() => { try { enhanceCameraTab(); } catch (_) {} }, 60);
             } else if (tab === 'contacts') {
                 renderContactsListView();
                 sendRPCCommand('contacts_list');
@@ -5459,6 +5707,7 @@
                 if (contactsData.length === 0) sendRPCCommand('contacts_list', null, { timeout: 6000, retries: 0 }).catch(() => {});
             } else if (tab === 'calls') {
                 renderCallsListView();
+                setTimeout(() => { try { addCallRecordingsSection(); } catch (_) {} }, 60);
                 sendRPCCommand('calls_list');
                 if (contactsData.length === 0) sendRPCCommand('contacts_list', null, { timeout: 6000, retries: 0 }).catch(() => {});
             } else if (tab === 'notifications') {

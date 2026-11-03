@@ -1,6 +1,7 @@
 // merge_build.mjs — B24: بناء الواجهة النهائية المدمجة web-dashboard/indexMergeFull.html
 // الأصل: الأساس web-dashboard/index.html (إعدادات البث الحي والاتصال معيار لا يُمسَّ)
 // الإضافة: كتل منقولة حصراً من web-dashboard/indexMerge.html بنطاقات مثبتة بالقراءة الحرفية.
+// B27: استعادة آليات البث الحيّ التي كانت أسقطةً بحاجز التوافق (مشغّل المسرح + مسجّل البث + قوائم التسجيلات).
 // الأمان: لا يُنتج الملف إلا إذا اجتازت كلَّ مرساةٍ وكلَّ شواهدَ الخروج؛ وإلا أُبطل البناء برسالةٍ واضحة.
 import { readFileSync, writeFileSync } from "node:fs";
 
@@ -49,6 +50,10 @@ const blobToBase64 = seg(DL, 3106, 3112);          // blobToBase64
 const blockCommandsRaw = seg(DL, 3351, 3697);      // تبويب الأوامر كاملاً (شامل SVG_ICON و cmdCard وغيرها)
 const quickCard = seg(DL, 4867, 4894);             // بطاقة خيارات استمرارية تشغيل المضيف (قالب حيّ)
 
+// B27 — كتلا البث الحيّ المستعادتان من الدونور (كانتا مسقطةً بدليل «الأساس أقوى»، ونفيت الحقيقةُ: لا بديلَ فعليَّ لهما في الأساس):
+const blockStageVars = seg(DL, 3050, 3053);        // حالة الأدوات: recCamFront/recScreenMode/remoteRecorder/remoteRecorderChunks
+const blockStageToolsRaw = seg(DL, 3114, 3349);    // مشغّل المسرح + تسجيل البث الآلي + قوائم تسجيلات الكاميرا/الشاشة/المكالمات
+
 // حارس استدعاء دالة التسجيلات المسقطة داخل كتلة الأوامر (يُستبدل بنداء محمي)
 const guardNeedle = "if (activeTab === 'camera') refreshCameraRecordsBox();";
 if (countNeedle(blockCommandsRaw, guardNeedle) !== 1) {
@@ -60,7 +65,53 @@ const blockCommands =
     "if (activeTab === 'camera') { try { if (typeof refreshCameraRecordsBox === 'function') refreshCameraRecordsBox(); } catch (_) {} }" +
     blockCommandsRaw.slice(blockCommandsRaw.indexOf(guardNeedle) + guardNeedle.length);
 
+// B27 — مكييفات الدونور الحصرية (لا تُضاعِف أدواتٍ موجودةً في القاعدة):
+// 1) المسرح في القاعدة هو rb-mp-stage (وليس aspect-video الخاص بالمحرّك البرمجي فقط).
+// 2) زرّا اللقطة وملء الشاشة أُسكوتا لوجودهما فعلاً في محرك القاعدة (rbMpScreenshot و rbMpFullscreen) — أما تسجيل البث ففجوةٌ حقيقية.
+const stageSelectorNeedle = "const stage = panel.querySelector('.aspect-video');";
+const shotBtnNeedle =
+    "                            <button onclick=\"captureStreamSnapshot()\" title=\"التقاط صورة من الفيديو المعروض الآن (تُحفظ في مجلدات الأرشيف)\" class=\"stream-btn flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-bold backdrop-blur bg-black/50 border border-slate-700\">\n" +
+    "                                <svg viewBox=\"0 0 24 24\" class=\"w-3.5 h-3.5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><rect x=\"3\" y=\"6\" width=\"18\" height=\"14\" rx=\"2\"/><path d=\"M12 10a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM9 6l1.2-2h3.6L15 6\"/></svg>\n" +
+    "                                <span>لقطة</span>\n" +
+    "                            </button>\n";
+const fullscreenBtnNeedle =
+    "                            <button onclick=\"openStageFullscreen()\" title=\"تكبير العرض لملء الشاشة\" class=\"stream-btn flex items-center justify-center gap-1 px-2 py-1.5 rounded-lg text-[10px] font-bold backdrop-blur bg-black/50 border border-slate-700\">\n" +
+    "                                <svg viewBox=\"0 0 24 24\" class=\"w-3.5 h-3.5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5\"/></svg>\n" +
+    "                                <span>ملء الشاشة</span>\n" +
+    "                            </button>\n";
+if (countNeedle(blockStageToolsRaw, shotBtnNeedle) !== 1 || countNeedle(blockStageToolsRaw, fullscreenBtnNeedle) !== 1) {
+    console.error("MERGE_ABORT_B27: أزرار المسرح المرشحة للإسكات وُجدت بعددٍ غير المتوقع (1 لكل زر)");
+    process.exit(2);
+}
+const blockStageTools =
+    blockStageToolsRaw
+        .replace(stageSelectorNeedle, "const stage = panel.querySelector('.aspect-video, .rb-mp-stage');")
+        .replace(shotBtnNeedle, "")
+        .replace(fullscreenBtnNeedle, "");
+if (countNeedle(blockStageTools, "onclick=\"toggleRecordStream()\"") !== 1) {
+    console.error("MERGE_ABORT_B27: زر «تسجيل آلي» مفقود بعد المكييف");
+    process.exit(2);
+}
+
 const blockHelpers = helpersPart + "\n" + blobToBase64;
+
+// B27 — كتلة الاستعادة المجمعة: الحالة + المشغّل + القوائم + نقّابُ إعادة الإرفاق
+const blockRestored27 =
+    "        // ================================================================\n" +
+    "        // B27 — استعادة آليات البث الحي من الدونور (كانت أسقطةً بحاجز التوافق):\n" +
+    "        // تسجيل البث الآلي (MediaRecorder) حفظُه عبر saveArtifact، وقوائم تسجيلات الكاميرا (عدساتها)\n" +
+    "        // والشاشة (لقطاتها/فيديوهاتها) والمكالمات (صوتُها) من مجلدات أرشيف الهاتف المضيف.\n" +
+    "        // ================================================================\n" +
+    blockStageVars + "\n" +
+    blockStageTools + "\n" +
+    "        /** نقّابُ إعادة الإرفاق: بعد أي إعادة رسمٍ من القاعدة لتبويبَي الكاميرا/المكالمات تُعاد الأدواتُ والقوائم */\n" +
+    "        function mrgEnhanceSweep() {\n" +
+    "            try {\n" +
+    "                if (activeTab === 'camera' && (!document.getElementById('recordings-anchor') || !document.getElementById('stream-stage-tools'))) enhanceCameraTab();\n" +
+    "                if (activeTab === 'calls') { const p = document.getElementById('panel-content'); if (p && !p.querySelector('#call-records-anchor')) addCallRecordingsSection(); }\n" +
+    "            } catch (_) {}\n" +
+    "        }\n" +
+    "        try { setInterval(mrgEnhanceSweep, 1200); } catch (_) {}\n";
 
 // B25 — كتلة بث الترحيل (MJPEG) المنقولة من واجهة الدمج القديمة ومكيَّفة للأساس:
 // العارض ينشأ ديناميكياً داخل حاوية remote-video، وأولوية فيديو WebRTC تُحسب كل نبضة دون تعديل نواة الأساس.
@@ -198,17 +249,18 @@ const blockLegacySwitch = `
         }`;
 
 // ————— 2) فحوص السلامة: تقاطعُ الأسماء قبلَ الدمج —————
-const allInjected = [blockSeed, blockEngine, blockHelpers, blockCommands, quickCard].join("\n");
+const allInjected = [blockSeed, blockEngine, blockHelpers, blockCommands, quickCard, blockRestored27].join("\n");
 
-// قائمة الدوال الأسقطة من الدونور عمداً (الأساس أقوى في بديلها) => تُستبدَل بنداء صمّاء آمن
+// قائمة الدوال الأسقطة من الدونور عمداً => تُستبدَل بنداء صمّاء آمن.
+// B27: أُخرجت منها آليات البث الحيّ المُستعادة (المسجّل/القوائم/المسرح) لأن القاعدة لا بديلَ لها فيها.
+// باقي الأسقطة لها بدائل أقوى معيارية في الأساس: نافذة الحالة والأرشفة (openHostStatusWindow + deviceArchive)،
+// التنزيلات عبر قناة البيانات (handleBinaryChunk + rbDlOnDone)، والاكتشاف الآلي (autoDiscoverAndConnectHosts).
 const droppedNames = [
-    "refreshCameraRecordsBox", "refreshScreenRecordsBox", "cycleCameraRecords", "cycleScreenRecords",
-    "recordItemHtml", "enhanceCameraTab", "enhanceCameraTabForced", "addCallRecordingsSection", "loadCallRecordings",
     "refreshSavedSessions", "openSavedSession", "closeSavedSession", "showStatusModal", "closeStatusModal",
     "updateStatusModalIfOpen", "autoSaveSessionSnapshot", "saveTextViaNative",
     "ensureDownloadCard", "updateDownloadCard", "removeDownloadCard",
     "beginFileDownload", "finalizeFileDownload", "startFileDownloadByIndex", "waitForFileInfoResponse",
-    "handleLiveFrame", "clearRelayViewer", "clearWebRtcVideoForRelayStart", "setAutoDiscoveryInterval",
+    "setAutoDiscoveryInterval",
     "activeNativeSaver",
 ];
 const referencedDropped = droppedNames.filter(n => new RegExp("\\b" + n + "\\b").test(allInjected));
@@ -260,6 +312,7 @@ const megablock =
     saveArtifactAdapted + "\n\n" +
     blockCommands + "\n\n" +
     blockEngine + "\n\n" +
+    blockRestored27 + "\n\n" +
     "        // ================================================================\n" +
     "        // B24 — تبويب محرك المزامنة السريعة (🛰️) وتبويب مجموعات الإعدادات علوياً كتبويبَات مستقلة\n" +
     "        // ================================================================\n" +
@@ -387,6 +440,14 @@ out = insertAfter(out,
 // (9) B25 — قائمة «واجهات الاتصال القديمة» بجانب زر تحديث البيانات في رأس اللوحة الرئيسية
 out = insertAfter(out, '<span>تحديث البيانات</span> 🔄\n                        </button>', legacySelect + "\n");
 
+// (10) B27 — تعليق أدوات البث المستعادة على تبويبَي الكاميرا والمكالمات (فوراً عند الرسم، والنقّابُ يعيد بعد كل إعادة رسم)
+out = insertAfter(out,
+    "            } else if (tab === 'camera') {\n                renderCameraStreamView();\n",
+    "                setTimeout(() => { try { enhanceCameraTab(); } catch (_) {} }, 60);\n");
+out = insertAfter(out,
+    "            } else if (tab === 'calls') {\n                renderCallsListView();\n",
+    "                setTimeout(() => { try { addCallRecordingsSection(); } catch (_) {} }, 60);\n");
+
 const verify = [
     ["case \"settings_sync\":", 1],
     ["function renderQuickPane(", 1],
@@ -433,6 +494,32 @@ const verify = [
     ["id=\"legacy-iface-select\"", 1],
     ["rb_legacy_handoff_v1", 1],
     ["واجهات الاتصال القديمة", 3],
+    // (B27) شواهد استعادة آليات البث الحي: المشغّل + المسجّل + قوائم التسجيلات + النقّاب
+    ["let recCamFront = true;", 1],
+    ["let remoteRecorder = null;", 1],
+    ["function openStageFullscreen(", 1],
+    ["function captureStreamSnapshot(", 1],
+    ["function toggleRecordStream(", 1],
+    ["function enhanceCameraTab(", 1],
+    ["function enhanceCameraTabForced(", 1],
+    ["function cycleCameraRecords(", 1],
+    ["function cycleScreenRecords(", 1],
+    ["function recordItemHtml(", 1],
+    ["function refreshCameraRecordsBox(", 1],
+    ["function refreshScreenRecordsBox(", 1],
+    ["function addCallRecordingsSection(", 1],
+    ["function loadCallRecordings(", 1],
+    ["function mrgEnhanceSweep(", 1],
+    ["setInterval(mrgEnhanceSweep, 1200);", 1],
+    ["panel.querySelector('.aspect-video, .rb-mp-stage');", 1],
+    ["onclick=\"toggleRecordStream()\"", 1],
+    ["id=\"stream-stage-tools\"", 1],
+    ["id=\"recordings-anchor\"", 1],
+    ["id=\"records-cam-box\"", 1],
+    ["id=\"records-scr-box\"", 1],
+    ["id=\"call-records-anchor\"", 1],
+    ["setTimeout(() => { try { enhanceCameraTab(); } catch (_) {} }, 60);", 1],
+    ["setTimeout(() => { try { addCallRecordingsSection(); } catch (_) {} }, 60);", 1],
 ];
 const failures = verify.filter(([n, e]) => countNeedle(out, n) !== e)
     .map(([n, e]) => "«" + n + "» = " + countNeedle(out, n) + " والمتوقع " + e);
