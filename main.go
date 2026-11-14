@@ -28,12 +28,26 @@ var upgrader = websocket.Upgrader{
 }
 
 type Client struct {
-	ID      string          `json:"deviceId"`
-	Role    string          `json:"role"`
-	Name    string          `json:"deviceName"`
-	Token   string          `json:"-"`
-	Socket  *websocket.Conn `json:"-"`
-	ConnectedAt time.Time   `json:"-"`
+	ID          string          `json:"deviceId"`
+	Role        string          `json:"role"`
+	Name        string          `json:"deviceName"`
+	Token       string          `json:"-"`
+	Socket      *websocket.Conn `json:"-"`
+	ConnectedAt time.Time       `json:"-"`
+	// writeMu — كتابة واحدة لكل عميل في الوقت الواحد. Gorilla WebSocket لا يسمح
+	// بكتابات متزامنة على نفس الاتصال؛ كانت البثوث (host_online/offline) والردود
+	// المباشرة تتزاحم على المقبس نفسه فتفسد الإطارات وتقطع الاتصال.
+	writeMu sync.Mutex
+}
+
+// send يرسل رسالة نصية واحدة بأمان على مقبس العميل.
+func (c *Client) send(msg []byte) error {
+	if c == nil || c.Socket == nil {
+		return nil
+	}
+	c.writeMu.Lock()
+	defer c.writeMu.Unlock()
+	return c.Socket.WriteMessage(websocket.TextMessage, msg)
 }
 
 type HostInfo struct {
@@ -497,12 +511,12 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode(map[string]interface{}{
-			"status":       "healthy",
-			"timestamp":    time.Now().UnixMilli(),
-			"hosts":        hostCount,
-			"controllers":  controllerCount,
-			"total":        len(hub.clients),
-			"uptime_ms":    time.Since(startTime).Milliseconds(),
+			"status":      "healthy",
+			"timestamp":   time.Now().UnixMilli(),
+			"hosts":       hostCount,
+			"controllers": controllerCount,
+			"total":       len(hub.clients),
+			"uptime_ms":   time.Since(startTime).Milliseconds(),
 		})
 	})
 
@@ -527,9 +541,8 @@ func main() {
 			}
 		}
 		if target == "" {
-			// B25 — التبنّي: الواجهة النهائية indexMergeFull.html هي المرجع الأساسي للجذر،
-			// والأساس index.html احتياطٌ في غيابها (ظل الواجهات القديمة متاحة على مساراتها).
-			for _, fallback := range []string{"indexMergeFull.html", "index.html"} {
+			// اعتماد الواجهة الموحدة indexMergeFull.html كالواجهة الحصرية والوحيدة للجذر
+			for _, fallback := range []string{"indexMergeFull.html"} {
 				index := filepath.Join("web-dashboard", fallback)
 				if _, err := os.Stat(index); err == nil {
 					target = index
@@ -594,29 +607,60 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	defer conn.Close()
 
 	var currentDeviceID string
-	var authToken string
 	var currentRole string
+	var clientRef *Client
+
+	wsConnections.Inc()
+	defer wsConnections.Dec()
 
 	defer func() {
-		if currentDeviceID != "" {
-			hub.mu.Lock()
+		if clientRef == nil {
+			return
+		}
+		// لا نحذف هوية الجهاز إلا إذا كان هذا الاتصال هو صاحبها الحالي.
+		// الاتصال القديم الذي حلّ محله اتصال أحدث لا يجوز أن يمسح التوكن
+		// الجديد ولا أن يبثّ host_offline للمتحكمين.
+		hub.mu.Lock()
+		stillRegistered := hub.clients[currentDeviceID] == clientRef
+		if stillRegistered {
 			delete(hub.clients, currentDeviceID)
 			delete(hub.clientTokens, currentDeviceID)
-			hub.mu.Unlock()
-			if currentRole == "host" {
-				broadcastHostOffline(currentDeviceID)
-			}
-			wsConnections.Dec()
+		}
+		hub.mu.Unlock()
+		if stillRegistered && currentRole == "host" {
+			broadcastHostOffline(currentDeviceID)
 		}
 	}()
 
-	wsConnections.Inc()
+	// نبض من الخادم + مهلة قراءة: يكشف الاتصالات الميتة خلال ~70 ثانية
+	// حتى لو لم يرسل العميل أي شيء (كانت الاتصالات المعلقة تبقى في hub للأبد).
+	_ = conn.SetReadDeadline(time.Now().Add(70 * time.Second))
+	conn.SetPongHandler(func(string) error {
+		return conn.SetReadDeadline(time.Now().Add(70 * time.Second))
+	})
+	pingDone := make(chan struct{})
+	defer close(pingDone)
+	go func() {
+		ticker := time.NewTicker(25 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				if err := conn.WriteControl(websocket.PingMessage, nil, time.Now().Add(10*time.Second)); err != nil {
+					return
+				}
+			case <-pingDone:
+				return
+			}
+		}
+	}()
 
 	for {
 		_, msgBytes, err := conn.ReadMessage()
 		if err != nil {
 			break
 		}
+		_ = conn.SetReadDeadline(time.Now().Add(70 * time.Second))
 
 		var base map[string]interface{}
 		if err := json.Unmarshal(msgBytes, &base); err != nil {
@@ -637,70 +681,93 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			currentDeviceID = reg.DeviceID
+			currentDeviceID = strings.TrimSpace(reg.DeviceID)
 			currentRole = reg.Role
-
-			// التحقق من التوكن للأجهزة المسجلة مسبقاً
-			hub.mu.RLock()
-			expectedToken, exists := hub.clientTokens[reg.DeviceID]
-			hub.mu.RUnlock()
-
-			if exists && expectedToken != "" && reg.Token != expectedToken {
-				conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","message":"Invalid authentication token"}`))
-				continue
+			if currentDeviceID == "" {
+				_ = conn.WriteMessage(websocket.TextMessage, []byte(`{"type":"error","message":"deviceId مطلوب في رسالة التسجيل"}`))
+				break
 			}
 
-			// إنشاء توكن جديد للجلسات اللاحقة
+			// تدوير التوكن عند كل تسجيل: يعالج إعادة التسجيل بعد إعادة تشغيل
+			// الخادم (التي تفقد التوكنات) ويعالج عودة المضيف قبل كشف الاتصال
+			// القديم الميت. لا نرفض التسجيل بتوكن قديم — العميل يحتفظ بالأحدث.
 			newToken := generateToken()
 			if newToken == "" {
 				newToken = base64.URLEncoding.EncodeToString([]byte(reg.DeviceID + time.Now().String()))
 			}
-			authToken = newToken
 
 			client := &Client{
-				ID:         reg.DeviceID,
-				Role:       reg.Role,
-				Name:       reg.DeviceName,
-				Token:      authToken,
-				Socket:     conn,
+				ID:          reg.DeviceID,
+				Role:        reg.Role,
+				Name:        reg.DeviceName,
+				Token:       newToken,
+				Socket:      conn,
 				ConnectedAt: time.Now(),
 			}
 
 			hub.mu.Lock()
+			oldClient := hub.clients[reg.DeviceID]
 			hub.clients[reg.DeviceID] = client
-			hub.clientTokens[reg.DeviceID] = authToken
+			hub.clientTokens[reg.DeviceID] = newToken
 			hub.mu.Unlock()
+
+			// إغلاق الجلسة القديمة لنفس الجهاز بعد تبديل المرجع. إغلاقها
+			// يجعل defer الخاص بها يرى أنه لم يعد صاحب الهوية فلا يحذف الجديدة.
+			if oldClient != nil && oldClient.Socket != nil && oldClient.Socket != conn {
+				_ = oldClient.Socket.Close()
+			}
+
+			clientRef = client
 
 			resp, _ := json.Marshal(map[string]interface{}{
 				"type":  "registered",
 				"ok":    true,
-				"token": authToken,
+				"token": newToken,
 			})
-			conn.WriteMessage(websocket.TextMessage, resp)
+			_ = client.send(resp)
 
 			if reg.Role == "host" {
 				broadcastHostOnline(reg.DeviceID, reg.DeviceName)
 			} else if reg.Role == "controller" {
-				sendHostList(conn)
+				sendHostList(client)
 			}
 			continue
 		}
 
-        // التحقق من التوكن للرسائل اللاحقة (إلا إذا كان ping)
-        if currentDeviceID != "" && msgType != "ping" {
-            hub.mu.RLock()
-            expectedToken := hub.clientTokens[currentDeviceID]
-            hub.mu.RUnlock()
+		// لا تُقبل أي رسالة قبل التسجيل (عدا ping التشخيصي).
+		if clientRef == nil {
+			if msgType == "ping" {
+				resp, _ := json.Marshal(map[string]interface{}{"type": "pong", "t": time.Now().UnixMilli()})
+				_ = conn.WriteMessage(websocket.TextMessage, resp)
+			}
+			continue
+		}
 
-            var msgEnvelope struct {
-                Token string `json:"token"`
-            }
-            _ = json.Unmarshal(msgBytes, &msgEnvelope)
-            // تساهل مقصود: يُرفض فقط التوكن الحاضر والخاطئ — العميلات القديمة بلا توكن تنجح
-            if expectedToken != "" && msgEnvelope.Token != "" && msgEnvelope.Token != expectedToken {
-                continue // تجاهل الرسائل غير المصادق عليها
-            }
-        }
+		// التحقق من أن هذا الاتصال ما زال صاحب الهوية، ثم التحقق من التوكن.
+		hub.mu.RLock()
+		stillOwner := hub.clients[currentDeviceID] == clientRef
+		expectedToken := hub.clientTokens[currentDeviceID]
+		hub.mu.RUnlock()
+		if !stillOwner {
+			break // حلّ اتصال أحدث محل هذا الاتصال
+		}
+		if msgType != "ping" {
+			var msgEnvelope struct {
+				Token string `json:"token"`
+			}
+			_ = json.Unmarshal(msgBytes, &msgEnvelope)
+			// تساهل مقصود: يُرفض فقط التوكن الحاضر والخاطئ — العميلات القديمة بلا توكن تنجح.
+			// عند الرفض نُبلّغ العميل صراحةً ونغلق الاتصال ليعيد التسجيل بتوكن جديد،
+			// بدل بقائه متصلاً في حلقة رسائل مُهملة بلا نهاية.
+			if expectedToken != "" && msgEnvelope.Token != "" && msgEnvelope.Token != expectedToken {
+				errResp, _ := json.Marshal(map[string]interface{}{
+					"type":    "error",
+					"message": "Invalid authentication token",
+				})
+				_ = clientRef.send(errResp)
+				break
+			}
+		}
 
 		// استخراج meta للرسائل الموجهة
 		var meta struct {
@@ -730,7 +797,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 					"to":     offerMeta.From,
 					"reason": "الجهاز المضيف [" + meta.To + "] غير متصل بخادم الإشارات حالياً",
 				})
-				conn.WriteMessage(websocket.TextMessage, rejectResp)
+				_ = clientRef.send(rejectResp)
 			}
 
 		case "answer":
@@ -775,7 +842,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 					"ok":        false,
 					"error":     "الجهاز [" + meta.To + "] غير متصل حالياً بخادم الإشارات",
 				})
-				conn.WriteMessage(websocket.TextMessage, errResp)
+				_ = clientRef.send(errResp)
 			}
 
 		case "rpc_response":
@@ -808,7 +875,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 				"type": "pong",
 				"t":    time.Now().UnixMilli(),
 			})
-			conn.WriteMessage(websocket.TextMessage, resp)
+			_ = clientRef.send(resp)
 
 		default:
 			// لا نُهدر رسائل مخصصة: كل نوع غير معروف لكنه منسوب لجهاز يُحوَّل كما هو
@@ -831,7 +898,7 @@ func relayMessage(msgBytes []byte, to string) bool {
 	hub.mu.RUnlock()
 
 	if ok && target.Socket != nil {
-		err := target.Socket.WriteMessage(websocket.TextMessage, msgBytes)
+		err := target.send(msgBytes)
 		if err != nil {
 			log.Printf("Failed to send to %s: %v", to, err)
 			return false
@@ -841,7 +908,7 @@ func relayMessage(msgBytes []byte, to string) bool {
 	return false
 }
 
-func sendHostList(conn *websocket.Conn) {
+func sendHostList(client *Client) {
 	hub.mu.RLock()
 	var hosts []HostInfo
 	for _, c := range hub.clients {
@@ -861,7 +928,7 @@ func sendHostList(conn *websocket.Conn) {
 		"count": len(hosts),
 		"ts":    time.Now().UnixMilli(),
 	})
-	conn.WriteMessage(websocket.TextMessage, msg)
+	_ = client.send(msg)
 }
 
 func broadcastHostOnline(deviceID, deviceName string) {
@@ -881,7 +948,7 @@ func broadcastHostOnline(deviceID, deviceName string) {
 	defer hub.mu.RUnlock()
 	for _, c := range hub.clients {
 		if c.Role == "controller" && c.Socket != nil {
-			if err := c.Socket.WriteMessage(websocket.TextMessage, msg); err != nil {
+			if err := c.send(msg); err != nil {
 				log.Printf("Failed to broadcast host_online to %s: %v", c.ID, err)
 			}
 		}
@@ -901,7 +968,7 @@ func broadcastHostOffline(deviceID string) {
 	defer hub.mu.RUnlock()
 	for _, c := range hub.clients {
 		if c.Role == "controller" && c.Socket != nil {
-			if err := c.Socket.WriteMessage(websocket.TextMessage, msg); err != nil {
+			if err := c.send(msg); err != nil {
 				log.Printf("Failed to broadcast host_offline to %s: %v", c.ID, err)
 			}
 		}
@@ -929,7 +996,8 @@ func init() {
 }
 
 // 🌐 POST/GET /api/state — خزّان لقطات الحالة الصغيرة للمضيف/المتحكم.
-func handleStateAPI(w http.ResponseWriter, r *http.Request) {	w.Header().Set("Access-Control-Allow-Origin", "*")
+func handleStateAPI(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 	if r.Method == http.MethodOptions {
