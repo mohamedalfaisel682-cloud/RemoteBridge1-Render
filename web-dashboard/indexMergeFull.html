@@ -6,6 +6,9 @@
     <title>RBstudio - Control &amp; Monitoring Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <!-- Leaflet Maps for Live Host Location Tracking -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
         * { box-sizing: border-box; }
         html, body {
@@ -245,47 +248,10 @@
             border-color: rgba(45, 212, 191, 0.5);
             box-shadow: 0 10px 28px rgba(45, 212, 191, 0.09);
         }
-        /* ===== B31: الأيقونات التفاعلية البراقة للبث والتسجيل (نشط: أخضر ↔ أبيض متوهج · متوقف: أخضر غامق ↔ أبيض مظلم) ===== */
-        @keyframes rbLiveGlowAnim {
-            0%, 100% {
-                border-color: rgba(52, 211, 153, 0.95) !important;
-                box-shadow: 0 0 0 2px rgba(52, 211, 153, 0.75), 0 0 20px 4px rgba(52, 211, 153, 0.5) !important;
-                background: linear-gradient(180deg, rgba(6, 78, 59, 0.65), rgba(2, 6, 23, 0.95)) !important;
-                color: #a7f3d0 !important;
-            }
-            50% {
-                border-color: rgba(255, 255, 255, 0.95) !important;
-                box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.85), 0 0 26px 6px rgba(255, 255, 255, 0.6) !important;
-                background: linear-gradient(180deg, rgba(16, 185, 129, 0.5), rgba(2, 6, 23, 0.95)) !important;
-                color: #ffffff !important;
-            }
-        }
-
-        @keyframes rbStoppedGlowAnim {
-            0%, 100% {
-                border-color: rgba(20, 83, 45, 0.7) !important;
-                box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.8) !important;
-                background: linear-gradient(180deg, rgba(6, 78, 59, 0.25), rgba(2, 6, 23, 0.92)) !important;
-                color: #059669 !important;
-            }
-            50% {
-                border-color: rgba(148, 163, 184, 0.35) !important;
-                box-shadow: 0 0 0 2px rgba(148, 163, 184, 0.15) !important;
-                background: linear-gradient(180deg, rgba(2, 44, 34, 0.35), rgba(2, 6, 23, 0.92)) !important;
-                color: #34d399 !important;
-            }
-        }
-
-        .rb-stream-card.rb-stream-card-on,
-        .rb-ctl.rb-ctl-on,
-        .rb-rec-btn-on {
-            animation: rbLiveGlowAnim 1.4s ease-in-out infinite !important;
-        }
-
-        .rb-stream-card:not(.rb-stream-card-on),
-        .rb-ctl:not(.rb-ctl-on),
-        .rb-rec-btn-off {
-            animation: rbStoppedGlowAnim 2.8s ease-in-out infinite !important;
+        .rb-stream-card.rb-stream-card-on {
+            border-color: rgba(16, 185, 129, 0.72);
+            background: linear-gradient(180deg, rgba(6, 78, 59, 0.38), rgba(2, 6, 23, 0.92));
+            box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.35), 0 0 26px rgba(16, 185, 129, 0.16);
         }
         .rb-stream-ico { font-size: 22px; line-height: 1; }
         .rb-stream-t { font-weight: 800; font-size: 12px; color: #e2e8f0; }
@@ -471,6 +437,124 @@
         .rb-chat-copy-btn:hover { background: #0e9488; color: #fff; border-color: #0e9488; }
         .rb-loc-row-click { cursor: pointer; transition: background .15s; }
         .rb-loc-row-click:hover { background: rgba(56, 189, 248, 0.08); }
+
+        /* ===== B33 — خريطة الموقع الحي والتتبع ===== */
+        #live-map-container {
+            width: 100%;
+            height: 260px;
+            border-radius: 16px;
+            overflow: hidden;
+            border: 1px solid rgba(51, 65, 85, 0.9);
+            background: #0f172a;
+        }
+        #live-map { width: 100%; height: 100%; }
+        .map-pin-live {
+            position: absolute;
+            width: 28px; height: 28px;
+            background: #ef4444;
+            border: 3px solid #fff;
+            border-radius: 50% 50% 50% 0;
+            transform: rotate(-45deg);
+            animation: map-pin-pulse 2s infinite ease-in-out;
+            z-index: 10;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+        }
+        .map-pin-live.pin-charging {
+            background: #10b981;
+            box-shadow: 0 0 0 0 rgba(16,185,129,0.6), 0 0 0 0 rgba(16,185,129,0.6);
+            animation: map-pin-pulse 1.5s infinite ease-in-out;
+        }
+        @keyframes map-pin-pulse {
+            0% { box-shadow: 0 0 0 0 rgba(239,68,68,0.7), 0 0 0 0 rgba(239,68,68,0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(239,68,68,0), 0 0 0 10px rgba(239,68,68,0); }
+            100% { box-shadow: 0 0 0 0 rgba(239,68,68,0), 0 0 0 0 rgba(239,68,68,0); }
+        }
+        .map-pin-live.pin-charging {
+            animation-name: map-pin-pulse-green;
+        }
+        @keyframes map-pin-pulse-green {
+            0% { box-shadow: 0 0 0 0 rgba(16,185,129,0.7), 0 0 0 0 rgba(16,185,129,0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(16,185,129,0), 0 0 0 10px rgba(16,185,129,0); }
+            100% { box-shadow: 0 0 0 0 rgba(16,185,129,0), 0 0 0 0 rgba(16,185,129,0); }
+        }
+        .map-path-line {
+            stroke: #0ea5e9;
+            stroke-width: 3;
+            fill: none;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            opacity: 0.8;
+        }
+        .map-controls {
+            position: absolute;
+            top: 10px; right: 10px;
+            z-index: 20;
+            background: rgba(15, 23, 42, 0.9);
+            border-radius: 12px;
+            padding: 8px;
+            border: 1px solid rgba(51, 65, 85, 0.9);
+            display: flex; flex-direction: column; gap: 6px;
+        }
+        .map-btn {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid rgba(51, 65, 85, 0.9);
+            color: #cbd5e1;
+            padding: 6px 10px;
+            border-radius: 8px;
+            font-size: 10px;
+            cursor: pointer;
+            transition: all .2s;
+        }
+        .map-btn:hover {
+            background: rgba(16, 185, 129, 0.2);
+            border-color: rgba(16, 185, 129, 0.6);
+            color: #6ee7b7;
+        }
+        .map-period-select {
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid rgba(51, 65, 85, 0.9);
+            color: #cbd5e1;
+            padding: 6px 8px;
+            border-radius: 8px;
+            font-size: 10px;
+            cursor: pointer;
+        }
+
+        /* ===== B34 — أيقونات العتاد والخدمات النشطة (توهج أخضر/أبيض متتابع) ===== */
+        .hw-icon-active {
+            color: #10b981;
+            animation: hw-pulse-green-white 2s ease-in-out infinite;
+        }
+        .hw-icon-inactive {
+            color: #64748b;
+        }
+        @keyframes hw-pulse-green-white {
+            0%, 100% { color: #10b981; text-shadow: 0 0 8px rgba(16,185,129,0.5); }
+            50% { color: #fff; text-shadow: 0 0 12px rgba(255,255,255,0.8); }
+        }
+        .hw-icon-dim {
+            color: #1e293b;
+            text-shadow: none;
+        }
+
+        /* ===== B35 — زر تحديث البث (تفاعل متقدم) ===== */
+        .refresh-stream-active {
+            background: #f59e0b !important;
+            box-shadow: 0 0 0 3px rgba(245,158,11,0.4);
+            animation: refresh-pulse 1.5s ease-in-out infinite;
+        }
+        @keyframes refresh-pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(245,158,11,0.7); }
+            50% { box-shadow: 0 0 0 8px rgba(245,158,11,0); }
+        }
+
+        /* ===== B36 — بطاقة Last Seen مصغّرة ===== */
+        .last-seen-details {
+            font-size: 10px;
+            color: #94a3b8;
+            line-height: 1.4;
+        }
+        .last-seen-details span { color: #cbd5e1; font-weight: 600; }
     </style>
     <style id="bridge-host-studio-css">
         /* ===== الإطار الوامض للجهاز المضيف المختار والمتصل (أخضر فاتح ↔ أبيض) ===== */
@@ -1001,9 +1085,9 @@
             </div>
             <div>
                 <h1 class="text-base md:text-xl font-black tracking-wide text-emerald-400 flex items-center gap-1.5">
-                    RBstudioAS <span class="text-[9px] uppercase font-bold text-emerald-300 bg-emerald-950/80 border border-emerald-500/30 px-1.5 py-0.5 rounded-full">Pro</span>
+                    RBstudioGLM5 <span class="text-[9px] uppercase font-bold text-emerald-300 bg-emerald-950/80 border border-emerald-500/30 px-1.5 py-0.5 rounded-full">GLM5</span>
                 </h1>
-                <p class="text-[10px] text-slate-300 hidden sm:block">RBstudioAS v1.5.2 (12) • بناء <span class="ts-en">2026-11-10 20:42</span></p>
+                <p class="text-[10px] text-slate-400 hidden sm:block">جسر الربط والمتابعة المباشر عبر WebRTC — الإصدار: 1.5.2 — البناء: 12-11-2026 (05:30 م)</p>
             </div>
         </div>
 
@@ -1019,13 +1103,13 @@
                 </svg>
                 <span>فحص الاتصال</span>
             </button>
-            <!-- الربط الهجين الموحد الحصري (WebRTC P2P + ترحيل WSS السحابي بالتكامل والتسلسل) -->
-            <div id="transport-toggle-btn" class="bg-teal-600/90 text-white px-2.5 md:px-3 py-1.5 md:py-2 rounded-xl text-xs font-bold shadow-md flex items-center gap-1.5 shrink-0 border border-teal-400/50" data-transport-mode="webrtc">
-                <svg class="w-3.5 h-3.5 text-teal-200 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+            <!-- أيقونة تحديث البث — إيقاف جميع حزم البث الحي وإعادة اتصال جديد بين المتحكم والمضيف -->
+            <button onclick="refreshStream()" id="refresh-stream-btn" class="bg-orange-600 hover:bg-orange-500 active:scale-95 text-white px-2.5 md:px-3 py-1.5 md:py-2 rounded-xl text-xs font-bold shadow-md transition flex items-center gap-1.5 shrink-0 border border-orange-500/40" data-active="false">
+                <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
                 </svg>
-                <span id="transport-mode-label">⚡ اتصال هجين موحد (P2P + Relay)</span>
-            </div>
+                <span id="refresh-stream-label">تحديث البث</span>
+            </button>
             <button onclick="toggleServerConnection()" id="connect-btn" class="bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white px-3 md:px-4 py-1.5 md:py-2 rounded-xl text-xs font-bold shadow-md transition flex items-center gap-1.5 shrink-0">
                 <svg class="w-4 h-4 text-emerald-200 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
@@ -1270,6 +1354,14 @@
         // B16/B18 — التبويب الفرعي للبث: ثلاث واجهات — «main» كلاسيكية، «pro» محرك برمجي احتياطي، «studio» استوديو سينمائي
         let broadcastViewMode = 'main';
         try { const _m = localStorage.getItem('rb_bc_mode_v1'); broadcastViewMode = (_m === 'pro' || _m === 'studio') ? _m : 'main'; } catch (_) { broadcastViewMode = 'main'; }
+
+        // ===== B33 — خريطة الموقع الحي والتتبع =====
+        let liveMap = null;
+        let mapPinMarker = null;
+        let mapPathPolyline = null;
+        let mapPathCoords = []; // كل نقاط المسار المسجلة
+        let mapPeriodFilter = 'all'; // hour | day | week | month | all
+        let mapLastHostLatLng = null;
         function setBroadcastViewMode(m) {
             broadcastViewMode = (m === 'pro' || m === 'studio') ? m : 'main';
             try { localStorage.setItem('rb_bc_mode_v1', broadcastViewMode); } catch (_) {}
@@ -1306,40 +1398,16 @@
             fly: "wss://my-ai-bridge-app.fly.dev/ws"
         };
 
-        const METERED_ICE_SERVERS = [
-            { urls: "stun:stun.relay.metered.ca:80" },
-            {
-                urls: "turn:standard.relay.metered.ca:80",
-                username: "76605207fb94657c3cfb5512",
-                credential: "/Rhb/9cPGGJsPVXE"
-            },
-            {
-                urls: "turn:standard.relay.metered.ca:80?transport=tcp",
-                username: "76605207fb94657c3cfb5512",
-                credential: "/Rhb/9cPGGJsPVXE"
-            },
-            {
-                urls: "turn:standard.relay.metered.ca:443",
-                username: "76605207fb94657c3cfb5512",
-                credential: "/Rhb/9cPGGJsPVXE"
-            },
-            {
-                urls: "turns:standard.relay.metered.ca:443?transport=tcp",
-                username: "76605207fb94657c3cfb5512",
-                credential: "/Rhb/9cPGGJsPVXE"
-            }
-        ];
-
         const DEFAULT_CONFIG = {
             serverUrl: PRESETS.origin || PRESETS.local,
             serverScope: "AUTO",
             deviceName: "RBstudio Web Controller",
             targetDeviceId: "",
-            stunServer: "stun:stun.relay.metered.ca:80",
-            turnUrl: "turn:standard.relay.metered.ca:80",
-            turnUsername: "76605207fb94657c3cfb5512",
-            turnCredential: "/Rhb/9cPGGJsPVXE",
-            meteredApiKey: "a5062af1ec6052b35444b0bf853d161e2fc3",
+            stunServer: "stun:stun.l.google.com:19302",
+            // TURN اختياري: يبقى فارغاً = معطّل تماماً
+            turnUrl: "",
+            turnUsername: "",
+            turnCredential: "",
             connectionProfile: "HYBRID"
         };
 
@@ -1650,36 +1718,40 @@
             connectSignalingServer();
         }
 
-        // دمج أنماط الاتصال بالربط الهجين الموحد (WebRTC P2P فائقة السرعة + ترحيل WSS سحابي متكامل)
-        let transportMode = "webrtc";
-        appConfig.connectionProfile = "HYBRID";
+        // B27 — تبديل نمط النقل بين WebRTC-P2P وترحيل WebSocket مع Preservation للوضع السابق
+        let transportMode = localStorage.getItem("rb_transport_mode") || "webrtc";
 
         function toggleTransportMode() {
-            appConfig.connectionProfile = "HYBRID";
-            transportMode = "webrtc";
-            updateTransportModeBtnUI();
-            showToast('⚡ الربط الهجين الموحد مفعّل تلقائياً: WebRTC P2P + WSS Relay يعملان بالتسلسل والتكامل دون الحاجة إلى التبديل اليدوي', 'info');
-        }
+            const btn = document.getElementById("transport-toggle-btn");
+            const label = document.getElementById("transport-mode-label");
+            if (!btn || !label) return;
 
-        function updateTransportModeBtnUI() {
-            appConfig.connectionProfile = "HYBRID";
-            const btn = document.getElementById('transport-toggle-btn');
-            const lbl = document.getElementById('transport-mode-label');
-            const btn2 = document.getElementById('transport-mode-btn');
+            const isWebRtc = transportMode === "webrtc";
+            transportMode = isWebRtc ? "wsrelay" : "webrtc";
+            localStorage.setItem("rb_transport_mode", transportMode);
 
-            const labelText = '⚡ اتصال هجين موحد (P2P + Relay)';
-            const clsText = 'bg-teal-600/90 text-white px-2.5 md:px-3 py-1.5 md:py-2 rounded-xl text-xs font-bold shadow-md flex items-center gap-1.5 shrink-0 border border-teal-400/50';
+            btn.setAttribute("data-transport-mode", transportMode);
 
-            if (lbl) lbl.innerText = labelText;
-            if (btn) {
-                btn.className = clsText;
-                btn.setAttribute("data-transport-mode", 'webrtc');
+            if (transportMode === "wsrelay") {
+                btn.classList.add("bg-emerald-600", "border-emerald-500/50", "text-white");
+                btn.classList.remove("bg-slate-700", "border-slate-600/50", "text-slate-200");
+                label.innerText = "ترحيل WS";
+            } else {
+                btn.classList.remove("bg-emerald-600", "border-emerald-500/50", "text-white");
+                btn.classList.add("bg-slate-700", "border-slate-600/50", "text-slate-200");
+                label.innerText = "WebRTC-P2P";
             }
-            if (btn2) {
-                btn2.className = clsText;
-                const lbl2 = document.getElementById('transport-mode-label-2');
-                if (lbl2) lbl2.innerText = labelText;
+
+            // أرسل النمط الجديد للخادم إن كان المقبس مفتوحاً
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                try {
+                    ws.send(JSON.stringify({ type: "transport_mode", mode: transportMode }));
+                } catch (e) {
+                    // يُتجاهل إن تعذر الإرسال — يُطبّق النمط محلياً عند إعادة الاتصال
+                }
             }
+
+            showToast("تم تبديل نمط النقل إلى: " + (transportMode === "wsrelay" ? "ترحيل WebSocket" : "WebRTC-P2P") + " — الإلغاء يعيد الإعدادات كما كانت", "info");
         }
 
         // يحاول المرشح الحالي؛ عند فشل المرشح قبل نجاح أي اتصال ينتقل للتالي تلقائياً.
@@ -1755,6 +1827,13 @@
                 try {
                     const msg = JSON.parse(event.data);
                     handleSignalingMessage(msg);
+                    // ===== B33 — استقبال موقع المضيف الحي من المضيف وتحديث الخريطة =====
+                    if (msg && msg.location && typeof msg.location.lat === 'number' && typeof msg.location.lng === 'number') {
+                        updateLiveMap(msg.location.lat, msg.location.lng, msg.location.charging === true, msg.location.ts || Date.now());
+                    }
+                    if (msg && msg.lat !== undefined && msg.lng !== undefined) {
+                        updateLiveMap(msg.lat, msg.lng, msg.charging === true, msg.ts || Date.now());
+                    }
                 } catch (e) {
                     console.error("Invalid JSON signaling msg:", event.data);
                 }
@@ -2669,44 +2748,22 @@
             const rtcConfig = {
                 iceServers: [
                     { urls: appConfig.stunServer || DEFAULT_CONFIG.stunServer },
-                    { urls: "stun:stun.relay.metered.ca:80" },
-                    { urls: "stun:stun.l.google.com:19302" },
-                    {
-                        urls: "turn:standard.relay.metered.ca:80",
-                        username: appConfig.turnUsername || DEFAULT_CONFIG.turnUsername,
-                        credential: appConfig.turnCredential || DEFAULT_CONFIG.turnCredential
-                    },
-                    {
-                        urls: "turn:standard.relay.metered.ca:80?transport=tcp",
-                        username: appConfig.turnUsername || DEFAULT_CONFIG.turnUsername,
-                        credential: appConfig.turnCredential || DEFAULT_CONFIG.turnCredential
-                    },
-                    {
-                        urls: "turn:standard.relay.metered.ca:443",
-                        username: appConfig.turnUsername || DEFAULT_CONFIG.turnUsername,
-                        credential: appConfig.turnCredential || DEFAULT_CONFIG.turnCredential
-                    },
-                    {
-                        urls: "turns:standard.relay.metered.ca:443?transport=tcp",
-                        username: appConfig.turnUsername || DEFAULT_CONFIG.turnUsername,
-                        credential: appConfig.turnCredential || DEFAULT_CONFIG.turnCredential
-                    }
+                    { urls: "stun:stun1.l.google.com:19302" },
+                    { urls: "stun:stun2.l.google.com:19302" },
+                    { urls: "stun:stun3.l.google.com:19302" },
+                    { urls: "stun:stun4.l.google.com:19302" },
+                    // B32 — خوادم TURN من Metered.ca (افتراضي)
+                    { urls: "turn:standard.relay.metered.ca:80", username: "76605207fb94657c3cfb5512", credential: "/Rhb/9cPGGJsPVXE" },
+                    { urls: "turn:standard.relay.metered.ca:80?transport=tcp", username: "76605207fb94657c3cfb5512", credential: "/Rhb/9cPGGJsPVXE" },
+                    { urls: "turn:standard.relay.metered.ca:443", username: "76605207fb94657c3cfb5512", credential: "/Rhb/9cPGGJsPVXE" },
+                    { urls: "turns:standard.relay.metered.ca:443?transport=tcp", username: "76605207fb94657c3cfb5512", credential: "/Rhb/9cPGGJsPVXE" }
                 ],
                 iceTransportPolicy: "all",
                 bundlePolicy: "max-bundle",
                 sdpSemantics: "unified-plan"
             };
 
-            const turnUrlValue = String(appConfig.turnUrl || '').trim();
-            if (turnUrlValue && turnUrlValue !== "turn:standard.relay.metered.ca:80") {
-                const turnServer = { urls: turnUrlValue };
-                if (appConfig.turnUsername) turnServer.username = String(appConfig.turnUsername);
-                if (appConfig.turnCredential) turnServer.credential = String(appConfig.turnCredential);
-                rtcConfig.iceServers.push(turnServer);
-                console.log(`%c[WebRTC Init] TURN إضافي مفعّل: ${turnUrlValue}`, "color: #fbbf24; font-weight: bold;");
-            }
-
-            console.log(`%c[WebRTC Init] تهيئة RTCPeerConnection للمضيف [${targetId}] بخوادم STUN:`, "color: #38bdf8; font-weight: bold;", rtcConfig.iceServers);
+            console.log(`%c[WebRTC Init] تهيئة RTCPeerConnection للمضيف [${targetId}] بخوادم STUN/TURN:`, "color: #38bdf8; font-weight: bold;", rtcConfig.iceServers);
 
             pc = new RTCPeerConnection(rtcConfig);
 
@@ -3325,10 +3382,325 @@
             b.classList.remove('rb-dl-out');
             try { b.scrollIntoView({ behavior: 'smooth', block: 'end' }); } catch (_) {}
         }
-        // B23 — محرّك الأيقونات التفاعلي: أمر إيقاف حتمي يُحرّر العتاد والجلسة في كل الأحوال
+        // B23 — محرّك الأيقونات التفاعلي: كل عنصر يحمل data-rb-ctl يُضيء عند النشاط ويخفت بالخمول
         function rbStopStreamSafe() {
-            rbStopAllStreams('تم تنفيذ إيقاف البث الحي وتطهير الجلسة والعتاد بنجاح 🛑');
+            if (streamState && streamState.active && streamState.mode && streamState.mode !== 'none') {
+                rbStopAllStreams('نقرة الإيقاف في واجهة المشغّل — أُوقف البث الحي');
+            } else {
+                showToast('لا بث نشط على الهاتف حالياً — ابدأ بثاً أولاً', 'info');
+            }
         }
+
+        // 🔄 تحديث البث — إيقاف جميع بثوث live وإعادة تهيئة الاتصال بين المتحكم والمضيف
+        // remain ready even when no stream is active
+        function refreshStream() {
+            try {
+                const btn = document.getElementById('refresh-stream-btn');
+                if (btn) {
+                    btn.classList.add('bg-orange-500', 'ring-2', 'ring-orange-300');
+                    btn.setAttribute('data-active', 'true');
+                    const span = btn.querySelector('span');
+                    if (span) span.textContent = 'تحديث البث — جاري الإيقاف…';
+                }
+                // إيقاف جميع البثوث الحية forcibly
+                rbStopAllStreams('أيقونة تحديث البث — إيقاف جميع حزم البث الحي وإعادة اتصال جديد');
+
+                // إرسال أمر إيقاف البث للمضيف عبر RPC إذا كان متصلاً
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                        type: 'command',
+                        cmd: 'stop_all_streams',
+                        params: {},
+                        ts: Date.now()
+                    }));
+                }
+
+                // إعادة تعيين حالة البث
+                streamState.active = false;
+                streamState.audioOnly = false;
+                streamState.mode = 'none';
+                streamState.isFront = false;
+                streamState.audioEnabled = true;
+
+                // إعادة تهيئة WebRTC peer connection للبدء من جديد
+                try {
+                    if (pc) {
+                        pc.close();
+                        pc = null;
+                    }
+                    if (dataChannel) {
+                        try { dataChannel.close(); } catch (_) {}
+                        dataChannel = null;
+                    }
+                } catch (_) {}
+
+                showToast('تم إيقاف جميع بثوث الحية وإعادة تهيئة الاتصال — أصبح جاهزاً لبث جديد', 'success');
+
+                // إعادة زر تحديث البث للحالة الطبيعية بعد 2.5 ثانية
+                setTimeout(() => {
+                    try {
+                        const btn = document.getElementById('refresh-stream-btn');
+                        if (btn) {
+                            btn.classList.remove('bg-orange-500', 'ring-2', 'ring-orange-300');
+                            btn.setAttribute('data-active', 'false');
+                            const span = btn.querySelector('span');
+                            if (span) span.textContent = 'تحديث البث';
+                        }
+                    } catch (_) {}
+                }, 2500);
+
+                // تحديث واجهة المشغّل
+                if (typeof rbCtlSync === 'function') rbCtlSync();
+                if (typeof rbRefreshStreamPane === 'function') rbRefreshStreamPane();
+            } catch (e) {
+                showToast('خطأ أثناء تحديث البث: ' + String(e.message || e), 'error');
+            }
+        }
+
+        // ===== B33 — دوال خريطة الموقع الحي والتتبع =====
+        function initLiveMap() {
+            if (liveMap) return;
+            try {
+                liveMap = L.map('live-map', {
+                    zoomControl: true,
+                    attributionControl: false
+                }).setView([31.2, 35.0], 6);
+
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap contributors',
+                    maxZoom: 19
+                }).addTo(liveMap);
+
+                mapPathPolyline = L.polyline([], {
+                    color: '#0ea5e9',
+                    weight: 3,
+                    opacity: 0.8,
+                    lineCap: 'round',
+                    lineJoin: 'round'
+                }).addTo(liveMap);
+
+                mapPinMarker = L.marker([31.2, 35.0], {
+                    icon: L.divIcon({
+                        className: 'map-pin-live',
+                        html: '<div style="width:28px;height:28px;background:#ef4444;border:3px solid #fff;border-radius:50% 50% 50% 0;transform:rotate(-45deg);"></div>',
+                        iconSize: [28, 28],
+                        iconAnchor: [14, 28]
+                    }),
+                    zIndexOffset: 1000
+                }).addTo(liveMap).bindPopup('موقع المضيف النشط').openPopup();
+                mapPinMarker.setOpacity(0);
+
+                liveMap.invalidateSize();
+            } catch (e) {
+                console.warn('خرائط: تعذر تهيئة الخريطة:', e);
+            }
+        }
+
+        function updateLiveMap(lat, lng, charging, timestamp) {
+            try {
+                initLiveMap();
+                const latlng = L.latLng(lat, lng);
+                mapLastHostLatLng = latlng;
+
+                // تحديث دبوس الموقع
+                if (mapPinMarker) {
+                    mapPinMarker.setLatLng(latlng);
+                    mapPinMarker.setOpacity(1);
+                    const pinEl = mapPinMarker._icon;
+                    if (pinEl) {
+                        pinEl.className = 'map-pin-live ' + (charging ? 'pin-charging' : '');
+                        mapPinMarker.getPopup().setContent(
+                            'موقع المضيف النشط<br>' +
+                            fmtEnTime(timestamp || Date.now()) +
+                            '<br>دقة: GPS مباشر' +
+                            (charging ? '<br>🔌 موصول بالشاحن' : '')
+                        );
+                    }
+                    mapPinMarker.openPopup();
+                }
+
+                // إضافة نقطة للمسار المسجل permanently
+                const now = Date.now();
+                const periodMs = mapPeriodFilter === 'all' ? Infinity :
+                    mapPeriodFilter === 'hour' ? 60 * 60 * 1000 :
+                    mapPeriodFilter === 'day' ? 24 * 60 * 60 * 1000 :
+                    mapPeriodFilter === 'week' ? 7 * 24 * 60 * 60 * 1000 :
+                    30 * 24 * 60 * 60 * 1000;
+
+                // إضافة النقطة مع الطابع الزمني
+                mapPathCoords.push({ latlng, ts: now });
+
+                // تصفية حسب الفترة المختارة
+                const cutoff = now - periodMs;
+                const filtered = mapPathCoords.filter(p => p.ts >= cutoff);
+
+                // الحفاظ على آخر 500 نقطة للأداء
+                if (filtered.length > 500) filtered.splice(0, filtered.length - 500);
+
+                if (mapPathPolyline && filtered.length > 1) {
+                    mapPathPolyline.setLatLngs(filtered.map(p => p.latlng));
+                    liveMap.fitBounds(mapPathPolyline.getBounds(), { padding: [40, 40], maxZoom: 15 });
+                } else if (mapPinMarker) {
+                    liveMap.setView(latlng, 14, { animate: true, duration: 1 });
+                }
+
+                // تحديث الإحصائيات
+                document.getElementById('map-point-count').textContent = filtered.length + ' نقطة';
+                document.getElementById('map-last-update').textContent = fmtEnTime(now);
+                document.getElementById('map-empty-state').classList.add('hidden');
+                document.getElementById('live-map-container').classList.remove('hidden');
+            } catch (e) {
+                console.warn('خرائط: تعذر تحديث الموقع:', e);
+            }
+        }
+
+        function applyMapPeriodFilter() {
+            const sel = document.getElementById('map-period-select');
+            if (sel) mapPeriodFilter = sel.value;
+            if (mapLastHostLatLng) {
+                // إعادة رسم المسار مع التصفية الجديدة
+                if (mapPathPolyline && mapPathCoords.length > 0) {
+                    const now = Date.now();
+                    const periodMs = mapPeriodFilter === 'all' ? Infinity :
+                        mapPeriodFilter === 'hour' ? 60 * 60 * 1000 :
+                        mapPeriodFilter === 'day' ? 24 * 60 * 60 * 1000 :
+                        mapPeriodFilter === 'week' ? 7 * 24 * 60 * 60 * 1000 :
+                        30 * 24 * 60 * 60 * 1000;
+                    const cutoff = now - periodMs;
+                    const filtered = mapPathCoords.filter(p => p.ts >= cutoff);
+                    if (filtered.length > 1) {
+                        mapPathPolyline.setLatLngs(filtered.map(p => p.latlng));
+                    } else {
+                        mapPathPolyline.setLatLngs([]);
+                    }
+                    document.getElementById('map-point-count').textContent = filtered.length + ' نقطة';
+                }
+            }
+        }
+
+        function centerMapOnHost() {
+            if (mapLastHostLatLng && liveMap) {
+                liveMap.setView(mapLastHostLatLng, 15, { animate: true, duration: 1 });
+            } else if (mapPinMarker) {
+                liveMap.setView([31.2, 35.0], 6);
+            }
+        }
+
+        function clearMapPath() {
+            mapPathCoords = [];
+            if (mapPathPolyline) mapPathPolyline.setLatLngs([]);
+            document.getElementById('map-point-count').textContent = '0 نقاط';
+            document.getElementById('map-last-update').textContent = 'تم المسح';
+            showToast('تم مسح مسار الخريطة', 'info');
+        }
+
+        function openLocationMapView() {
+            switchTab('dashboard');
+            // الخريطة موجودة بالفعل في اللوحة، لكن يمكن التمرير إليها
+            setTimeout(() => {
+                const el = document.getElementById('live-map-container');
+                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 100);
+            showToast('خريطة الموقع الحي مفتوحة — دبوس موقع المضيف يظهر عند الاتصال', 'hint');
+        }
+
+        // ===== B34 — أيقونات العتاد والخدمات النشطة =====
+        let hwStates = {
+            cam: false, mic: false, spk: false, call: false, scr: false,
+            camSince: 0, micSince: 0, spkSince: 0, callSince: 0, scrSince: 0
+        };
+
+        function updateHardwareIcon(kind, active, since) {
+            const el = document.getElementById('hw-icon-' + kind);
+            if (!el) return;
+            hwStates[kind] = active === true;
+            hwStates[kind + 'Since'] = since || (active ? Date.now() : 0);
+            if (active) {
+                el.classList.remove('hw-icon-inactive', 'hw-icon-dim');
+                el.classList.add('hw-icon-active');
+                el.title = el.getAttribute('title') + ' — نشط منذ ' + fmtEnClock(since || Date.now());
+            } else {
+                el.classList.remove('hw-icon-active');
+                el.classList.add('hw-icon-inactive', 'hw-icon-dim');
+                const dur = hwStates[kind + 'Since'] ? (Date.now() - hwStates[kind + 'Since']) : 0;
+                el.title = el.getAttribute('title') + ' — غير نشط (آخر نشاط قبل ' + fmtElapsedAr(dur) + ')';
+            }
+        }
+
+        function showHwDetail(kind) {
+            const labels = {
+                cam: 'الكاميرا', mic: 'الميكروفون', spk: 'مكبر صوت الوسائط', call: 'الاتصال الهجري', scr: 'الشاشة'
+            };
+            const st = hwStates[kind];
+            if (st) {
+                showToast(labels[kind] + ' — نشطة حالياً (مدة النشاط: ' + fmtElapsedAr(Date.now() - hwStates[kind + 'Since']) + ')', 'info');
+            } else {
+                showToast(labels[kind] + ' — غير نشطة', 'info');
+            }
+        }
+
+        // استلام حالة العتاد من المضيف عبر RPC/رسالة
+        window.__rbSetHardwareState = function(kind, active, since) {
+            updateHardwareIcon(kind, active, since);
+        };
+
+        // ===== B36 — التسجيلات المحفوظة في مجلد المحفوظات =====
+        let recordingsStore = [];
+
+        function refreshRecordingsList() {
+            const container = document.getElementById('recordings-list');
+            if (!container) return;
+            if (recordingsStore.length === 0) {
+                container.innerHTML = '<div class="text-[10px] text-slate-500 text-center py-2 bg-slate-900/40 rounded-xl border border-slate-800">لا توجد تسجيلات محفوظة بعد. ابدأ بثاً وقم بالتسجيل للحفظ هنا.</div>';
+                return;
+            }
+            container.innerHTML = recordingsStore.map((r, i) => `
+                <div class="p-2 bg-slate-900/80 border border-slate-700 rounded-xl flex items-center justify-between transition cursor-pointer group" onclick="playRecording(${i})" title="تشغيل التسجيل المسجل">
+                    <div class="flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full ${r.status === 'active' ? 'bg-emerald-400 animate-pulse' : r.status === 'paused' ? 'bg-amber-500' : 'bg-slate-600'}"></span>
+                        <div class="min-w-0">
+                            <div class="text-xs font-bold text-slate-200 truncate">${r.name || 'تسجيل غير مسمى'}</div>
+                            <div class="text-[9px] text-slate-500">${fmtEnDate(r.ts || 0)} • ${r.size || '—'} • ${r.duration || '—'}</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-1.5 shrink-0">
+                        <button onclick="event.stopPropagation(); downloadRecording(${i})" class="bg-emerald-600/30 hover:bg-emerald-600 text-emerald-300 border border-emerald-500/30 px-2 py-1 rounded text-[9px] font-bold">⬇️</button>
+                        <button onclick="event.stopPropagation(); deleteRecording(${i})" class="bg-rose-600/30 hover:bg-rose-600 text-rose-300 border border-rose-500/30 px-2 py-1 rounded text-[9px] font-bold">🗑️</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function openRecordingsFolder() {
+            showToast('فتح مجلد التسجيلات في واجهة الملفات والذاكرة →फ़ولدر المحفوظات', 'info');
+            switchTab('files');
+        }
+
+        function playRecording(idx) {
+            const r = recordingsStore[idx];
+            if (!r) return;
+            showToast('تشغيل التسجيل: ' + (r.name || 'غير مسمى'), 'info');
+        }
+
+        function downloadRecording(idx) {
+            const r = recordingsStore[idx];
+            if (!r) return;
+            showToast('تنزيل التسجيل: ' + (r.name || 'غير مسمى'), 'info');
+        }
+
+        function deleteRecording(idx) {
+            recordingsStore.splice(idx, 1);
+            refreshRecordingsList();
+            showToast('تم حذف التسجيل', 'info');
+        }
+
+        // استلام تسجيل محفوظ من المضيف عبر RPC
+        window.__rbAddRecording = function(name, size, duration, status, ts) {
+            recordingsStore.unshift({ name, size, duration, status: status || 'saved', ts: ts || Date.now() });
+            if (recordingsStore.length > 100) recordingsStore.pop();
+            refreshRecordingsList();
+            showToast('تم حفظ التسجيل: ' + name, 'success');
+        };
         function rbCtlSync() {
             try {
                 const active = (streamState.active && streamState.mode && streamState.mode !== 'none') ? streamState.mode : null;
@@ -4762,25 +5134,10 @@
             const batteryEl = document.getElementById("dash-battery");
             const storageEl = document.getElementById("dash-storage");
             const osEl = document.getElementById("dash-os");
-            const chargeBadge = document.getElementById("dash-charge-badge");
-            const chargeIcon = document.getElementById("dash-charge-icon");
 
             if (batteryEl) {
                 const chargingText = data.isCharging ? " (جارٍ الشحن ⚡)" : " (على البطارية)";
                 batteryEl.innerText = `🔋 ${data.batteryLevel}%${chargingText}`;
-            }
-            if (chargeBadge) {
-                if (data.isCharging) {
-                    chargeBadge.classList.remove("hidden");
-                    chargeBadge.classList.add("flex");
-                } else {
-                    chargeBadge.classList.add("hidden");
-                    chargeBadge.classList.remove("flex");
-                }
-            }
-            if (chargeIcon) {
-                if (data.isCharging) chargeIcon.classList.remove("hidden");
-                else chargeIcon.classList.add("hidden");
             }
             if (storageEl) {
                 const freeGb = (data.storageFreeBytes / 1073741824).toFixed(1);
@@ -4799,8 +5156,6 @@
                 const pctHint = document.getElementById('dash-storage-pct');
                 if (pctHint) pctHint.innerText = `· استُخدم ${pct}%`;
             }
-            // B30 — تحديث حالات العتاد والخدمات النشطة وتتبع الجلسات المتراكمة
-            try { updateHwActivityStates(data); } catch (_) {}
             updateTabStateDots();
         }
 
@@ -7159,54 +7514,85 @@
                             <p class="text-[10px] text-slate-500 truncate">قمر صناعي + شوارع ← انقر للعرض</p>
                         </div>
                     </div>
-                    <!-- B13 — بطاقة آخر رؤية مستقلة بمعاينة نظيفة وعدّاد حي مع أيقونات العتاد المباشر -->
-                    <div class="rb-card-in rb-card-lift bg-slate-900/80 p-3.5 rounded-xl border border-amber-500/25 flex flex-col justify-between">
-                        <div class="flex items-center gap-3">
-                            <div class="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-xl shrink-0">🕒</div>
-                            <div class="min-w-0 flex-1">
-                                <p class="text-[11px] text-slate-400 font-medium">آخر رؤية — المنقضي</p>
-                                <p id="dash-lastseen" class="text-base md:text-lg font-bold text-amber-200 font-mono truncate" title="الوقت المنقضي منذ آخر رؤية (يُعدّ باستمرار كل ثانية)">${lastSeenText}</p>
-                                <p id="dash-lastseen-detail" class="text-[8.5px] md:text-[9px] text-slate-500 truncate mt-0.5">${escapeHtml2(lastSeenDetail)}</p>
-                            </div>
+                    <!-- B13 — بطاقة آخر رؤية مستقلة بمعاينة نظيفة وعدّاد حي كل ثانية -->
+                    <div class="rb-card-in rb-card-lift bg-slate-900/80 p-4 rounded-xl border border-amber-500/25 flex items-center gap-3">
+                        <div class="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-2xl shrink-0">🕒</div>
+                        <div class="min-w-0">
+                            <p class="text-[11px] text-slate-400 font-medium">آخر رؤية — المنقضي</p>
+                            <p id="dash-lastseen" class="text-base md:text-xl font-bold text-amber-200 font-mono truncate" title="الوقت المنقضي منذ آخر رؤية (يُعدّ باستمرار كل ثانية)">${lastSeenText}</p>
+                            <p id="dash-lastseen-detail" class="text-[10px] text-slate-500 truncate">${escapeHtml2(lastSeenDetail)}</p>
                         </div>
-                        <div class="mt-2 pt-1.5 border-t border-amber-500/15 flex items-center justify-between gap-1">
-                            <span class="text-[9px] text-slate-400 font-medium shrink-0">العتاد المباشر:</span>
-                            <div class="flex items-center gap-1">
-                                <button onclick="openHwActivityModal('camera')" id="hw-btn-camera" title="الكاميرا (انقر لعرض الجلسات وسجل المدة والتأطير الزمني)" class="p-1 rounded-lg border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-slate-400 transition flex items-center gap-0.5 active:scale-95">
-                                    <span class="text-[10px]">📷</span><span id="hw-dot-camera" class="w-1.5 h-1.5 rounded-full bg-slate-600"></span>
-                                </button>
-                                <button onclick="openHwActivityModal('mic')" id="hw-btn-mic" title="الميكروفون (انقر لعرض الجلسات وسجل المدة والتأطير الزمني)" class="p-1 rounded-lg border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-slate-400 transition flex items-center gap-0.5 active:scale-95">
-                                    <span class="text-[10px]">🎙️</span><span id="hw-dot-mic" class="w-1.5 h-1.5 rounded-full bg-slate-600"></span>
-                                </button>
-                                <button onclick="openHwActivityModal('audio')" id="hw-btn-audio" title="مكبر الصوت (انقر لعرض الجلسات وسجل المدة والتأطير الزمني)" class="p-1 rounded-lg border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-slate-400 transition flex items-center gap-0.5 active:scale-95">
-                                    <span class="text-[10px]">🔊</span><span id="hw-dot-audio" class="w-1.5 h-1.5 rounded-full bg-slate-600"></span>
-                                </button>
-                                <button onclick="openHwActivityModal('call')" id="hw-btn-call" title="المكالمات (انقر لعرض الجلسات وسجل المدة والتأطير الزمني)" class="p-1 rounded-lg border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-slate-400 transition flex items-center gap-0.5 active:scale-95">
-                                    <span class="text-[10px]">📞</span><span id="hw-dot-call" class="w-1.5 h-1.5 rounded-full bg-slate-600"></span>
-                                </button>
-                                <button onclick="openHwActivityModal('screen')" id="hw-btn-screen" title="الشاشة (انقر لعرض الجلسات وسجل المدة والتأطير الزمني)" class="p-1 rounded-lg border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-slate-400 transition flex items-center gap-0.5 active:scale-95">
-                                    <span class="text-[10px]">📱</span><span id="hw-dot-screen" class="w-1.5 h-1.5 rounded-full bg-slate-600"></span>
-                                </button>
-                            </div>
+                        <!-- B34 — أيقونات العتاد والخدمات النشطة والمشغلة حالياً -->
+                        <div class="ml-3 flex items-center gap-1.5 text-xs border-l border-slate-700 pl-3">
+                            <div title="الكاميرا — نشطة في بث/تصوير/تسجيل" id="hw-icon-cam" class="hw-icon-inactive p-1.5 rounded hover:bg-slate-700/50 transition cursor-pointer" onclick="showHwDetail('cam')">📹</div>
+                            <div title="الميكروفون — نشط في اتصال فيديو/صوت/تسجيل" id="hw-icon-mic" class="hw-icon-inactive p-1.5 rounded hover:bg-slate-700/50 transition cursor-pointer" onclick="showHwDetail('mic')">🎤</div>
+                            <div title="مكبر صوت الوسائط — عرض صوت/فيديو" id="hw-icon-spk" class="hw-icon-inactive p-1.5 rounded hover:bg-slate-700/50 transition cursor-pointer" onclick="showHwDetail('spk')">🔊</div>
+                            <div title="الاتصال الهجري — مكالمة جارية" id="hw-icon-call" class="hw-icon-inactive p-1.5 rounded hover:bg-slate-700/50 transition cursor-pointer" onclick="showHwDetail('call')">📞</div>
+                            <div title="الشاشة — مفتوحة ومضاءة (بث شاشة نشط)" id="hw-icon-scr" class="hw-icon-inactive p-1.5 rounded hover:bg-slate-700/50 transition cursor-pointer" onclick="showHwDetail('scr')">📱</div>
                         </div>
                     </div>
-                    <!-- B13 — بطاقة النظام والمساحة المدمجة: نظام + بطارية + معاينة الشحن المباشرة + مساحة -->
+                    <!-- B13 — بطاقة النظام والمساحة المدمجة: نظام + بطارية + مساحة مع قضيب امتلاء ثميني -->
                     <div class="rb-card-in rb-card-lift bg-slate-900/80 p-4 rounded-xl border border-slate-800 flex items-center gap-3">
                         <div class="w-12 h-12 rounded-xl bg-purple-500/10 border border-purple-500/25 flex items-center justify-center text-2xl shrink-0">📱</div>
                         <div class="min-w-0 flex-1">
                             <p class="text-[11px] text-slate-400 font-medium">النظام والمساحة</p>
                             <p id="dash-os" class="text-sm md:text-base font-bold text-slate-100 truncate">${osText}</p>
                             <p id="dash-battery" class="text-[11px] font-bold text-emerald-300 mt-0.5 truncate">🔋 ${batteryText}</p>
-                            <div id="dash-charge-badge" class="${latestDeviceInfo && latestDeviceInfo.isCharging ? 'flex' : 'hidden'} items-center gap-1 px-2 py-0.5 mt-0.5 rounded-lg bg-amber-500/20 border border-amber-400/50 text-amber-300 text-[10px] font-bold animate-pulse shadow-sm w-fit">
-                                <span>⚡</span><span>جارٍ الشحن الآن</span>
-                            </div>
                             <span id="dash-charge-icon" class="text-[10px] font-bold text-yellow-300 hidden">⚡ جارٍ الشحن الآن</span>
-                            <div class="rb-storage-bar mt-1.5"><div id="dash-storage-bar-fill" class="rb-storage-fill" style="width:${storagePct}%"></div></div>
+                            <div class="rb-storage-bar"><div id="dash-storage-bar-fill" class="rb-storage-fill" style="width:${storagePct}%"></div></div>
                             <p class="mt-1 flex items-center gap-1 text-[10px] text-slate-400">
                                 <span>💾</span>
                                 <span id="dash-storage" class="font-bold text-slate-200">${storageText}</span>
                                 <span id="dash-storage-pct" class="text-slate-500">· استُخدم ${storagePct}%</span>
                             </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ===== B33 — خريطة الموقع الحي مع تتبع المسار permanently ===== -->
+                <div class="glass-panel p-4 rounded-2xl border border-emerald-500/20 mb-4 bg-gradient-to-r from-emerald-950/20 via-slate-900/80 to-slate-900/90 shadow-xl">
+                    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-3 mb-3 border-b border-slate-800 gap-2">
+                        <div class="flex items-center gap-2.5">
+                            <span class="w-8 h-8 rounded-xl bg-teal-500/20 border border-teal-500/40 flex items-center justify-center text-teal-300 font-bold text-sm">🗺️</span>
+                            <div>
+                                <h3 class="text-xs md:text-sm font-bold text-emerald-300">خريطة الموقع الحي للهاتف المضيف</h3>
+                                <p class="text-[10.5px] text-slate-400">دبوس موقع واحد للمضيف النشط + تسجيل المسار permanently مع تصفية بالفترة الزمنية</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-1.5 flex-wrap map-controls">
+                            <select id="map-period-select" class="map-period-select" onchange="applyMapPeriodFilter()">
+                                <option value="hour">آخر ساعة</option>
+                                <option value="day">آخر 24 ساعة</option>
+                                <option value="week">آخر أسبوع</option>
+                                <option value="month">آخر شهر</option>
+                                <option value="all">الكل (بدون تصفية)</option>
+                            </select>
+                            <button onclick="centerMapOnHost()" class="map-btn" title="تكبير الخريطة على موقع المضيف الحالي">📍 تكبير على المضيف</button>
+                            <button onclick="clearMapPath()" class="map-btn" title="مسح مسار الخريطة مسجل">🗑️ مسح المسار</button>
+                        </div>
+                    </div>
+                    <div id="live-map-container" class="rounded-xl overflow-hidden border border-slate-700/50 relative">
+                        <div id="live-map"></div>
+                        <div id="map-pin-live" class="map-pin-live hidden" title="موقع المضيف النشط"></div>
+                        <div id="map-empty-state" class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 bg-black/20">
+                            <div class="text-2xl mb-2">🗺️</div>
+                            <p class="text-xs">لم يتم استقبال موقع المضيف بعد</p>
+                            <p class="text-[10px] text-slate-600 mt-1">سيظهر دبوس الموقع عند اتصال المضيف وإرسال بيانات الموقع</p>
+                        </div>
+                    </div>
+                    <div class="mt-3 flex flex-wrap items-center gap-4 text-xs">
+                        <div class="flex items-center gap-1.5">
+                            <span class="w-3 h-3 rounded-full bg-red-500"></span>
+                            <span class="text-slate-400">موقع المضيف النشط (دبوس)</span>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <svg class="w-4 h-4 text-blue-500/80" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 11-4 0 2 2 0 014 0zM1 5h18m-18 8h18m-18 8h18"></path></svg>
+                            <span class="text-slate-400">مسار التتبع المسجل</span>
+                        </div>
+                        <div id="map-stats" class="flex items-center gap-2 text-slate-400">
+                            <span id="map-point-count">0 نقاط</span>
+                            <span class="text-slate-600">·</span>
+                            <span id="map-last-update">بدون تحديث</span>
                         </div>
                     </div>
                 </div>
@@ -8127,15 +8513,36 @@
                     </button>
                     <span class="text-[10px] text-slate-500">صوت البث (كتم/تفعيل)</span>
 
-                    <span class="flex-1"></span>
-                    <button onclick="stopLiveStream()" title="إيقاف البث الحي وتفريغ العتاد" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-3.5 py-2 rounded-xl transition shadow-lg shadow-rose-950/50 active:scale-95 flex items-center gap-1 text-xs">
-                        <span>🛑 إيقاف البث</span>
-                    </button>
-                    <button onclick="rbHardResetStreamEngine()" title="تحديث وتطهير البث الحي — قطع كافة حزم الاتصال والعتاد وإعادة التهيئة" class="bg-amber-600 hover:bg-amber-500 text-white font-bold px-3.5 py-2 rounded-xl transition shadow-lg shadow-amber-950/50 active:scale-95 flex items-center gap-1 text-xs">
-                        <span>🔄 تحديث البث</span>
-                    </button>
+                    ${streamState.active ? `
+                        <span class="flex-1"></span>
+                        <button onclick="stopLiveStream()" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-4 py-2 rounded-xl transition shadow-lg shadow-rose-950/50 active:scale-95 flex items-center gap-1">
+                            <span>🛑 إيقاف البث الحي</span>
+                        </button>
+                    ` : `<span class="rb-stream-chip-hint">ابدأ من بطاقة أعلاه — أدوات اللقطة/التسجيل/الأرشيف في الشريط التالي</span>`}
                 </div>
                 ${renderStreamExtraToolbar()}
+                
+                <!-- B36 — مجلد التسجيلات المحفوظة ضمن واجهة البث الحي للكاميرا والصوت -->
+                <div class="glass-panel p-3.5 rounded-2xl border border-emerald-500/20 mt-4 bg-gradient-to-r from-emerald-950/20 via-slate-900/80 to-slate-900/90 shadow-xl">
+                    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-2 mb-3 border-b border-slate-800 gap-2">
+                        <div class="flex items-center gap-2">
+                            <span class="w-7 h-7 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-300 font-bold text-xs">💾</span>
+                            <h3 class="text-xs md:text-sm font-bold text-emerald-300">التسجيلات المحفوظة — مجلد المحفوظات</h3>
+                        </div>
+                        <div class="flex items-center gap-1.5 text-xs">
+                            <button onclick="refreshRecordingsList()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-2.5 py-1 rounded-lg transition text-[10px] font-bold">تحديث</button>
+                            <button onclick="openRecordingsFolder()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1 rounded-lg text-[10px] font-bold transition">📂 فتح المجلد</button>
+                        </div>
+                    </div>
+                    <div class="flex flex-col gap-1.5 max-h-48 overflow-y-auto custom-scrollbar" id="recordings-list">
+                        <div class="text-[10px] text-slate-500 text-center py-2 bg-slate-900/40 rounded-xl border border-slate-800">لا توجد تسجيلات محفوظة بعد. ابدأ بثاً وقم بالتسجيل للحفظ هنا.</div>
+                    </div>
+                    <div class="mt-2 flex items-center gap-2 text-[10px] text-slate-500">
+                        <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-400"></span> نشط</span>
+                        <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-amber-500"></span> موقوف مؤقتاً</span>
+                        <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-slate-600"></span> محفوظ</span>
+                    </div>
+                </div>
             `;
             rbRebindMediaElements();
         }
@@ -8234,7 +8641,7 @@
         }
         function rbStreamSwitchBusyFlash() { showToast('تبديل وسيلة البث قيد التنفيذ — لحظة من فضلك', 'info'); }
         let rbStreamSwitchBusy = false;
-        // الإيقاف المحلي الموحّد (بلا إرسال أمر) — يُقطع جميع المسارات والعناصر المحلية فوراً
+        // الإيقاف المحلي الموحّد (بلا إرسال أمر) — يُستخدم عند التأكيد من ردّ المضيف أيضاً
         function rbStopLocalStateOnly() {
             streamState.active = false;
             streamState.audioOnly = false;
@@ -8244,93 +8651,20 @@
             rbStreamRecoveryCancel();
             rbLiveClockStop();
             rbStopAudioLevelFeed();
-
-            // 🛑 تطهير وقطع كافة مسارات الوسائط وتعيين عناصر الفيديو والصوت إلى null
-            if (window.remoteMediaStream) {
-                try {
-                    window.remoteMediaStream.getTracks().forEach(track => {
-                        try { track.stop(); } catch (_) {}
-                    });
-                } catch (_) {}
-                window.remoteMediaStream = null;
-            }
-
-            ['remote-video', 'bc-pro-video', 'rb-studio-video', 'remote-audio', 'bc-pro-audio', 'rb-studio-audio'].forEach(id => {
-                const el = document.getElementById(id);
-                if (el) {
-                    try { el.pause(); } catch (_) {}
-                    try { el.srcObject = null; } catch (_) {}
-                    try { el.removeAttribute('src'); } catch (_) {}
-                }
-            });
-
-            if (window.__rbLiveMeter) {
-                try { window.__rbLiveMeter.close(); } catch (_) {}
-                window.__rbLiveMeter = null;
-            }
-            window.__rbLiveRms = 0;
-
             try { rbBc.framesSeen = false; rbBc.lastBytes = 0; rbBc.lastBitrateKbps = 0; } catch (_) {}
             try { if (rbBc.watchdogTimer) { clearInterval(rbBc.watchdogTimer); rbBc.watchdogTimer = null; } } catch (_) {}
             try { if (rbBc.engineTimer) { clearInterval(rbBc.engineTimer); rbBc.engineTimer = null; } } catch (_) {}
         }
-
-        // الإيقاف الموحّد (أي أمر إيقاف في أي واجهة يمرّ من هنا ويُجبر المضيف على تحرير العتاد)
+        // الإيقاف الموحّد (أي أمر إيقاف في أي واجهة يمرّ من هنا)
         function rbStopAllStreams(reasonLabel, forceClosePc = false) {
             try {
                 sendRPCCommand('stop_camera_stream');
-            } catch (_) {}
-            try {
-                sendRPCCommand('reset_stream_engine');
             } catch (_) {}
             rbStopLocalStateOnly();
             if (forceClosePc || (pc && (pc.connectionState === 'failed' || pc.connectionState === 'closed'))) {
                 if (pc) { try { pc.close(); } catch (_) {} pc = null; }
             }
-            showToast(reasonLabel || 'تم إيقاف كافة وسائل البث المباشر وتفريغ العتاد', 'info');
-            rbRefreshStreamPane();
-        }
-
-        // 🔄 زر «تحديث البث» الشامل: إيقاف إجباري + قطع حزم + تفريغ العتاد + إعادة تفاوض اتصال نظيف
-        async function rbHardResetStreamEngine() {
-            showToast('🔄 جارٍ تحديث البث وإعادة تهيئة جميع القنوات والعتاد بالكامل...', 'info');
-            rbBcLog('تم النقر على «تحديث البث» الشامل ← قطع كافة الحزم وتفرغ العتاد وإعادة التهيئة');
-
-            try {
-                if (typeof recActiveM !== 'undefined') {
-                    ['screen', 'camera', 'audio'].forEach(k => {
-                        if (recActiveM[k] || (typeof recPending !== 'undefined' && recPending[k])) {
-                            try { stopRec(k); } catch (_) {}
-                        }
-                    });
-                }
-            } catch (_) {}
-
-            try { sendRPCCommand('stop_camera_stream'); } catch (_) {}
-            try { sendRPCCommand('reset_stream_engine'); } catch (_) {}
-
-            rbStopLocalStateOnly();
-
-            const targetId = activeTargetDeviceId || appConfig.targetDeviceId;
-            if (pc) {
-                try { pc.close(); } catch (_) {}
-                pc = null;
-            }
-
-            if (targetId && ws && ws.readyState === WebSocket.OPEN) {
-                try {
-                    initPeerConnection(targetId);
-                    setTimeout(() => {
-                        if (activeTargetDeviceId && ws && ws.readyState === WebSocket.OPEN) {
-                            createWebRTCOffer(targetId);
-                        }
-                    }, 400);
-                } catch (e) {
-                    console.warn('re-init offer failed', e);
-                }
-            }
-
-            showToast('✅ تم تحديث البث واستعادة الوضع الافتراضي للشبكة والعتاد والإشارات بنجاح', 'success');
+            showToast(reasonLabel || 'تم إيقاف كافة وسائل البث المباشر', 'info');
             rbRefreshStreamPane();
         }
         // بدء وسيلة البث (الأوامر القياسية للمضيف — نفس بروتوكول الربط والهاتف والنظام)
@@ -8552,11 +8886,8 @@
                         <button onclick="toggleLiveAudio()" class="rbv3-key ${streamState.audioEnabled ? 'rb-on' : 'rb-mute'}" title="${streamState.audioEnabled ? 'الصوت مفعّل — انقر للكتم' : 'الصوت مكتوم — انقر للتفعيل'}">
                             <span>${streamState.audioEnabled ? '🔊' : '🔇'}</span><span class="rbv3-key-label">صوتية</span>
                         </button>
-                        <button onclick="rbStopStreamSafe()" class="rbv3-key rb-stop ${on ? 'rb-ctl-stop-on' : 'rb-ctl-stop-off'}" data-rb-ctl-stop title="إيقاف كل وسائل البث فوراً وتفريغ العتاد">
+                        <button onclick="rbStopStreamSafe()" class="rbv3-key rb-stop ${on ? 'rb-ctl-stop-on' : 'rb-ctl-stop-off'}" data-rb-ctl-stop title="إيقاف كل وسائل البث فوراً">
                             <span>🛑</span><span class="rbv3-key-label">إيقاف</span>
-                        </button>
-                        <button onclick="rbHardResetStreamEngine()" class="rbv3-key bg-amber-950/60 hover:bg-amber-900 border border-amber-600/60 text-amber-300" title="تحديث وتطهير البث الحي — قطع كافة حزم الاتصال والعتاد وإعادة التهيئة حتماً">
-                            <span>🔄</span><span class="rbv3-key-label">تحديث</span>
                         </button>
                         <span class="rbv3-key-label" style="position:static;inset-inline:0;display:block;margin-top:2px;font-size:9px;color:#38bdf8;opacity:.8;">${on ? 'بث نشط: ' + modeLabel + ' — انقر الأيقونة نفسها للإيقاف' : 'لا بث نشط — انقر أيقونة للبدء'}</span>
                     </div>
@@ -8663,10 +8994,9 @@
 
         function rbBcStart(mode) {
             try {
-                const targetId = activeTargetDeviceId || appConfig.targetDeviceId;
-                if (!targetId) {
-                    showToast('اختر جهازاً مضيفاً أولاً لبدء البث المباشر', 'warning');
-                    rbBcLog('رفض البدء: لا يوجد جهاز مضيف محدد');
+                if (!(dataChannel && dataChannel.readyState === 'open')) {
+                    showToast('المحرك البرمجي يحتاج قناة البيانات حية — فعّل الربط الحي مع المضيف أولاً', 'warning');
+                    rbBcLog('رفض البدء: لا قناة بيانات مفتوحة');
                     return;
                 }
                 rbBc.framesSeen = false;
@@ -9129,8 +9459,7 @@
                     </button>
                     <button onclick="rbBcRenegotiate(false)" title="إنشاء عرض WebRTC جديد يدوياً للتعافي" class="bg-sky-700/60 hover:bg-sky-600 text-sky-100 border border-sky-500/40 px-3 py-2 rounded-xl text-[10px] font-bold transition">♻️ إعادة التفاوض</button>
                     <span class="flex-1"></span>
-                    <button onclick="rbStopStreamSafe()" data-rb-ctl-stop class="bg-rose-600 hover:bg-rose-500 font-bold px-3.5 py-2 rounded-xl transition active:scale-95 text-white ${streamState.active ? 'rb-ctl-stop-on shadow-lg shadow-rose-950/50' : 'rb-ctl-stop-off'}" title="إيقاف كل وسائل البث فوراً وتفريغ العتاد">🛑 إيقاف البث</button>
-                    <button onclick="rbHardResetStreamEngine()" class="bg-amber-600 hover:bg-amber-500 text-white font-bold px-3.5 py-2 rounded-xl transition shadow-lg shadow-amber-950/50 active:scale-95" title="تحديث وتطهير البث الحي — قطع كافة حزم الاتصال والعتاد وإعادة التهيئة">🔄 تحديث البث</button>
+                    <button onclick="rbStopStreamSafe()" data-rb-ctl-stop class="bg-rose-600 font-bold px-4 py-2 rounded-xl transition active:scale-95 ${streamState.active ? 'rb-ctl-stop-on shadow-lg shadow-rose-950/50' : 'rb-ctl-stop-off'}" title="إيقاف كل وسائل البث فوراً">🛑 إيقاف البث</button>
                 </div>
 
                 <div class="mt-3 bg-slate-950/70 border border-slate-800 rounded-xl p-2.5">
@@ -10796,9 +11125,6 @@
                     ${recBtn('camera')}
                     ${recBtn('audio')}
                     <span class="w-px h-6 bg-slate-700 mx-1"></span>
-                    <button onclick="rbHardResetStreamEngine()" title="تحديث وتطهير البث الحي — قطع كافة حزم الاتصال والعتاد وإعادة التهيئة حتمياً" class="px-3.5 py-2 rounded-xl font-bold transition flex items-center gap-1.5 active:scale-95 bg-amber-600 hover:bg-amber-500 text-white border border-amber-400 shadow-lg shadow-amber-950/40">
-                        <span>🔄</span><span class="text-[11px]">تحديث البث</span>
-                    </button>
                     <button onclick="openShortcutsDrawer()" title="فتح قائمة الاختصارات المنبثقة والوصول السريع" class="px-3.5 py-2 rounded-xl font-bold transition flex items-center gap-1.5 active:scale-95 bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-400 shadow-lg">
                         <span>⚡</span><span class="text-[11px]">قائمة الاختصارات المنبثقة</span>
                     </button>
@@ -10888,12 +11214,6 @@
             if (hud) hud.remove();
             showToast('⏹️ تم إيقاف التسجيل وحفظ المقاطع بنجاح في المجلد الأرشيفي 📁', 'success');
             refreshRecButtons();
-            setTimeout(() => {
-                try {
-                    if (typeof refreshCameraRecordsBox === 'function') refreshCameraRecordsBox();
-                    if (typeof refreshScreenRecordsBox === 'function') refreshScreenRecordsBox();
-                } catch (_) {}
-            }, 1200);
         }
 
         function applyRecStart(kind, prefs) {
@@ -11048,215 +11368,10 @@
                 <div id="rb-recordings-modal" class="hidden fixed inset-0 z-[70] items-center justify-center bg-black/70 backdrop-blur-sm p-2 md:p-4"></div>
                 <div id="rb-screenshot-modal" class="hidden fixed inset-0 z-[85] items-center justify-center bg-black/80 p-4"></div>
                 <div id="rb-location-modal" class="hidden fixed inset-0 z-[80] items-center justify-center bg-black/80 p-2 md:p-4"></div>
-                <div id="rb-hw-activity-modal" class="hidden fixed inset-0 z-[82] items-center justify-center bg-black/80 backdrop-blur-sm p-4"></div>
                 <div id="rb-host-snapshot-modal" class="hidden fixed inset-0 z-[70] items-center justify-center bg-black/70 backdrop-blur-sm p-4"></div>
                 <div id="rb-server-cache-modal" class="hidden fixed inset-0 z-[72] items-center justify-center bg-black/70 backdrop-blur-sm p-2 md:p-4"></div>
                 <div id="rb-shortcuts-modal" class="hidden fixed inset-0 z-[90] items-center justify-center bg-black/75 backdrop-blur-md p-4"></div>`;
             document.body.appendChild(shell);
-        }
-
-        // ==================== B30 — تتبع جلسات نشاط العتاد وسجل الفترات الزمني ====================
-        let hwSessionsStore = (function loadHwSessionsStore() {
-            try {
-                return JSON.parse(localStorage.getItem('rb_hw_sessions_v1') || '{}');
-            } catch (_) { return {}; }
-        })();
-
-        let hwCurrentActiveState = { camera: false, mic: false, audio: false, call: false, screen: false };
-        let hwActiveStartTs = { camera: 0, mic: 0, audio: 0, call: 0, screen: 0 };
-
-        function updateHwActivityStates(data) {
-            if (!data) return;
-            const now = Date.now();
-            const kinds = ['camera', 'mic', 'audio', 'call', 'screen'];
-
-            const activeMap = {
-                camera: data.isCameraActive === true || (typeof streamState !== 'undefined' && streamState.active && streamState.mode === 'camera'),
-                mic: data.isMicActive === true || (typeof streamState !== 'undefined' && streamState.active && streamState.audioEnabled),
-                audio: data.isAudioActive === true,
-                call: data.isCallActive === true,
-                screen: data.isScreenActive === true || (typeof streamState !== 'undefined' && streamState.active && streamState.mode === 'screen')
-            };
-
-            kinds.forEach(k => {
-                const isNowActive = activeMap[k] === true;
-                const wasActive = hwCurrentActiveState[k] === true;
-
-                if (isNowActive && !wasActive) {
-                    hwCurrentActiveState[k] = true;
-                    hwActiveStartTs[k] = now;
-                } else if (!isNowActive && wasActive) {
-                    hwCurrentActiveState[k] = false;
-                    const startTs = hwActiveStartTs[k] || now;
-                    const durationMs = Math.max(1000, now - startTs);
-                    hwActiveStartTs[k] = 0;
-
-                    if (!hwSessionsStore[k]) hwSessionsStore[k] = [];
-                    hwSessionsStore[k].unshift({ startTs, endTs: now, durationMs });
-                    hwSessionsStore[k] = hwSessionsStore[k].slice(0, 300);
-                    try { localStorage.setItem('rb_hw_sessions_v1', JSON.stringify(hwSessionsStore)); } catch (_) {}
-                }
-
-                updateHwIconUI(k, isNowActive);
-            });
-        }
-
-        function updateHwIconUI(kind, isActive) {
-            const dot = document.getElementById('hw-dot-' + kind);
-            const btn = document.getElementById('hw-btn-' + kind);
-            if (!dot || !btn) return;
-            if (isActive) {
-                dot.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-sm shadow-emerald-400';
-                btn.className = 'p-1 rounded-lg border border-emerald-500/60 bg-emerald-950/60 text-emerald-200 shadow-md shadow-emerald-950/50 transition flex items-center gap-0.5 active:scale-95';
-            } else {
-                dot.className = 'w-1.5 h-1.5 rounded-full bg-slate-600';
-                btn.className = 'p-1 rounded-lg border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-slate-400 transition flex items-center gap-0.5 active:scale-95';
-            }
-        }
-
-        function getHwKindMeta(kind) {
-            const map = {
-                camera: { label: 'الكاميرا', icon: '📷', desc: 'تصوير أو بث حي أو تسجيل مرئي' },
-                mic: { label: 'الميكروفون', icon: '🎙️', desc: 'تسجيل صوت أو بث صوتي أو مكالمة' },
-                audio: { label: 'مكبر الصوت', icon: '🔊', desc: 'تشغيل صوت وسائط أو فيديو' },
-                call: { label: 'المكالمات', icon: '📞', desc: 'إجراء أو استقبال مكالمة هاتفية' },
-                screen: { label: 'الشاشة', icon: '📱', desc: 'الشاشة مفتوحة ومضاءة وتفاعل' }
-            };
-            return map[kind] || { label: kind, icon: '⚙️', desc: 'خدمة عتاد' };
-        }
-
-        function calcHwStats(kind, timeframe) {
-            const now = Date.now();
-            const tfMs = timeframe === 'hourly' ? 3600000 : timeframe === 'daily' ? 86400000 : timeframe === 'weekly' ? 604800000 : timeframe === 'monthly' ? 2592000000 : 0;
-            const all = hwSessionsStore[kind] || [];
-            const filtered = tfMs > 0 ? all.filter(s => (now - (s.endTs || s.startTs)) <= tfMs) : all;
-            let totalMs = filtered.reduce((acc, s) => acc + (s.durationMs || 0), 0);
-            if (hwCurrentActiveState[kind] && hwActiveStartTs[kind] > 0) {
-                totalMs += Math.max(0, now - hwActiveStartTs[kind]);
-            }
-            return {
-                totalMs,
-                count: filtered.length + (hwCurrentActiveState[kind] ? 1 : 0),
-                sessions: filtered
-            };
-        }
-
-        function fmtDurationAr(ms) {
-            if (ms <= 0) return '0 ثانية';
-            const totalSec = Math.floor(ms / 1000);
-            const hrs = Math.floor(totalSec / 3600);
-            const mins = Math.floor((totalSec % 3600) / 60);
-            const secs = totalSec % 60;
-            const parts = [];
-            if (hrs > 0) parts.push(hrs + ' ساعة');
-            if (mins > 0) parts.push(mins + ' دقيقة');
-            if (secs > 0 || !parts.length) parts.push(secs + ' ثانية');
-            return parts.join(' و ');
-        }
-
-        let activeHwModalKind = 'camera';
-        let activeHwModalTimeframe = 'daily';
-
-        function openHwActivityModal(kind, tf) {
-            ensureStreamModalsShell();
-            if (kind) activeHwModalKind = kind;
-            if (tf) activeHwModalTimeframe = tf;
-            const modal = document.getElementById('rb-hw-activity-modal');
-            if (!modal) return;
-
-            renderHwActivityModalContent();
-            modal.classList.replace('hidden', 'flex');
-        }
-
-        function renderHwActivityModalContent() {
-            const modal = document.getElementById('rb-hw-activity-modal');
-            if (!modal) return;
-            const kind = activeHwModalKind;
-            const tf = activeHwModalTimeframe;
-            const meta = getHwKindMeta(kind);
-            const isActive = hwCurrentActiveState[kind] === true;
-            const stats = calcHwStats(kind, tf);
-
-            const tfs = [
-                ['hourly', 'ساعي'],
-                ['daily', 'يومي'],
-                ['weekly', 'أسبوعي'],
-                ['monthly', 'شهري'],
-                ['all', 'كل الفترة']
-            ];
-
-            const rowsHtml = (stats.sessions || []).map((s, i) => `
-                <tr class="text-slate-300 hover:bg-slate-800/50 text-[11px]">
-                    <td class="px-2.5 py-2 font-mono text-slate-500 text-center">#${stats.sessions.length - i}</td>
-                    <td class="px-2.5 py-2 font-mono text-right" style="direction:ltr">${recFmtDate(s.startTs)} → ${recFmtDate(s.endTs)}</td>
-                    <td class="px-2.5 py-2 font-bold text-teal-300 text-left">${fmtDurationAr(s.durationMs)}</td>
-                </tr>
-            `).join('');
-
-            modal.innerHTML = `
-                <div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-2xl shadow-2xl p-4">
-                    <div class="flex items-center justify-between pb-3 mb-3 border-b border-slate-800">
-                        <div class="flex items-center gap-2.5">
-                            <span class="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-xl">${meta.icon}</span>
-                            <div>
-                                <h3 class="text-sm font-bold text-slate-100 flex items-center gap-2">
-                                    <span>سجل ومدد نشاط ${meta.label}</span>
-                                    <span class="text-[10px] px-2 py-0.5 rounded-full font-bold border ${isActive ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/50 animate-pulse' : 'bg-slate-800 text-slate-400 border-slate-700'}">
-                                        ${isActive ? '🟢 نشط حالياً' : '⚪ غير نشط'}
-                                    </span>
-                                </h3>
-                                <p class="text-[10.5px] text-slate-400">${meta.desc}</p>
-                            </div>
-                        </div>
-                        <button onclick="closeHwActivityModal()" class="text-slate-400 hover:text-white text-lg px-2">✕</button>
-                    </div>
-
-                    <div class="flex items-center justify-between gap-2 flex-wrap mb-3">
-                        <div class="flex rounded-xl overflow-hidden border border-slate-700 bg-slate-950 p-0.5">
-                            ${tfs.map(([k, l]) => `
-                                <button onclick="setHwModalTimeframe('${k}')" class="px-3 py-1 text-[11px] font-bold rounded-lg transition ${tf === k ? 'bg-teal-600 text-white' : 'text-slate-400 hover:text-slate-200'}">${l}</button>
-                            `).join('')}
-                        </div>
-                        <button onclick="switchTab('stats'); closeHwActivityModal();" class="px-3 py-1.5 text-[11px] font-bold bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/40 rounded-xl transition flex items-center gap-1">
-                            📊 عرض التقرير الشامل في الإحصائيات
-                        </button>
-                    </div>
-
-                    <div class="grid grid-cols-2 gap-3 mb-3">
-                        <div class="bg-slate-950/80 border border-slate-800 p-3 rounded-xl">
-                            <p class="text-[10px] text-slate-400">إجمالي مدة النشاط في النطاق</p>
-                            <p class="text-sm font-bold text-teal-300 mt-0.5">${fmtDurationAr(stats.totalMs)}</p>
-                        </div>
-                        <div class="bg-slate-950/80 border border-slate-800 p-3 rounded-xl">
-                            <p class="text-[10px] text-slate-400">عدد مرات الاستخدام والنشاط</p>
-                            <p class="text-sm font-bold text-amber-300 mt-0.5">${stats.count} مرة</p>
-                        </div>
-                    </div>
-
-                    <div class="rounded-xl border border-slate-800 overflow-hidden max-h-56 overflow-y-auto custom-scrollbar">
-                        ${stats.sessions.length ? `
-                        <table class="w-full text-right">
-                            <thead class="bg-slate-950 text-slate-400 text-[10px]">
-                                <tr><th class="px-2.5 py-1.5 text-center">#</th><th class="px-2.5 py-1.5 text-right">الفترة الزمنية (من → إلى)</th><th class="px-2.5 py-1.5 text-left">المدة</th></tr>
-                            </thead>
-                            <tbody class="divide-y divide-slate-800/60">${rowsHtml}</tbody>
-                        </table>` : '<div class="p-4 text-center text-xs text-slate-500">لا جلسات مسجلة ضمن هذه الفترة الزمنية.</div>'}
-                    </div>
-
-                    <div class="mt-3 text-left">
-                        <button onclick="closeHwActivityModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl transition">إغلاق</button>
-                    </div>
-                </div>`;
-        }
-
-        function setHwModalTimeframe(tf) {
-            activeHwModalTimeframe = tf;
-            renderHwActivityModalContent();
-        }
-
-        function closeHwActivityModal() {
-            const modal = document.getElementById('rb-hw-activity-modal');
-            if (modal) modal.classList.replace('flex', 'hidden');
         }
 
         // ============================================================
@@ -12082,15 +12197,9 @@
                         <select id="rb-loc-window" onchange="redrawLocationMap()" class="bg-slate-800 border border-slate-600 rounded-xl px-2 py-1.5 text-[11px] text-slate-100">
                             <option value="5">آخر 5 دقائق</option>
                             <option value="10">آخر 10 دقائق</option>
-                            <option value="30">آخر 30 دقيقة</option>
                             <option value="60" selected>آخر ساعة</option>
                             <option value="120">آخر ساعتين</option>
-                            <option value="360">آخر 6 ساعات</option>
-                            <option value="720">آخر 12 ساعة</option>
-                            <option value="1440">آخر 24 ساعة (يوم)</option>
-                            <option value="10080">آخر أسبوع</option>
-                            <option value="43200">آخر 30 يوماً</option>
-                            <option value="all">كل السجل الدائم</option>
+                            <option value="all">كل السجل</option>
                         </select>
                         <button onclick="refreshLocationPoints()" title="تحديث نقاط السجل" class="px-2.5 py-1.5 rounded-xl text-[11px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700"> ⟳ النقاط </button>
                         <button onclick="refreshMapTiles()" title="إعادة جلب بلاطات الصور الفضائية والخريطة" class="px-2.5 py-1.5 rounded-xl text-[11px] font-bold bg-teal-950/80 hover:bg-teal-900 text-teal-300 border border-teal-700/60 transition"> 🗺️ إعادة جلب البلاطات </button>
@@ -12275,33 +12384,7 @@
             const now = Date.now();
             const winEl = document.getElementById('rb-loc-window');
             const win = winEl ? winEl.value : '60';
-            const selMap = {
-                '5': 5 * 60e3,
-                '10': 10 * 60e3,
-                '30': 30 * 60e3,
-                '60': 60 * 60e3,
-                '120': 120 * 60e3,
-                '360': 360 * 60e3,
-                '720': 720 * 60e3,
-                '1440': 1440 * 60e3,
-                '10080': 10080 * 60e3,
-                '43200': 43200 * 60e3
-            };
-            const sel = selMap[win];
-            const winLabels = {
-                '5': '5 دقائق',
-                '10': '10 دقائق',
-                '30': '30 دقيقة',
-                '60': 'ساعة',
-                '120': 'ساعتين',
-                '360': '6 ساعات',
-                '720': '12 ساعة',
-                '1440': '24 ساعة (يوم)',
-                '10080': 'أسبوع',
-                '43200': '30 يوماً',
-                'all': 'كل السجل الدائم'
-            };
-            const winLabel = winLabels[win] || 'الفترة المحددة';
+            const sel = { '5': 5 * 60e3, '10': 10 * 60e3, '60': 60 * 60e3, '120': 120 * 60e3 }[win];
             const all = locationSourcePoints().filter(p => p && typeof p.lat === 'number' && typeof p.lng === 'number');
             const pts = sel ? all.filter(p => (now - (Number(p.ts) || 0)) <= sel) : all;
             try { rbLocMarkersLayer.clearLayers(); } catch (_) { rbLocMarkersLayer = window.L.layerGroup().addTo(rbLocMap); }
@@ -12333,6 +12416,7 @@
                         }
                     } catch (_) {}
                     const anchorAgeMin = Math.max(0, Math.round((now - (Number(anchor.ts) || 0)) / 60000));
+                    const winLabel = win === '5' ? '5 دقائق' : win === '10' ? '10 دقائق' : win === '120' ? 'ساعتين' : 'ساعة';
                     if (summary) summary.innerText = 'لا نقاط ضمن نطاق ' + winLabel + ' — تثبيت الخريطة على آخر نقطة مسجلة (منذ ' + anchorAgeMin + ' د) • إجمالي السجل: ' + all.length + ' نقطة';
                 } else {
                     if (summary) summary.innerText = 'لا نقاط تسجيل بعد — فعّل فاصل تسجيل النقاط من الهاتف المضيف أو انتظر أول نبضة موقع حية';
@@ -13321,8 +13405,32 @@
             }
         }
 
-        // --- التبديل ومزامنة زر نمط الاتصال الهجين والمباشر والترحيل السحابي ---
-        // الدالة الموحدة toggleTransportMode معرفة أعلاه وتحدث الواجهة فوراً عند كل نقرة
+        // --- التبديل بين طريقة WebRTC P2P وطريقة الترحيل السحابية WSS Relay ---
+        function toggleTransportMode() {
+            const cur = appConfig.connectionProfile || 'HYBRID';
+            const next = (cur === 'HYBRID') ? 'RENDER_ONLY' : 'HYBRID';
+            setConnectionProfile(next);
+            updateTransportModeBtnUI();
+            if (next === 'RENDER_ONLY') {
+                showToast('⚡ تم التبديل إلى طريقة الترحيل السحابية WSS Relay (ثبات مطلق على كل الشبكات والحوائط النارية)', 'info');
+            } else {
+                showToast('🚀 تم التبديل إلى طريقة WebRTC P2P المباشرة (السرعة والتأخير المنخفض)', 'success');
+            }
+        }
+
+        function updateTransportModeBtnUI() {
+            const btn = document.getElementById('transport-mode-btn');
+            const lbl = document.getElementById('transport-mode-label');
+            const cur = appConfig.connectionProfile || 'HYBRID';
+            if (!lbl) return;
+            if (cur === 'RENDER_ONLY') {
+                lbl.innerText = '📡 ترحيل (WSS Relay)';
+                if (btn) btn.className = 'bg-amber-600 hover:bg-amber-500 active:scale-95 text-white px-2.5 md:px-3.5 py-1.5 md:py-2 rounded-xl text-xs font-bold shadow-md transition flex items-center gap-1.5 shrink-0';
+            } else {
+                lbl.innerText = '⚡ هجين (P2P + Relay)';
+                if (btn) btn.className = 'bg-sky-600 hover:bg-sky-500 active:scale-95 text-white px-2.5 md:px-3.5 py-1.5 md:py-2 rounded-xl text-xs font-bold shadow-md transition flex items-center gap-1.5 shrink-0';
+            }
+        }
 
         // --- 3. فحص الجاهزية الشاملة بنقرة واحدة (الميزة 4) ---
         async function runOneClickHealthCheck() {

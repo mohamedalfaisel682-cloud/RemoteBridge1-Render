@@ -1,14 +1,6 @@
-# RemoteBridge Pro Studio — RBstudioPRO (RBstudioAS)
+# RemoteBridge Pro Studio — RBstudioPRO
 
 تطبيق أندرويد للتحكم عن بعد بين واجهة ويب (متحكم) وتطبيق أندرويد (مضيف) باستخدام `WebRTC`، وخادم إشارات، وبروتوكول `RPC`.
-
-## 📌 النسخة المعتمدة للاختبار والتطوير لأول مرة
-
-- **اسم التطبيق (App Name):** `RBstudioAS`
-- **معرف الحزمة (Application ID & Namespace):** `com.rbstudioas`
-- **رمز الإصدار (Version Code):** `12`
-- **اسم الإصدار (Version Name):** `1.5.2`
-- **حالة الاعتماد:** النسخة الأولى الناجحة والمكتملة والمعتمدة رسمياً كبدء أساس للاختبار والتطوير المباشر.
 
 ## 📋 الميزات
 
@@ -112,34 +104,24 @@ node extract_check.mjs
 
 ## 🔧 الإعدادات المهمة
 
-### خادم Metered TURN / STUN المعتمد افتراضياً
-
-تم دمج وتوثيق خادم Metered TURN المعتمد كإعداد افتراضي دائم في الكود المصدري وواجهة المتحكم الويب:
-
-- **STUN Server:** `stun:stun.relay.metered.ca:80`
-- **TURN Server:** `turn:standard.relay.metered.ca:80`
-- **Username:** `76605207fb94657c3cfb5512`
-- **Credential / Password:** `/Rhb/9cPGGJsPVXE`
-- **API Key:** `a5062af1ec6052b35444b0bf853d161e2fc3`
-
-### قائمة ICE Servers المعتمدة:
-1. `stun:stun.relay.metered.ca:80`
-2. `turn:standard.relay.metered.ca:80` (UDP)
-3. `turn:standard.relay.metered.ca:80?transport=tcp` (TCP)
-4. `turn:standard.relay.metered.ca:443` (UDP/TLS)
-5. `turns:standard.relay.metered.ca:443?transport=tcp` (TURNS/TLS)
-
 ### متغيرات البيئة (`.env`)
 
-انسخ `.env.example` إلى `.env`:
+انسخ `.env.example` إلى `.env` وعدّل القيم:
 
 ```env
-TURN_SERVER_URL=turn:standard.relay.metered.ca:80
-TURN_USERNAME=76605207fb94657c3cfb5512
-TURN_PASSWORD=/Rhb/9cPGGJsPVXE
-METERED_API_KEY=a5062af1ec6052b35444b0bf853d161e2fc3
+TURN_SERVER_URL=turn:turn.remotebridge.app:3478?transport=udp
+TURN_USERNAME=webrtcuser
+TURN_PASSWORD=StrongTurnPassword2026!
 SIGNALING_SERVER_URL=wss://remotebridge1.onrender.com/ws
 ```
+
+### إعدادات `TURN` في التطبيق
+
+من شاشة الإعدادات في التطبيق، أضف:
+
+- عنوان خادم `TURN`.
+- اسم المستخدم.
+- كلمة المرور.
 
 ## 📊 مراقبة الصحة والمقاييس
 
