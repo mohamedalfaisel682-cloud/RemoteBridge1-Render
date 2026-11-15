@@ -1,18 +1,75 @@
-version: '3.8'
+version: "3.8"
+
+# =============================================================================
+# RemoteBridge — تشغيل محلي كامل: خادم الإشارات + خادم TURN (coturn)
+# -----------------------------------------------------------------------------
+# التشغيل:
+#   docker compose -f docker-compose.turn.yml up -d --build
+# المراقبة:
+#   docker compose -f docker-compose.turn.yml logs -f coturn
+# الإيقاف:
+#   docker compose -f docker-compose.turn.yml down
+#
+# متغيرات محلية مستقلة عن Metered (لا تستخدم TURN_USERNAME/TURN_PASSWORD السحابيين):
+#   LOCAL_TURN_USERNAME  اسم مستخدم coturn المحلي   (افتراضي: webrtcuser)
+#   LOCAL_TURN_PASSWORD  كلمة مرور coturn المحلية    (افتراضي: غيّرها فوراً)
+#   LOCAL_TURN_REALM     نطاق المصادقة المحلي        (افتراضي: remotebridge)
+#   TURN_MIN_PORT        أول منفذ للتتابع            (افتراضي: 49160)
+#   TURN_MAX_PORT        آخر منفذ للتتابع            (افتراضي: 49200)
+# =============================================================================
 
 services:
-  # خادم الإشارات (RemoteBridge Signaling Server) - يعمل عبر خادم ر_render فقط
+  # ---------------------------------------------------------------------------
+  # 1) خادم الإشارات (WebSocket) — يخدم أيضاً لوحة الويب indexMergeFull.html
+  # ---------------------------------------------------------------------------
   signaling:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: remotebridge-signaling
-    network_mode: host
     restart: unless-stopped
     environment:
       - PORT=10000
     ports:
       - "10000:10000"
-      - "9090:9090"
 
-volumes: {}
+  # ---------------------------------------------------------------------------
+  # 2) خادم TURN الحقيقي (coturn) — المرحلة الاحتياطية عند فشل الاتصال المباشر
+  #    TURN لا يبث الفيديو بنفسه؛ بل يمرر حزم WebRTC عند تعذّر P2P.
+  # ---------------------------------------------------------------------------
+  coturn:
+    image: coturn/coturn:4.18.0-r0
+    container_name: remotebridge-turn
+    restart: unless-stopped
+    command:
+      # منفذ الاستماع القياسي (UDP + TCP)
+      - --listening-port=3478
+      # بصمة WebRTC الإلزامية لبعض المتصفحات
+      - --fingerprint
+      # مصادقة ثابتة باسم مستخدم وكلمة مرور (تطابق حقلي TURN في اللوحة)
+      - --lt-cred-mech
+      - --user=${LOCAL_TURN_USERNAME:-webrtcuser}:${LOCAL_TURN_PASSWORD:-StrongTurnPassword2026!}
+      - --realm=${LOCAL_TURN_REALM:-remotebridge}
+      # نطاق منافذ التتابع (كل جلسة تستهلك منفذاً واحداً)
+      - --min-port=${TURN_MIN_PORT:-49160}
+      - --max-port=${TURN_MAX_PORT:-49200}
+      # لا نفعّل TLS/DTLS الآن لعدم وجود شهادة؛ أضفها لاحقاً عند النشر السحابي
+      - --no-tls
+      - --no-dtls
+      # تحصينات أساسية
+      - --no-multicast-peers
+      - --no-cli
+      - --stale-nonce=600
+      - --log-file=stdout
+      # -----------------------------------------------------------------------
+      # مهم جداً عند الوصول من جهاز آخر على نفس الشبكة المحلية:
+      # أزل التعليق وضع عنوان IP لجهاز الكمبيوتر على الشبكة (وليس 127.0.0.1).
+      # مثال: - --external-ip=192.168.1.50
+      # -----------------------------------------------------------------------
+      # - --external-ip=192.168.1.50
+    ports:
+      - "3478:3478/udp"
+      - "3478:3478/tcp"
+      # منفذ بديل شائع لاختراق الجدران النارية (اختياري):
+      # - "443:3478/tcp"
+      - "${TURN_MIN_PORT:-49160}-${TURN_MAX_PORT:-49200}:${TURN_MIN_PORT:-49160}-${TURN_MAX_PORT:-49200}/udp"

