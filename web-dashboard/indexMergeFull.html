@@ -1252,6 +1252,92 @@
             60% { box-shadow: 0 0 0 8px rgba(56,189,248,0); }
             100% { box-shadow: 0 0 0 0 rgba(56,189,248,0); }
         }
+
+        /* ============================================================
+           B50 — استجابة موحّدة للهاتف والكمبيوتر: تبويبات الإعدادات،
+           النوافذ، مربعات النص، الجداول، الإشعارات، والاتجاه.
+           ============================================================ */
+        .settings-submenu[hidden] { display: none !important; }
+        .rb-sg-chipbar {
+            display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+            margin-bottom: 12px; padding: 6px; border-radius: 14px;
+            background: rgba(2,6,23,.62); border: 1px solid #1e293b;
+        }
+        .rb-sg-chip {
+            display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+            padding: 8px 12px; border-radius: 10px; font-size: 12px; font-weight: 700;
+            background: #1e293b; color: #cbd5e1; border: 1px solid #334155;
+            cursor: pointer; transition: background .16s ease, border-color .16s ease, transform .12s ease;
+            min-height: 38px;
+        }
+        .rb-sg-chip:hover { background: #334155; color: #f1f5f9; border-color: #475569; }
+        .rb-sg-chip:active { transform: scale(.97); }
+        .rb-sg-chip.rb-sg-tab-on {
+            background: rgba(16,185,129,.2); color: #86efac;
+            border-color: rgba(16,185,129,.5); box-shadow: 0 0 10px rgba(16,185,129,.12);
+        }
+        html[dir="ltr"] .rb-notif-pop,
+        html[dir="ltr"] .rb-rec-menu { right: auto; left: 0; }
+        html[dir="ltr"] .rb-notif-preview { right: auto; left: 0; }
+
+        @media (max-width: 767px) {
+            html, body { max-width: 100%; overflow-x: hidden; }
+            #main-content { padding: 8px !important; gap: 10px !important; }
+            .glass-panel { border-radius: 14px !important; }
+            h1, h2, h3 { line-height: 1.35; overflow-wrap: anywhere; }
+            .rb-notif-text, .rb-notif-title, .rb-saved-name, .lw-title, .lw-sub,
+            .rb-hw-event-title, .bubble-text { overflow-wrap: anywhere; word-break: break-word; }
+            /* منع تكبير iOS/أندرويد التلقائي عند التركيز */
+            input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+            textarea, select { font-size: 16px !important; min-height: 42px; }
+            textarea { min-height: 84px; }
+            button, .settings-subitem, .rb-sg-chip, .rb-prio-btn { -webkit-tap-highlight-color: transparent; }
+            button { touch-action: manipulation; }
+            .tab-btn-mobile { min-height: 40px; padding: 9px 12px; font-size: 12px !important; }
+            .rb-sg-chipbar {
+                position: sticky; top: 96px; z-index: 22;
+                background: rgba(2,6,23,.94); backdrop-filter: blur(12px);
+                box-shadow: 0 8px 22px rgba(2,6,23,.45);
+            }
+            .rb-sg-chip { flex: 1 1 130px; min-height: 42px; font-size: 12px; }
+            .settings-subitem { min-height: 40px; }
+            /* النوافذ واللوحات: لا تتجاوز الشاشة أبداً */
+            .chat-window, .rb-lightwin { max-width: 97vw !important; max-height: 92dvh !important; }
+            .chat-window { border-radius: 16px !important; }
+            .chat-header { padding: 10px 12px !important; gap: 8px; }
+            .chat-body { padding: 10px !important; gap: 8px !important; }
+            .chat-footer { padding: 8px !important; gap: 6px; flex-wrap: wrap; }
+            #rb-stream-modals > div { padding: 8px !important; }
+            #rb-stream-modals > div > div:first-child { max-width: 98vw !important; max-height: 94dvh !important; }
+            .rb-notif-pop, .rb-rec-menu { width: min(92vw, 310px); }
+            .rb-notif-preview { width: min(92vw, 330px); }
+            .rb-notif-center-list { max-height: 62vh; }
+            .rb-prio-btn { width: 34px; height: 34px; }
+            .rb-prio-btn.rb-prio-mini { width: 30px; height: 30px; }
+            /* الجداول تتمرر أفقياً بدل كسر الصفحة */
+            table { display: block; width: 100%; overflow-x: auto; white-space: nowrap; }
+            .rb-lightwin .lw-row { flex-wrap: wrap; }
+            .rb-hw-card { padding: 8px; }
+            .rb-hw-card .rb-hw-val { font-size: 12px; }
+            .rb-saved-row { flex-wrap: wrap; }
+            .rb-saved-name { word-break: break-all; }
+            .rb-mp-chip, .rbv3-stage-clock { font-size: 12px !important; }
+            /* أزرار متجاورة تلتف بدل الضغط */
+            .flex-wrap { row-gap: 6px; }
+            .rb-sg-chipbar, .settings-group { scroll-margin-top: 150px; }
+            /* المساحات الآمنة للهواتف ذات الحافة */
+            body { padding-bottom: env(safe-area-inset-bottom, 0); }
+        }
+
+        @media (max-width: 390px) {
+            .rb-sg-chip { flex: 1 1 100%; }
+            .rb-prio-btn { width: 32px; height: 32px; }
+        }
+
+        @media (hover: none) {
+            .rb-card-lift:hover { transform: none; box-shadow: none; }
+            button:active { transform: scale(.97); }
+        }
     </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col custom-scrollbar selection:bg-emerald-500 selection:text-slate-950 overflow-x-hidden">
@@ -1321,14 +1407,10 @@
         <button onclick="switchTab('contacts')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">📇 الأسماء <span class="tab-state-dot" data-tab-dot="contacts" title="حالة الميزة الحيّة"></span> <span id="badge-contacts-m" class="tab-badge" hidden>0</span></button>
         <button onclick="switchTab('sms')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">💬 الرسائل <span class="tab-state-dot" data-tab-dot="sms" title="حالة الميزة الحيّة"></span> <span id="badge-sms-m" class="tab-badge" hidden>0</span></button>
         <button onclick="switchTab('calls')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">📞 المكالمات <span class="tab-state-dot" data-tab-dot="calls" title="حالة الميزة الحيّة"></span> <span id="badge-calls-m" class="tab-badge" hidden>0</span></button>
-        <button onclick="switchTab('settings')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">⚙️ الإعدادات <span class="tab-state-dot" data-tab-dot="settings" title="حالة الميزة الحيّة"></span></button>
-        <button onclick="switchTab('commands')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">⚡ الأوامر</button>
-        <button onclick="switchTab('advanced')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">🛠️ التحكم المتقدم <span id="badge-advanced-m" class="tab-badge" hidden>0</span></button>
+        <button onclick="switchTab('settings')" id="settings-tab-btn-m" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">⚙️ الإعدادات <span class="tab-state-dot" data-tab-dot="settings" title="حالة الميزة الحيّة"></span></button>
+        <button onclick="switchTab('commands')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">🛠️ التحكم المتقدم <span id="badge-advanced-m" class="tab-badge" hidden>0</span></button>
         <button onclick="switchTab('stats')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">📈 الإحصائيات</button>
         <button onclick="switchTab('sync')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">🛰️ المزامنة</button>
-        <button onclick="openSettingsGroupTab('connection')" data-sg-key="connection" class="tab-btn-mobile rb-sg-tab px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">🔌 اتصال</button>
-        <button onclick="openSettingsGroupTab('ui')" data-sg-key="ui" class="tab-btn-mobile rb-sg-tab px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">🎨 واجهة</button>
-        <button onclick="openSettingsGroupTab('quick')" data-sg-key="quick" class="tab-btn-mobile rb-sg-tab px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">✨ سريعة</button>
     </div>
 
     <!-- Main Content Layout (Desktop Grid / Mobile Full Width) -->
@@ -1364,20 +1446,17 @@
                     <span class="flex items-center gap-2.5 text-xs"><span class="tab-emoji">📞</span> سجل المكالمات<span class="tab-state-dot" data-tab-dot="calls" title="حالة الميزة الحيّة"></span></span>
                     <span id="badge-calls" class="tab-badge" hidden>0</span>
                 </button>
-                <button onclick="switchTab('settings')" id="settings-tab-btn" class="tab-btn w-full text-right px-3.5 py-2.5 rounded-xl hover:bg-slate-800/80 text-slate-300 font-medium transition flex items-center justify-between group">
-                    <span class="flex items-center gap-2.5 text-xs"><span class="tab-emoji">⚙️</span> الإعدادات والبروفايلات<span class="tab-state-dot" data-tab-dot="settings" title="حالة الميزة الحيّة"></span></span>
+                <button onclick="switchTab('settings')" id="settings-tab-btn" title="نقرة واحدة: فتح التبويبات الفرعية أسفل التبويب · نقرة ثانية: دمج كل المجموعات داخل اللوحة" class="tab-btn w-full text-right px-3.5 py-2.5 rounded-xl hover:bg-slate-800/80 text-slate-300 font-medium transition flex items-center justify-between group">
+                    <span class="flex items-center gap-2.5 text-xs"><span class="tab-emoji">⚙️</span> الإعدادات<span class="tab-state-dot" data-tab-dot="settings" title="حالة الميزة الحيّة"></span></span>
                     <span id="settings-chev" class="text-[10px] text-slate-500 transition-transform" style="transition-duration:.2s">▾</span>
                 </button>
-                <div id="settings-submenu" hidden>
-                    <button onclick="switchSettingsGroup('connection')" class="settings-subitem" data-sg="connection"><span>🔌</span><span>إعدادات الاتصال والربط</span></button>
-                    <button onclick="switchSettingsGroup('ui')" class="settings-subitem" data-sg="ui"><span>🎨</span><span>إعدادات الواجهة</span></button>
-                    <button onclick="switchSettingsGroup('quick')" class="settings-subitem" data-sg="quick"><span>⚡</span><span>إعدادات الخيارات السريعة</span></button>
+                <div id="settings-submenu" class="settings-submenu" hidden>
+                    <button onclick="openSettingsGroupTab('ui')" class="settings-subitem" data-sg="ui"><span>🎨</span><span>الواجهة والإشعارات</span></button>
+                    <button onclick="openSettingsGroupTab('connection')" class="settings-subitem" data-sg="connection"><span>🔌</span><span>الاتصالات والربط</span></button>
+                    <button onclick="openSettingsGroupTab('quick')" class="settings-subitem" data-sg="quick"><span>⚡</span><span>الخيارات السريعة</span></button>
                 </div>
                 <button onclick="switchTab('commands')" class="tab-btn w-full text-right px-3.5 py-2.5 rounded-xl hover:bg-slate-800/80 text-slate-300 font-medium transition flex items-center justify-between group">
-                    <span class="flex items-center gap-2.5 text-xs"><span class="tab-emoji">⚡</span> الأوامر والتحكم البعيد</span>
-                </button>
-                <button onclick="switchTab('advanced')" class="tab-btn w-full text-right px-3.5 py-2.5 rounded-xl hover:bg-slate-800/80 text-slate-300 font-medium transition flex items-center justify-between group">
-                    <span class="flex items-center gap-2.5 text-xs"><span class="tab-emoji">🛠️</span> التحكم والأوامر المتقدمة<span class="tab-state-dot" data-tab-dot="advanced" title="مراقبة تغيّر العتاد والخدمات"></span></span>
+                    <span class="flex items-center gap-2.5 text-xs"><span class="tab-emoji">🛠️</span> التحكم المتقدم<span class="tab-state-dot" data-tab-dot="advanced" title="مراقبة تغيّر العتاد والخدمات"></span></span>
                     <span id="badge-advanced" class="tab-badge" hidden>0</span>
                 </button>
                 <button onclick="switchTab('stats')" class="tab-btn w-full text-right px-3.5 py-2.5 rounded-xl hover:bg-slate-800/80 text-slate-300 font-medium transition flex items-center justify-between group">
@@ -1385,16 +1464,6 @@
                 </button>
                 <button onclick="switchTab('sync')" class="tab-btn w-full text-right px-3.5 py-2.5 rounded-xl hover:bg-slate-800/80 text-slate-300 font-medium transition flex items-center justify-between group">
                     <span class="flex items-center gap-2.5 text-xs"><span class="tab-emoji">🛰️</span> محرك مزامنة الإعدادات السريعة</span>
-                </button>
-                <div class="px-3 py-1 text-[11px] font-bold text-slate-500 uppercase tracking-wider">مجموعات الإعدادات كتبويبات</div>
-                <button onclick="openSettingsGroupTab('connection')" data-sg-key="connection" class="tab-btn rb-sg-tab w-full text-right px-3.5 py-2 rounded-xl hover:bg-slate-800/80 text-slate-300 font-medium transition flex items-center justify-between group">
-                    <span class="flex items-center gap-2.5 text-xs"><span class="tab-emoji">🔌</span> إعدادات الاتصال والربط</span>
-                </button>
-                <button onclick="openSettingsGroupTab('ui')" data-sg-key="ui" class="tab-btn rb-sg-tab w-full text-right px-3.5 py-2 rounded-xl hover:bg-slate-800/80 text-slate-300 font-medium transition flex items-center justify-between group">
-                    <span class="flex items-center gap-2.5 text-xs"><span class="tab-emoji">🎨</span> إعدادات الواجهة</span>
-                </button>
-                <button onclick="openSettingsGroupTab('quick')" data-sg-key="quick" class="tab-btn rb-sg-tab w-full text-right px-3.5 py-2 rounded-xl hover:bg-slate-800/80 text-slate-300 font-medium transition flex items-center justify-between group">
-                    <span class="flex items-center gap-2.5 text-xs"><span class="tab-emoji">✨</span> الخيارات السريعة (مزامنة مع المضيف)</span>
                 </button>
             </nav>
 
@@ -1826,13 +1895,41 @@
 
         // ===== B4 — صيغة الوقت/التاريخ بالأرقام الإنجليزية (Latin digits) بخط أوضح =====
         // تُستخدم في كل ترويسة الوقت داخل لوحة الويب: رسائل/مكالمات/إشعارات/تسجيلات/الخريطة
+        // ===== B50 — دوال الوقت والمدة الموحّدة على كل المشروع =====
+        // الوقت: 00:00 مع AM/PM بالإنجليزية أو «صباحاً/مساءً» بالعربية حسب لغة الواجهة.
+        // المدة: 00:00:00 (ساعة:دقيقة:ثانية) مع إضافة «N يوم/day» عند تجاوز 24 ساعة.
+        function rbUiIsArabic() {
+            try { return document.documentElement.lang === 'ar'; } catch (_) { return false; }
+        }
+        function rbFmtClock(ts) {
+            try {
+                const d = (ts instanceof Date) ? ts : new Date(Number(ts) || Date.now());
+                if (isNaN(d.getTime())) return '—';
+                let h = d.getHours();
+                const mm = String(d.getMinutes()).padStart(2, '0');
+                const isAm = h < 12;
+                let h12 = h % 12; if (h12 === 0) h12 = 12;
+                const suffix = rbUiIsArabic() ? (isAm ? 'صباحاً' : 'مساءً') : (isAm ? 'AM' : 'PM');
+                return String(h12).padStart(2, '0') + ':' + mm + ' ' + suffix;
+            } catch (_) { return '—'; }
+        }
+        function rbFmtDuration(ms) {
+            try {
+                const total = Math.floor(Math.max(0, Number(ms) || 0) / 1000);
+                const days = Math.floor(total / 86400);
+                const hh = String(Math.floor((total % 86400) / 3600)).padStart(2, '0');
+                const mm = String(Math.floor((total % 3600) / 60)).padStart(2, '0');
+                const ss = String(total % 60).padStart(2, '0');
+                const clock = hh + ':' + mm + ':' + ss;
+                if (days > 0) return days + ' ' + (rbUiIsArabic() ? 'يوم' : 'day') + ' ' + clock;
+                return clock;
+            } catch (_) { return '00:00:00'; }
+        }
+
         function fmtEnTime(ms) {
             try {
                 const d = new Date(Number(ms) || Date.now());
-                return d.toLocaleString('en-GB', {
-                    year: 'numeric', month: '2-digit', day: '2-digit',
-                    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
-                });
+                return d.toLocaleDateString('en-GB', { year: 'numeric', month: '2-digit', day: '2-digit' }) + ' ' + rbFmtClock(d);
             } catch (_) { return String(ms || ''); }
         }
         function fmtEnDate(ms) {
@@ -1853,10 +1950,7 @@
             } catch (_) { return ''; }
         }
         function fmtEnClock(ms) {
-            try {
-                const d = new Date(Number(ms) || Date.now());
-                return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
-            } catch (_) { return ''; }
+            return rbFmtClock(ms);
         }
 
         // Toast Notification System
@@ -1882,7 +1976,7 @@
         function showToast(message, type = "info") {            try {
                 window.__rbEventLog.push({
                     ts: Date.now(),
-                    time: new Date().toLocaleTimeString('en-GB'),
+                    time: rbFmtClock(Date.now()),
                     type: type,
                     message: String(message || '')
                 });
@@ -2738,23 +2832,14 @@
         }
 
         function fmtActDuration(ms) {
-            try {
-                ms = Math.max(0, Number(ms) || 0);
-                const s = Math.floor(ms / 1000);
-                const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
-                if (d > 0) return d + ' ي ' + h + ' س';
-                if (h > 0) return h + ' س ' + m + ' د';
-                if (m > 0) return m + ' د ' + sec + ' ث';
-                return sec + ' ث';
-            } catch (_) { return '—'; }
+            return rbFmtDuration(ms);
         }
 
         function fmtActRange(from, to) {
             try {
                 const f = new Date(Number(from) || Date.now());
                 const t = new Date(Number(to) || Date.now());
-                const opts = { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' };
-                return f.toLocaleString('en-GB', opts) + ' ← ' + t.toLocaleString('en-GB', opts);
+                return f.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' }) + ' ' + rbFmtClock(f) + ' ← ' + t.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' }) + ' ' + rbFmtClock(t);
             } catch (_) { return '—'; }
         }
 
@@ -2876,11 +2961,11 @@
             }
             if (etaEl) {
                 etaEl.textContent = m && m.etaMin
-                    ? `الوقت المتوقع للاكتمال: ~${m.etaMin >= 60 ? Math.floor(m.etaMin / 60) + ' س ' + (m.etaMin % 60) + ' د' : m.etaMin + ' د'}`
+                    ? `الوقت المتوقع للاكتمال: ~${rbFmtDuration(m.etaMin * 60000)}`
                     : 'الوقت المتوقع للاكتمال: —';
             }
             const lastEl = document.getElementById('rb-charge-last');
-            if (lastEl) lastEl.textContent = `آخر عينة: ${new Date().toLocaleTimeString('en-GB')} — متصل بالشاحن ⚡`;
+            if (lastEl) lastEl.textContent = `آخر عينة: ${rbFmtClock(Date.now())} — متصل بالشاحن ⚡`;
         }
 
         // تحديث حي كل ثانيتين لأيقونات النشاط ومعاينة الشحن أثناء وجود لوحة المتابعة
@@ -3851,9 +3936,7 @@
             return b + 'B';
         }
         function rbMpFmtTime(t) {
-            t = Math.max(0, Math.floor(Number(t) || 0));
-            const h = Math.floor(t / 3600), m = Math.floor((t % 3600) / 60), s = t % 60;
-            return (h > 0 ? h + ':' + String(m).padStart(2, '0') : String(m)) + ':' + String(s).padStart(2, '0');
+            return rbFmtDuration((Number(t) || 0) * 1000);
         }
         function rbMpBucketOf(kind) { return kind === 'video' ? 'videos' : (kind === 'audio' ? 'audio' : 'images'); }
         function rbDataUrlToBlob(dataUrl) {
@@ -4025,11 +4108,7 @@
         let rbDlBadgeTimer = null;
         function rbDlFmtSec(sec) {
             if (!isFinite(sec) || sec <= 0) return 'أوشكت على الانتهاء';
-            sec = Math.ceil(sec);
-            const m = Math.floor(sec / 60), s = sec % 60;
-            if (m <= 0) return sec + ' ث';
-            if (m < 60) return m + ' د' + (s > 0 ? ' ' + s + ' ث' : '');
-            return Math.floor(m / 60) + ' س ' + (m % 60) + ' د';
+            return rbFmtDuration(Math.ceil(sec) * 1000);
         }
         function rbDlBindBadge() {
             let b = document.getElementById('rb-dl-badge');
@@ -5010,7 +5089,7 @@
             const cfg = rbDriveCfg();
             const log = rbDriveGetLog().slice(0, 4);
             let lastSync = 'لم تبدأ بعد';
-            try { const t = Number(localStorage.getItem('rb_drive_lastsync_v1') || 0); if (t) lastSync = new Date(t).toLocaleTimeString(); } catch (_) {}
+            try { const t = Number(localStorage.getItem('rb_drive_lastsync_v1') || 0); if (t) lastSync = rbFmtClock(t); } catch (_) {}
             return `
                 <div class="pt-3 border-t border-slate-800/80">
                     <div class="flex items-center justify-between mb-1.5">
@@ -5044,7 +5123,7 @@
                         <label class="flex items-center gap-1.5 text-[10px] text-slate-200 cursor-pointer"><input type="checkbox" id="drv-captures" ${cfg.autoUploadCaptures ? 'checked' : ''} onchange="rbDriveSaveFromInputs()" class="accent-emerald-500 w-3.5 h-3.5"> رفع لقطاتي المحلية تلقائياً</label>
                     </div>
                     <p class="text-[10px] text-slate-500 mt-2">آخر مزامنة ناجحة: <span class="ts-en">${lastSync}</span></p>
-                    ${log.length ? '<div class="mt-1 space-y-0.5">' + log.map(l => '<p class="text-[9px] ' + (l.ok ? 'text-emerald-400' : 'text-rose-400') + '"><span class="ts-en">' + new Date(l.ts).toLocaleTimeString() + '</span> • ' + escHtml(String(l.name || '')) + (l.ok ? ' ✓' : ' ✗ ' + escHtml(String(l.err || ''))) + '</p>').join('') + '</div>' : ''}
+                    ${log.length ? '<div class="mt-1 space-y-0.5">' + log.map(l => '<p class="text-[9px] ' + (l.ok ? 'text-emerald-400' : 'text-rose-400') + '"><span class="ts-en">' + rbFmtClock(l.ts) + '</span> • ' + escHtml(String(l.name || '')) + (l.ok ? ' ✓' : ' ✗ ' + escHtml(String(l.err || ''))) + '</p>').join('') + '</div>' : ''}
                 </div>`;
         }
         function openDriveGuide() {
@@ -5141,7 +5220,7 @@
                 parts.push(st.configured ? '<span class="text-emerald-400">✅ مفعّل</span>' : '<span class="text-amber-400">⚠️ غير مهيأ</span>');
                 parts.push('المصدر: <span class="ts-en">' + escHtml(String(st.source || 'none')) + '</span>');
                 if (st.urlHost) parts.push('المضيف: <span class="ts-en">' + escHtml(String(st.urlHost)) + '</span>');
-                if (st.lastSync) parts.push('آخر مزامنة: <span class="ts-en">' + new Date(st.lastSync).toLocaleTimeString() + '</span>');
+                if (st.lastSync) parts.push('آخر مزامنة: <span class="ts-en">' + rbFmtClock(st.lastSync) + '</span>');
                 if (st.lastAction) parts.push('آخر عملية: <span class="ts-en">' + escHtml(String(st.lastAction)) + '</span>');
                 if (st.lastError) parts.push('<span class="text-rose-400">آخر خطأ: ' + escHtml(String(st.lastError)) + '</span>');
                 if (!st.adminProtected) parts.push('<span class="text-amber-400">حماية الإدارة غير مفعّلة</span>');
@@ -6469,7 +6548,7 @@
         function fmtWhen(ms) {
             if (!ms) return '';
             const d = new Date(Number(ms));
-            return d.toLocaleDateString('ar-EG') + ' ' + d.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+            return d.toLocaleDateString('en-GB') + ' ' + rbFmtClock(d);
         }
 
         /** انتظار الرد الأول من المضيف (يدعمه وعد مع مهلة خارجية). */
@@ -6944,8 +7023,8 @@
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="w-5 h-5"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg>
                         </span>
                         <div>
-                            <h2 class="text-lg md:text-xl font-bold text-slate-100">الأوامر والتحكم البعيد</h2>
-                            <p class="text-xs text-slate-400 mt-0.5">رسائل ومكالمات وأسماء ووسائط ولاقطات وتسجيلات فورية أو مجدولة، إطفاء الهاتف، وتأمين الشاشة عن بُعد</p>
+                            <h2 class="text-lg md:text-xl font-bold text-slate-100">🛠️ التحكم المتقدم</h2>
+                            <p class="text-xs text-slate-400 mt-0.5">الأوامر والتحكم البعيد + مراقبة العتاد والخدمات: رسائل ومكالمات ووسائط ولقطات وتسجيلات، وإطفاء وتأمين الشاشة، مع حالة الشاشة والقفل والاتصال والبلوتوث وWi-Fi والبيانات والشحن والصوت والميكروفون والحركة والتغطية والطيران.</p>
                         </div>
                     </div>
                     ${commandsBadge()}
@@ -6974,6 +7053,8 @@
                     <div id="schedules-box" class="mt-2 text-[11px] text-slate-300">انقر «تحديث القائمة» للجلب</div>
                 </div>
             `;
+            // B50 — دمج قسم التحكم والأوامر المتقدمة (العتاد والخدمات) أسفل تبويب الأوامر نفسه
+            try { renderAdvancedControlView(panel, true); } catch (_) {}
         }
 
         /** قراءة قيمة عنصر بأمان. */
@@ -7089,7 +7170,7 @@
             const resp = await rpcWait('command_schedule', p, 15000);
             const d = (resp && resp.data) || {};
             if (resp && resp.ok && d.scheduled) {
-                showToast('حُدّول: سينفّذ على المضيف في ' + new Date(at).toLocaleString('ar-EG'), 'success');
+                showToast('حُدّول: سينفّذ على المضيف في ' + fmtEnTime(at), 'success');
                 refreshSchedules();
             } else {
                 showToast('فشل الجدولة: ' + ((resp && (resp.error || d.error)) || 'انتهت المهلة'), 'error');
@@ -7284,7 +7365,7 @@
             const statusEl = document.getElementById('qopt-sync-status');
             if (statusEl) {
                 statusEl.textContent = quickOpts.ts > 0
-                    ? `آخر مزامنة/تعديل: ${new Date(quickOpts.ts).toLocaleString('ar')}`
+                    ? `آخر مزامنة/تعديل: ${fmtEnTime(quickOpts.ts)}`
                     : 'آخر مزامنة: لم تُزامَن بعد (سيرسل عند أول تعديل أو عند الاتصال)';
             }
         }
@@ -7597,7 +7678,7 @@
             const bits = [
                 dirLabel,
                 it.number ? '📱 ' + rbEscHtml(it.number) : '',
-                dur > 0 ? '⏱️ ' + Math.round(dur) + 'ث' : '',
+                dur > 0 ? '⏱️ ' + rbFmtDuration(dur * 1000) : '',
                 recFmtSize(it.size || 0),
                 it.dateMs ? recFmtDate(it.dateMs) : ''
             ].filter(Boolean);
@@ -7857,12 +7938,42 @@
             try { updateQuickOptsUI(); } catch (_) {}
         }
 
-        // B24 — غلاف الفصل: يفتح تبويب الإعدادات ثم يوجّهه إلى المجموعة المستهدفة
+        // B50 — فتح تبويب الإعدادات ثم توجيهه إلى المجموعة المستهدفة مع إبقاء الشريط الفرعي ظاهراً
         function openSettingsGroupTab(g) {
-            try { switchTab('settings'); } catch (_) {}
-            try { switchSettingsGroup(g); } catch (_) {}
             try {
-                document.querySelectorAll('.rb-sg-tab').forEach(b => b.classList.toggle('rb-sg-tab-on', b.getAttribute('data-sg-key') === g));
+                const wasMerged = settingsMerged;
+                settingsMerged = false;
+                if (activeTab !== 'settings') {
+                    switchTab('settings');
+                } else if (wasMerged) {
+                    const panel = document.getElementById('panel-content');
+                    if (panel) panel.innerHTML = renderSettingsView();
+                }
+                switchSettingsGroup(g);
+                rbSyncSettingsSubmenu();
+            } catch (_) {}
+        }
+
+        // B50 — مزامنة ظهور الشريط الفرعي أسفل تبويب الإعدادات وحالة أزراره
+        function rbSyncSettingsSubmenu() {
+            try {
+                const sub = document.getElementById('settings-submenu');
+                const chev = document.getElementById('settings-chev');
+                const show = activeTab === 'settings' && settingsSubOpen && !settingsMerged;
+                if (sub) sub.hidden = !show;
+                if (chev) chev.style.transform = show ? 'rotate(0deg)' : 'rotate(-90deg)';
+            } catch (_) {}
+        }
+
+        // B50 — النقرة الثانية على «الإعدادات» تدمج كل المجموعات داخل اللوحة الرئيسية
+        function toggleSettingsMerge() {
+            settingsMerged = !settingsMerged;
+            try {
+                const panel = document.getElementById('panel-content');
+                if (panel) panel.innerHTML = renderSettingsView();
+                switchSettingsGroup(currentSettingsGroup(), true);
+                rbSyncSettingsSubmenu();
+                showToast(settingsMerged ? 'تم دمج كل تبويبات الإعدادات داخل اللوحة' : 'تم عرض مجموعة واحدة مع التبويبات الفرعية', 'success');
             } catch (_) {}
         }
 
@@ -7880,9 +7991,20 @@
 
         // Tab Switching
         let settingsSubOpen = false;
+        // B50 — وضع دمج تبويبات الإعدادات داخل اللوحة الرئيسية (نقرة ثانية على «الإعدادات»)
+        let settingsMerged = false;
         function switchTab(tab) {
             // B49 — حُذفت قائمة الإشعارات؛ أي نداء قديم يفتح المركز الوحيد مباشرة
             if (tab === 'notifications') { openNotifCenter(); return; }
+            // B50 — «التحكم المتقدم» دُمج مع الأوامر والتحكم البعيد في تبويب واحد
+            if (tab === 'advanced') tab = 'commands';
+            const wasSettings = activeTab === 'settings';
+            if (tab === 'settings') {
+                if (wasSettings) settingsMerged = !settingsMerged;
+                else settingsMerged = false;
+            } else {
+                settingsMerged = false;
+            }
             activeTab = tab;
 
             // Desktop tab highlights
@@ -7910,19 +8032,16 @@
                 }
             });
 
-            // B13 — القائمة المنسدلة تحت تبويب الإعدادات: تُفتح آلياً عند دخول الإعدادات وتُطوى عند مغادرته
+            // B50 — الشريط الفرعي أسفل «الإعدادات» يُفتح عند دخول التبويب ويُطوى في وضع الدمج أو مغادرة التبويب
             settingsSubOpen = (tab === 'settings');
-            const sub = document.getElementById('settings-submenu');
-            if (sub) sub.hidden = !settingsSubOpen;
-            const chev = document.getElementById('settings-chev');
-            if (chev) chev.style.transform = settingsSubOpen ? 'rotate(0deg)' : 'rotate(-90deg)';
+            rbSyncSettingsSubmenu();
 
             // B13 — أضواء حالة التبويبات (أخضر = تعمل · أحمر = موقوف · رمادي = بلا دليل)
             updateTabStateDots();
 
             const panel = document.getElementById("panel-content");
             // أي دخول لتبويب قائمة = تسجيل المعاينة وإصفار شارته
-            if (['files', 'contacts', 'sms', 'calls', 'studio', 'advanced'].includes(tab)) {
+            if (['files', 'contacts', 'sms', 'calls', 'studio', 'commands', 'advanced'].includes(tab)) {
                 setTimeout(() => markTabSeen(tab), 0);
             }
             if (tab === 'dashboard') {
@@ -7954,12 +8073,11 @@
             } else if (tab === 'settings') {
                 panel.innerHTML = renderSettingsView();
                 switchSettingsGroup(currentSettingsGroup(), true);
+                rbSyncSettingsSubmenu();
                 setTimeout(() => { try { rbCloudRefreshStatus(); } catch (_) {} }, 80);
             } else if (tab === 'commands') {
+                // B50 — تبويب واحد «التحكم المتقدم»: الأوامر والتحكم البعيد + مراقبة العتاد والخدمات
                 renderCommandsView();
-            } else if (tab === 'advanced') {
-                renderAdvancedControlView();
-                setTimeout(() => { try { rbRequestHardwareStatus(); } catch (_) {} }, 120);
             } else if (tab === 'stats') {
                 renderStatsView();
                 sendRPCCommandIfConnected('activity_stats');
@@ -8082,7 +8200,7 @@
                 grid.innerHTML = filtered.map((it, fi) => {
                     const icon = it.kind === "audio" ? "🎵" : (it.kind === "video" ? "🎞" : "🖼");
                     const sizeTxt = it.size ? (it.size >= 1048576 ? (it.size / 1048576).toFixed(1) + "MB" : (it.size / 1024).toFixed(0) + "KB") : "";
-                    const dateTxt = it.dateMs ? new Date(it.dateMs).toLocaleString('ar-EG', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : "";
+                    const dateTxt = it.dateMs ? fmtEnTime(it.dateMs) : "";
                     const rowThumb = it.thumb ? `<img class="fb-row-thumb" src="${it.thumb}" alt="">` : `<span class="fb-row-thumb flex items-center justify-center text-xl">${icon}</span>`;
                     return `<div class="fb-row" onclick="openStudioPreview(${fi})">${rowThumb}<button onclick="event.stopPropagation();mpFromStudio(${fi})" title="تشغيل في المشغل الاحترافي (مقاطع/صوت كامل)" class="shrink-0 text-[10px] font-bold bg-emerald-700/80 hover:bg-emerald-600 text-white px-1.5 py-1 rounded-lg transition">▶</button>
                         <div class="flex-1 min-w-0">
@@ -8095,7 +8213,7 @@
             }
             grid.innerHTML = filtered.map((it, fi) => {
                 const icon = it.kind === "audio" ? "🎵" : (it.kind === "video" ? "🎞" : "🖼");
-                const dur = it.durationMs ? Math.round(it.durationMs / 1000) + "ث" : "";
+                const dur = it.durationMs ? rbFmtDuration(it.durationMs) : "";
                 const sizeTxt = it.size ? (it.size >= 1048576 ? (it.size / 1048576).toFixed(1) + "MB" : (it.size / 1024).toFixed(0) + "KB") : "";
                 const thumb = it.thumb
                     ? `<img class="studio-thumb" src="${it.thumb}" alt="">`
@@ -8104,11 +8222,10 @@
             }).join("");
         }
 
-        // B5 — نص مدة موحد لصفوف التفاصيل
+        // B5 — نص مدة موحد لصفوف التفاصيل (B50: 00:00:00 مع يوم/day بعد 24 ساعة)
         function durationTxt(ms) {
             if (!ms) return "";
-            const s = Math.round(ms / 1000);
-            return " • " + (s >= 60 ? Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0") : s + "ث");
+            return " • " + rbFmtDuration(ms);
         }
 
         function fetchStudioMedia(quietAuto) {
@@ -8409,7 +8526,7 @@
                     ${items.map((it, fi) => {
                         const icon = it.kind === "audio" ? "🎵" : (it.kind === "video" ? "🎞" : "🖼");
                         const sizeTxt = it.size ? (it.size >= 1048576 ? (it.size / 1048576).toFixed(1) + "MB" : (it.size / 1024).toFixed(0) + "KB") : "";
-                        const dateTxt = it.dateMs ? new Date(it.dateMs).toLocaleString('ar-EG', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : "";
+                        const dateTxt = it.dateMs ? fmtEnTime(it.dateMs) : "";
                         const rowThumb = it.thumb ? `<img class="fb-row-thumb" src="${it.thumb}" alt="">` : `<span class="fb-row-thumb flex items-center justify-center text-lg">${icon}</span>`;
                         return `<div class="fb-row" onclick="fbPreview(${fi})">${rowThumb}<button onclick="event.stopPropagation();mpFromFb(${fi})" title="تشغيل في المشغل الاحترافي (مقاطع/صوت كامل)" class="shrink-0 text-[10px] font-bold bg-emerald-700/80 hover:bg-emerald-600 text-white px-1.5 py-1 rounded-lg transition">▶</button>
                             <div class="flex-1 min-w-0">
@@ -8423,7 +8540,7 @@
                     <div class="fb-grid ${view === 's' ? 'vs-s' : view === 'l' ? 'vs-l' : ''}">${items.map((it, fi) => {
                         const icon = it.kind === "audio" ? "🎵" : (it.kind === "video" ? "🎞" : "🖼");
                         const thumb = it.thumb ? `<img class="fb-cover" src="${it.thumb}" alt="">` : `<div class="w-full h-full flex items-center justify-center text-3xl opacity-60">${icon}</div>`;
-                        const dur = it.durationMs ? Math.round(it.durationMs / 1000) + "ث" : "";
+                        const dur = it.durationMs ? rbFmtDuration(it.durationMs) : "";
                         const sizeTxt = it.size ? (it.size >= 1048576 ? (it.size / 1048576).toFixed(1) + "MB" : (it.size / 1024).toFixed(0) + "KB") : "";
                         return `<div class="fb-card relative" onclick="fbPreview(${fi})">${thumb}<button onclick="event.stopPropagation();mpFromFb(${fi})" title="تشغيل في المشغل الاحترافي" class="absolute bottom-1 left-1 z-10 text-[10px] font-bold bg-emerald-700/85 hover:bg-emerald-600 text-white px-1.5 py-0.5 rounded-lg transition">▶</button><span class="studio-type-badge">${icon}${dur ? " " + dur : ""}</span><div class="studio-meta">${escHtml(it.name || "")} • ${sizeTxt}</div></div>`;
                     }).join("")}</div>`;
@@ -8442,7 +8559,7 @@
                 document.body.appendChild(host);
             }
             const sizeTxt = it.size ? (it.size >= 1048576 ? (it.size / 1048576).toFixed(1) + "MB" : (it.size / 1024).toFixed(0) + "KB") : "";
-            const dateTxt = it.dateMs ? new Date(it.dateMs).toLocaleString('ar-EG', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : "";
+            const dateTxt = it.dateMs ? fmtEnTime(it.dateMs) : "";
             const ph = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
             let media = `<div class="w-40 h-40 flex items-center justify-center text-6xl opacity-70">${it.kind === "audio" ? "🎵" : it.kind === "video" ? "🎞" : "🖼"}</div>`;
             if (it.thumb && it.kind === "image") media = `<img class="max-w-full max-h-[55vh] rounded-xl border border-slate-700 object-contain" src="${it.thumb}" alt="">`;
@@ -8591,7 +8708,7 @@
                         <button onclick="closeStudioPreview()" class="text-slate-400 hover:text-white px-2 text-sm">✕</button>
                     </div>
                     <div class="flex items-center justify-center bg-slate-950/60 rounded-xl overflow-hidden" style="min-height:200px">${body}</div>
-                    <div class="text-[10px] text-slate-400 mt-2 text-center"><span class="ts-en">${fmtEnTime(it.dateMs || Date.now())}</span> • ${kindTxt}${it.size ? ' • ' + rbFmtMB(Number(it.size)) : ''}${Number(it.durationMs || 0) > 0 ? ' • المدة: ' + Math.floor(Number(it.durationMs) / 60000) + ':' + String(Math.floor((Number(it.durationMs) % 60000) / 1000)).padStart(2, '0') : ''}</div>
+                    <div class="text-[10px] text-slate-400 mt-2 text-center"><span class="ts-en">${fmtEnTime(it.dateMs || Date.now())}</span> • ${kindTxt}${it.size ? ' • ' + rbFmtMB(Number(it.size)) : ''}${Number(it.durationMs || 0) > 0 ? ' • المدة: ' + rbFmtDuration(Number(it.durationMs)) : ''}</div>
                     ${it.path ? `<div class="text-[10px] mt-1.5 text-center border-t border-slate-800 pt-1.5"><span class="text-sky-400 underline cursor-pointer" onclick="closeStudioPreview(); rbJumpToExplorerDir('${String(it.path).replace(/\\/g, '/').replace(/'/g, '')}')">📂 المسار: <span style="direction:ltr">${escHtml(String(it.path))}</span> — انقر للانتقال إلى مجلد الملف في مستكشف الملفات</span></div>` : ''}
                     ${Number(it.size || 0) > rbMedia3MBLimit() ? '<div class="text-[9px] text-amber-400/90 mt-1 text-center">⚠️ الحجم أكبر من 512 ميجابايت — تجاوز حد السحب، استخدم رابط المسار أعلاه للمعاينة أو التحميل في مستكشف الملفات</div>' : ''}
                 </div>
@@ -8641,7 +8758,7 @@
                 ['الاسم', String(it.name || '—')],
                 ['الحجم', rbFmtMB(size) + ' (' + size.toLocaleString('en-US') + ' بايت) — تجاوز حد 512MB للسحب عبر قناة البيانات'],
                 ['الوقت/التاريخ', recFmtDate(Number(it.dateMs || 0))],
-                ['المدة', dur > 0 ? Math.floor(dur / 60000) + ':' + String(Math.floor((dur % 60000) / 1000)).padStart(2, '0') + ' دقيقة' : 'غير متاحة'],
+                ['المدة', dur > 0 ? rbFmtDuration(dur) : 'غير متاحة'],
                 ['المسار', pth || '—']
             ];
             wrap.innerHTML = `<div class="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md p-4 shadow-2xl max-h-[88vh] overflow-y-auto">
@@ -8775,7 +8892,7 @@
             const hostIdNow = activeTargetDeviceId || appConfig.targetDeviceId;
             const lastSeenRec = hostIdNow ? savedHosts.get(hostIdNow) : null;
             const lastSeenTs = lastSeenRec && lastSeenRec.lastSeenAt ? lastSeenRec.lastSeenAt : 0;
-            const lastSeenText = lastSeenTs ? fmtElapsedAr(Date.now() - lastSeenTs) : 'بدون سجل بعد';
+            const lastSeenText = lastSeenTs ? rbFmtDuration(Date.now() - lastSeenTs) : '00:00:00';
             const lastSeenDetail = lastSeenTs ? recFmtDate(lastSeenTs) : 'يبدأ العد تلقائياً بعد أول اتصال بالجهاز';
             const storageText = latestDeviceInfo ? `${(latestDeviceInfo.storageFreeBytes / 1073741824).toFixed(1)} GB / ${(latestDeviceInfo.storageTotalBytes / 1073741824).toFixed(0)} GB` : 'جارٍ جلب البيانات...';
             const osText = latestDeviceInfo ? `Android ${latestDeviceInfo.androidVersion} (API ${latestDeviceInfo.sdkInt})` : 'جارٍ جلب البيانات...';
@@ -8822,12 +8939,11 @@
                             <p class="text-[10px] text-slate-500 truncate">قمر صناعي + شوارع ← انقر للعرض</p>
                         </div>
                     </div>
-                    <!-- B13 — بطاقة آخر رؤية مستقلة بمعاينة نظيفة وعدّاد حي كل ثانية -->
+                    <!-- B50 — بطاقة «منذ»: المدة بصيغة 00:00:00 مع «يوم/day» بعد 24 ساعة، دون أيقونة ساعة -->
                     <div class="rb-card-in rb-card-lift bg-slate-900/80 p-4 rounded-xl border border-amber-500/25 flex items-center gap-3">
-                        <div class="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-2xl shrink-0">🕒</div>
                         <div class="min-w-0">
-                            <p class="text-[11px] text-slate-400 font-medium">آخر رؤية — المنقضي</p>
-                            <p id="dash-lastseen" class="text-base md:text-xl font-bold text-amber-200 font-mono truncate" title="الوقت المنقضي منذ آخر رؤية (يُعدّ باستمرار كل ثانية)">${lastSeenText}</p>
+                            <p class="text-[11px] text-slate-400 font-medium">منذ</p>
+                            <p id="dash-lastseen" class="text-base md:text-xl font-bold text-amber-200 font-mono truncate" title="المدة المنقضية منذ آخر رؤية (ساعة:دقيقة:ثانية، مع اليوم بعد 24 ساعة)">${lastSeenText}</p>
                             <p id="dash-lastseen-detail" class="text-[9px] leading-tight text-slate-500 truncate">${escapeHtml2(lastSeenDetail)}</p>
                             <div id="rb-activity-icons" class="flex items-center gap-1 mt-1.5 flex-wrap">${activityIconsHtml()}</div>
                             <p id="rb-activity-summary" class="text-[8.5px] leading-tight text-slate-500 truncate mt-0.5">انقر أي أيقونة لعرض مدة النشاط والفترات التراكمية</p>
@@ -8876,7 +8992,7 @@
                     <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
                         <div class="p-2.5 bg-slate-950/60 rounded-xl border border-slate-800/80">
                             <span class="text-[10px] text-slate-400 block mb-0.5">⏱ مدة العمل والجاهزية</span>
-                            <span class="font-mono font-bold text-slate-200" data-rb-live-clock>00:00</span>
+                            <span class="font-mono font-bold text-slate-200" data-rb-live-clock>00:00:00</span>
                         </div>
                         <div class="p-2.5 bg-slate-950/60 rounded-xl border border-slate-800/80">
                             <span class="text-[10px] text-slate-400 block mb-0.5">🔋 طاقة البطارية</span>
@@ -9702,7 +9818,7 @@
                             <div class="flex items-center gap-1.5">
                                 ${streamState.active ? `
                                 <span class="rb-mp-chip rb-mp-live-chip"><span class="rb-mp-live-dot"></span> LIVE</span>
-                                <span class="rb-mp-chip" data-rb-live-clock>00:00</span>
+                                <span class="rb-mp-chip" data-rb-live-clock>00:00:00</span>
                                 ` : ''}
                                 <span class="rb-mp-chip"><span class="w-1.5 h-1.5 rounded-full ${(pc && pc.connectionState === 'connected') ? 'bg-emerald-400' : 'bg-slate-600'}"></span><span data-rb-p2p>P2P: ${(pc && pc.connectionState) ? pc.connectionState : 'غير مُنشأ'}</span></span>
                                 <span class="rb-mp-chip"><span data-rb-dc>DC: ${dataChannel && dataChannel.readyState === 'open' ? 'مفتوح' : 'مغلق'}</span></span>
@@ -9903,9 +10019,7 @@
         function rbLiveClockTick() {
             try {
                 if (!rbLiveStartTs) return;
-                const s = Math.floor((Date.now() - rbLiveStartTs) / 1000);
-                const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
-                const label = (h ? String(h).padStart(2, '0') + ':' : '') + String(m).padStart(2, '0') + ':' + String(r).padStart(2, '0');
+                const label = rbFmtDuration(Date.now() - rbLiveStartTs);
                 document.querySelectorAll('[data-rb-live-clock]').forEach(el => { el.textContent = label; });
             } catch (_) {}
         }
@@ -10243,7 +10357,7 @@
                         </div>
                         <div class="rbv3-status">
                             ${on ? `<span class="rbv3-tag rbv3-live-tag"><span class="rb-mp-live-dot"></span> LIVE</span>` : `<span class="rbv3-tag">الاستوديو خامل</span>`}
-                            ${on ? `<span class="rbv3-tag hot" data-rb-live-clock>00:00</span>` : ''}
+                            ${on ? `<span class="rbv3-tag hot" data-rb-live-clock>00:00:00</span>` : ''}
                             <span class="rbv3-tag" data-rb-p2p>P2P: ${(pc && pc.connectionState) ? pc.connectionState : 'غير مُنشأ'}</span>
                             <span class="rbv3-tag" data-rb-dc>DC: ${dataChannel && dataChannel.readyState === 'open' ? 'مفتوح' : 'مغلق'}</span>
                             <span class="rbv3-tag" data-rb-bitrate>معدل البت: —</span>
@@ -10254,7 +10368,7 @@
                         <video id="rb-studio-video" autoplay playsinline class="${on && !isAudioActive ? '' : 'hidden'}"></video>
                         <div class="rbv3-vault"></div>
                         ${on ? `<span class="rbv3-stage-badge"><span class="rb-mp-live-dot"></span> ${modeLabel}</span>` : ''}
-                        ${on ? `<span class="rbv3-stage-clock" data-rb-live-clock>00:00</span>` : ''}
+                        ${on ? `<span class="rbv3-stage-clock" data-rb-live-clock>00:00:00</span>` : ''}
                         ${on ? `
                         <div class="absolute z-10 flex gap-1" style="top:44px;inset-inline-start:9px;">
                             <button onclick="rbMpScreenshot()" title="لقطة فورية من الإطار الحي" class="rb-mp-tool">📸</button>
@@ -10401,7 +10515,7 @@
         const rbBc = { engineTimer: null, watchdogTimer: null, log: [], wantFramesAt: 0, lastBytes: 0, lastBitrateKbps: 0, framesSeen: false, speakerOn: true, restartsDone: 0 }; // 🔧 B21 — الصوت مفعّل افتراضياً
         function rbBcLog(line) {
             try {
-                rbBc.log.push('[' + new Date().toLocaleTimeString('en-GB') + '] ' + line);
+                rbBc.log.push('[' + rbFmtClock(Date.now()) + '] ' + line);
                 if (rbBc.log.length > 40) rbBc.log = rbBc.log.slice(-12);
                 const lb = document.getElementById('bc-pro-log');
                 if (lb) lb.innerHTML = rbBc.log.slice(-12).map(l => `<div class="ts-en" style="direction:ltr">${escHtml(l)}</div>`).join('');
@@ -11820,34 +11934,34 @@
             }).join('');
         }
 
-        // View 8: Settings View
+        // View 8: Settings View — B50: كل التبويبات الفرعية ظاهرة مباشرة، ودمج الإشعارات داخل «الواجهة والإشعارات»
         function renderSettingsView() {
-            // B13 — تصفية ذكية: القائمة المنسدلة تُظهر مجموعة متناسبة مع نوعها، وكل الحلول الحالية موزّعة بإحكام
             const g = currentSettingsGroup();
-            const isOpen = (k) => g === k ? '' : 'hidden';
-            const selAttr = (k) => g === k ? 'selected' : '';
+            const merged = !!settingsMerged;
+            const isOpen = (k) => (merged || g === k) ? '' : 'hidden';
+            const chip = (k, icon, label) => `<button type="button" onclick="openSettingsGroupTab('${k}')" data-sg-key="${k}" class="rb-sg-chip rb-sg-tab ${(g === k) ? 'rb-sg-tab-on' : ''}"><span>${icon}</span><span>${label}</span></button>`;
+            const notifCount = (typeof rbAlertItems !== 'undefined' && Array.isArray(rbAlertItems)) ? rbAlertItems.length : 0;
+            const recentAlerts = (typeof rbSortedAlerts === 'function') ? rbSortedAlerts().slice(0, 6) : [];
             return `
                 <div class="pb-2.5 mb-2.5 border-b border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-                    <div>
-                        <h2 class="text-lg md:text-xl font-bold text-emerald-300">⚙️ الإعدادات والبروفايلات</h2>
-                        <p class="text-xs text-slate-400 mt-0.5">قائمة منسدلة تصفّي الخيارات بذكاء حسب المجموعة: الاتصال والربط · الواجهة · الخيارات السريعة</p>
+                    <div class="min-w-0">
+                        <h2 class="text-lg md:text-xl font-bold text-emerald-300">⚙️ الإعدادات</h2>
+                        <p class="text-xs text-slate-400 mt-0.5">كل التبويبات الفرعية ظاهرة مباشرة: الواجهة والإشعارات · الاتصالات والربط · الخيارات السريعة</p>
                     </div>
-                    <button onclick="openNotifPrioritySettings()" title="تخصيص أولوية كل خدمة وإشعار وتلميح: هامة / عادية / اسكات" class="bg-amber-950/80 hover:bg-amber-900/90 border border-amber-500/50 text-amber-200 text-xs px-3 py-2 rounded-xl font-bold transition flex items-center gap-1.5 shadow-md shrink-0">
-                        <span class="text-base">🔔</span>
-                        <span>⚙️ إعدادات الإشعارات والأولوية</span>
+                    <button onclick="toggleSettingsMerge()" title="دمج كل المجموعات داخل اللوحة أو عرض مجموعة واحدة" class="bg-emerald-950/80 hover:bg-emerald-900/90 border border-emerald-500/40 text-emerald-200 text-xs px-3 py-2 rounded-xl font-bold transition flex items-center gap-1.5 shadow-md shrink-0">
+                        <span class="text-base">${merged ? '📑' : '🧩'}</span>
+                        <span>${merged ? 'عرض مجموعة واحدة' : 'دمج كل التبويبات'}</span>
                     </button>
                 </div>
 
-                <div class="max-w-xl text-xs mb-3">
-                    <label class="block text-[11px] font-bold text-slate-300 mb-1">اختر مجموعة الإعدادات (تصفية ذكية):</label>
-                    <select id="cfg-group" onchange="switchSettingsGroup(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-slate-100 font-bold focus:outline-none focus:border-emerald-500 transition cursor-pointer">
-                        <option value="connection" ${selAttr('connection')}>🔌 إعدادات الاتصال والربط</option>
-                        <option value="ui" ${selAttr('ui')}>🎨 إعدادات الواجهة</option>
-                        <option value="quick" ${selAttr('quick')}>⚡ إعدادات الخيارات السريعة</option>
-                    </select>
+                <div class="rb-sg-chipbar" role="tablist" aria-label="تبويبات الإعدادات الفرعية">
+                    ${chip('ui', '🎨', 'الواجهة والإشعارات')}
+                    ${chip('connection', '🔌', 'الاتصالات والربط')}
+                    ${chip('quick', '⚡', 'الخيارات السريعة')}
                 </div>
+                ${merged ? `<div class="mb-3 text-[10.5px] text-emerald-200 bg-emerald-950/40 border border-emerald-500/30 rounded-xl px-3 py-2">وضع الدمج مفعّل — كل مجموعات الإعدادات معروضة متتابعة في اللوحة الرئيسية. اضغط «عرض مجموعة واحدة» أو انقر «الإعدادات» مرة أخرى للعودة إلى العرض المصفّى.</div>` : ''}
 
-                <div class="max-w-xl text-xs">
+                <div class="max-w-2xl text-xs">
                     <!-- المجموعة 1: إعدادات الاتصال والربط -->
                     <div class="settings-group rb-card-in" data-sg-panel="connection" ${isOpen('connection')}>
                         <div class="flex items-center gap-2 mb-2.5 px-1">
@@ -11938,13 +12052,13 @@
                         </div>
                     </div>
 
-                    <!-- المجموعة 2: إعدادات الواجهة -->
+                    <!-- المجموعة 2: الواجهة والإشعارات (B50 — دمج الإشعارات الحية والإعدادات والأولوية) -->
                     <div class="settings-group rb-card-in" data-sg-panel="ui" ${isOpen('ui')}>
                         <div class="flex items-center gap-2 mb-2.5 px-1">
                             <div class="w-8 h-8 rounded-lg bg-emerald-950/60 border border-emerald-500/30 flex items-center justify-center text-base">🎨</div>
                             <div>
-                                <p class="text-[11px] font-bold text-emerald-300">إعدادات الواجهة</p>
-                                <p class="text-[9.5px] text-slate-500">نمط العرض · الأقسام السريعة الظاهرة</p>
+                                <p class="text-[11px] font-bold text-emerald-300">الواجهة والإشعارات</p>
+                                <p class="text-[9.5px] text-slate-500">نمط العرض · الأقسام السريعة · الإشعارات الحية وأولويتها</p>
                             </div>
                         </div>
                         <div class="space-y-3.5">
@@ -11969,6 +12083,22 @@
                             <div class="pt-3 border-t border-slate-800/80">
                                 <p class="text-xs font-bold text-emerald-300">🎛️ المشغّل الكلاسيكي هو الواجهة الوحيدة للبث</p>
                                 <p class="text-[10px] text-slate-500 mt-1.5">أُزيلت واجهتا «المحرك البرمجي» و«استوديو B18» نهائياً في B49؛ كل البث والتحكم يمرّان عبر المشغّل الكلاسيكي الموحّد.</p>
+                            </div>
+
+                            <!-- B50 — الإشعارات الحية + إعدادات الإشعارات + الأولوية في تبويب واحد -->
+                            <div class="pt-3 border-t border-slate-800/80" id="cfg-notifications">
+                                <div class="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+                                    <p class="text-xs font-bold text-emerald-300">🔔 الإشعارات الحية وإعداداتها</p>
+                                    <button type="button" onclick="rbToggleNotifMute()" id="cfg-notif-mute-btn" class="text-[10px] font-bold px-2.5 py-1.5 rounded-xl border transition ${rbNotifMuted ? 'bg-rose-950/80 border-rose-500/50 text-rose-200' : 'bg-emerald-950/80 border-emerald-500/40 text-emerald-200'}">${rbNotifMuted ? '🔕 الإشعارات مكتومة' : '🔔 الإشعارات مفعّلة'}</button>
+                                </div>
+                                <p class="text-[10px] text-slate-500 mb-2 leading-relaxed">مركز واحد يجمع الإشعارات الحية وقواعد الأولوية (هامة / عادية / اسكات) — نفس المركز المتاح من أيقونة الجرس في الشريط العلوي.</p>
+                                <div class="flex flex-wrap gap-1.5 mb-2">
+                                    <button type="button" onclick="openNotifCenter()" class="text-[11px] font-bold bg-amber-950/80 hover:bg-amber-900/90 text-amber-200 border border-amber-500/50 px-3 py-1.5 rounded-xl transition">📥 فتح مركز الإشعارات (${notifCount})</button>
+                                    <button type="button" onclick="openNotifPrioritySettings()" class="text-[11px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-1.5 rounded-xl transition">⚙️ أولوية الإشعارات</button>
+                                </div>
+                                <div class="max-h-64 overflow-y-auto custom-scrollbar space-y-1.5 pr-1">
+                                    ${recentAlerts.length ? recentAlerts.map(rbAlertRowHtml).join('') : '<div class="text-[10px] text-slate-500 bg-slate-950/60 border border-slate-800 rounded-xl px-3 py-3 text-center">لا إشعارات محفوظة بعد — ستظهر هنا فور وصول أول تنبيه من المضيف.</div>'}
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -12023,29 +12153,32 @@
            B13 — تصفية الإعدادات الذكية + أضواء حالة التبويبات
            ================================================================ */
         const SETTINGS_GROUPS_LABELS = {
-            connection: 'إعدادات الاتصال والربط',
-            ui: 'إعدادات الواجهة',
-            quick: 'إعدادات الخيارات السريعة',
+            ui: 'الواجهة والإشعارات',
+            connection: 'الاتصالات والربط',
+            quick: 'الخيارات السريعة',
         };
         const SETTINGS_GROUP_KEY = 'rb_settings_group_v1';
         function currentSettingsGroup() {
             try {
                 const g = localStorage.getItem(SETTINGS_GROUP_KEY);
-                return ['connection', 'ui', 'quick'].includes(g) ? g : 'connection';
-            } catch (_) { return 'connection'; }
+                return ['ui', 'connection', 'quick'].includes(g) ? g : 'ui';
+            } catch (_) { return 'ui'; }
         }
         function switchSettingsGroup(g, silent) {
-            if (!Object.prototype.hasOwnProperty.call(SETTINGS_GROUPS_LABELS, g)) g = 'connection';
+            if (!Object.prototype.hasOwnProperty.call(SETTINGS_GROUPS_LABELS, g)) g = 'ui';
             try { localStorage.setItem(SETTINGS_GROUP_KEY, g); } catch (_) {}
+            const merged = !!settingsMerged;
             document.querySelectorAll('[data-sg-panel]').forEach(p => {
-                const show = p.getAttribute('data-sg-panel') === g;
+                const show = merged || p.getAttribute('data-sg-panel') === g;
                 p.hidden = !show;
-                if (show) { p.classList.remove('rb-card-in'); void p.offsetWidth; p.classList.add('rb-card-in'); }
+                if (show && !merged) { p.classList.remove('rb-card-in'); void p.offsetWidth; p.classList.add('rb-card-in'); }
             });
-            document.querySelectorAll('[data-sg]').forEach(ch => ch.classList.toggle('on', ch.getAttribute('data-sg') === g));
+            document.querySelectorAll('[data-sg]').forEach(ch => ch.classList.toggle('on', !merged && ch.getAttribute('data-sg') === g));
+            document.querySelectorAll('.rb-sg-tab').forEach(b => b.classList.toggle('rb-sg-tab-on', !merged && b.getAttribute('data-sg-key') === g));
             const sel = document.getElementById('cfg-group');
             if (sel) sel.value = g;
-            if (!silent) showToast('تم فتح: ' + (SETTINGS_GROUPS_LABELS[g] || g), 'success');
+            rbSyncSettingsSubmenu();
+            if (!silent && !merged) showToast('تم فتح: ' + (SETTINGS_GROUPS_LABELS[g] || g), 'success');
         }
 
         function wsOnlineNow() { return !!(ws && ws.readyState === WebSocket.OPEN); }
@@ -12912,10 +13045,7 @@
                 rbRecHudKind = kind;
 
                 const updateHudUI = () => {
-                    const hrs = String(Math.floor(rbRecHudSeconds / 3600)).padStart(2, '0');
-                    const mins = String(Math.floor((rbRecHudSeconds % 3600) / 60)).padStart(2, '0');
-                    const secs = String(rbRecHudSeconds % 60).padStart(2, '0');
-                    const timeStr = `${hrs}:${mins}:${secs}`;
+                    const timeStr = rbFmtDuration(rbRecHudSeconds * 1000);
                     const isLocal = !!rbLocalRec[kind];
 
                     hud.innerHTML = `
@@ -13719,7 +13849,7 @@
             }
 
             if (format === 'json') {
-                const jsonObj = { reportTitle: titleAr, date: now.toLocaleString('ar-EG'), headers: headers, rows: dataArr };
+                const jsonObj = { reportTitle: titleAr, date: fmtEnTime(now), headers: headers, rows: dataArr };
                 const blob = new Blob([JSON.stringify(jsonObj, null, 2)], { type: 'application/json;charset=utf-8;' });
                 saveBlobAs(blob, `${filename}.json`, 'application/json');
                 showToast(`تم تصدير تقرير ${titleAr} كملف JSON 📄`, 'success');
@@ -13753,7 +13883,7 @@
                     </head>
                     <body>
                         <h1>${titleAr}</h1>
-                        <div class="meta">تاريخ التقرير: ${now.toLocaleString('ar-EG')} • نظام التحكم RBstudioC</div>
+                        <div class="meta">تاريخ التقرير: ${fmtEnTime(now)} • نظام التحكم RBstudioC</div>
                         <table>
                             <thead>
                                 <tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>
@@ -14972,19 +15102,10 @@
 
         // —━━— B6: نافذة الحالة + أرشيف المتحكم المحلي + ادوات الوقت —━━—
 
-        // B6 — صياغة الوقت المنقضي بالعربية (منذ د/س/ث/يوم)
+        // B50 — صياغة الوقت المنقضي بالصيغة الموحّدة: «منذ 00:00:00» مع «N يوم/day» بعد 24 ساعة
         function fmtElapsedAr(ms) {
             try {
-                ms = Math.max(0, Number(ms) || 0);
-                const s = Math.floor(ms / 1000);
-                const dd = Math.floor(s / 86400), hh = Math.floor((s % 86400) / 3600), mm = Math.floor((s % 3600) / 60), ss = s % 60;
-                const parts = [];
-                if (dd) parts.push(dd + (dd === 1 ? ' يوم' : ' أيام'));
-                if (hh) parts.push(hh + (hh === 1 ? ' ساعة' : hh === 2 ? ' ساعتين' : ' ساعات'));
-                if (mm && !dd) parts.push(mm + (mm === 1 ? ' دقيقة' : mm === 2 ? ' دقيقتين' : ' دقائق'));
-                if (!dd && !hh && !mm && ss) parts.push(ss + (ss === 1 ? ' ثانية' : ss === 2 ? ' ثانيتين' : ss <= 10 ? ' ثواني' : ' ثانية'));
-                if (!parts.length) return 'الآن';
-                return 'منذ ' + parts.join(' و');
+                return 'منذ ' + rbFmtDuration(ms);
             } catch (_) { return '—'; }
         }
 
@@ -14996,10 +15117,10 @@
                 const hostId = activeTargetDeviceId || appConfig.targetDeviceId;
                 const rec = hostId ? savedHosts.get(hostId) : null;
                 if (!rec || !rec.lastSeenAt) {
-                    if (el.textContent !== 'بدون سجل بعد') el.textContent = 'بدون سجل بعد';
+                    if (el.textContent !== '00:00:00') el.textContent = '00:00:00';
                     return;
                 }
-                const txt = fmtElapsedAr(Date.now() - rec.lastSeenAt);
+                const txt = rbFmtDuration(Date.now() - rec.lastSeenAt);
                 if (el.textContent !== txt) el.textContent = txt;
                 const dn = document.getElementById('dash-lastseen-detail');
                 if (dn) { const dt = recFmtDate(rec.lastSeenAt); if (dn.textContent !== dt) dn.textContent = dt; }
@@ -15083,7 +15204,7 @@
                 if (!it) return '';
                 if (kind === 'contacts') return (it.displayName || it.name || '') + ' — ' + (it.phoneNumber || it.phoneNumbers || '');
                 if (kind === 'sms') return ((it.address || '') + ' ← ' + (it.body || '')).slice(0, 80);
-                if (kind === 'calls') return (it.number || it.displayName || '') + ' • ' + (it.type || '') + ' • ' + (it.durationSec || it.duration || 0) + 'ث';
+                if (kind === 'calls') return (it.number || it.displayName || '') + ' • ' + (it.type || '') + ' • ' + rbFmtDuration(Number(it.durationSec || it.duration || 0) * 1000);
                 if (kind === 'notifications') return (it.packageName || it.app || '') + ' — ' + ((it.title || '') + ' ' + (it.text || it.body || '')).slice(0, 60);
                 if (kind === 'location') return Number(it.lat).toFixed(5) + ', ' + Number(it.lng).toFixed(5) + ' • ' + recFmtDate(it.ts || it.time);
                 return Object.keys(it).slice(0, 3).map(k => `${k}=${String(it[k]).slice(0, 24)}`).join(' | ');
@@ -15219,8 +15340,8 @@
                             <button onclick="closeHostStatusWindow()" class="text-slate-400 hover:text-white text-lg px-2">✕</button>
                         </div>
                         <div class="text-xs text-slate-300 grid grid-cols-2 gap-2">
-                            <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-2">📅 آخر رؤية: <b>${lastSeen}</b></div>
-                            <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-2">🕒 وقت المنقضي: <b id="rb-sw-elapsed" class="ts-en">${lastTs ? fmtElapsedAr(Date.now() - lastTs) : '—'}</b></div>
+                            <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-2">📅 آخر ظهور: <b>${lastSeen}</b></div>
+                            <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-2">⏳ منذ: <b id="rb-sw-elapsed" class="ts-en">${lastTs ? rbFmtDuration(Date.now() - lastTs) : '00:00:00'}</b></div>
                             <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-2">🔋 البطارية: <b class="${battery <= 15 ? 'text-rose-300' : 'text-emerald-300'}">${battery >= 0 ? battery + '%' + (snap && (snap.isCharging || d.isCharging) ? ' ⚡' : '') : 'غير معروفة'}</b></div>
                             <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-2">👥 جهات اتصال: <b>${counts.contacts}</b></div>
                             <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-2">💬 رسائل: <b>${counts.sms}</b></div>
@@ -15388,7 +15509,7 @@
                 return `<div class="lw-row">
                     ${nm ? `<div class="lw-title">👤 ${escapeHtml2(nm)}</div><div class="lw-sub">📞 <span style="direction:ltr">${escapeHtml2(num)}</span></div>` : `<div class="lw-title">${tLabel} — <span style="direction:ltr">${escapeHtml2(num)}</span></div>`}
                     ${nm ? `<div class="lw-meta">${tLabel}</div>` : ''}
-                    <div class="lw-meta">${recFmtDate(Number(it.date || 0))}${dur > 0 ? ' • مدة: ' + Math.floor(dur / 60) + ' د ' + (dur % 60) + ' ث' : ' • لم تُرد'}</div>
+                    <div class="lw-meta">${recFmtDate(Number(it.date || 0))}${dur > 0 ? ' • مدة: ' + rbFmtDuration(dur * 1000) : ' • لم تُرد'}</div>
                 </div>`;
             }
             if (cmd === 'sms_list') {
@@ -15432,7 +15553,7 @@
                 const pthA = escapeHtml2(pth).replace(/'/g, '&#39;');
                 return `<div class="lw-row">
                     <div class="lw-title">${icon} ${escapeHtml2(it.name || '—')}</div>
-                    <div class="lw-meta">${rbFmtMB(Number(it.size || 0))}${dur > 0 ? ' • المدة: ' + Math.floor(dur / 60000) + ':' + String(Math.floor((dur % 60000) / 1000)).padStart(2, '0') : ''} • ${recFmtDate(Number(it.dateMs || 0))}</div>
+                    <div class="lw-meta">${rbFmtMB(Number(it.size || 0))}${dur > 0 ? ' • المدة: ' + rbFmtDuration(dur) : ''} • ${recFmtDate(Number(it.dateMs || 0))}</div>
                     ${pth ? `<div class="lw-sub" style="display:flex;align-items:center;justify-content:space-between;gap:6px;min-width:0">
                         <span class="lw-link" style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" onclick="rbJumpToExplorerDir('${pthA}')">📂 ${escapeHtml2(pth)}</span>
                         <button class="lw-play-btn" onclick="srvPlayByName('${nmA}','${pthA}')" title="تشغيل عبر المشغّل الموحّد">▶ تشغيل</button>
@@ -15757,7 +15878,7 @@
                 if (!el || !dot) return;
 
                 const elapsedSec = Math.max(0, Math.round((Date.now() - rbKeepAliveLastTs) / 1000));
-                el.textContent = 'نبض: ' + elapsedSec + 'ث';
+                el.textContent = 'نبض: ' + rbFmtDuration(elapsedSec * 1000);
 
                 if (elapsedSec <= 20) {
                     dot.className = 'w-2 h-2 rounded-full bg-emerald-400';
@@ -16297,7 +16418,7 @@
             if (!n) return '—';
             try {
                 const d = new Date(n);
-                return d.toLocaleString('en-GB', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
+                return d.toLocaleDateString('en-GB', { month: '2-digit', day: '2-digit' }) + ' ' + rbFmtClock(d);
             } catch (_) { return '—'; }
         }
 
@@ -16412,6 +16533,14 @@
                 if (bell) {
                     bell.classList.toggle('rb-bell-muted', rbNotifMuted);
                     bell.title = rbNotifMuted ? 'الإشعارات مكتومة — فتح المركز' : 'الإشعارات — فتح المركز';
+                }
+                // B50 — مزامنة زر الكتم داخل «الواجهة والإشعارات» مع الحالة العامة
+                const cfgBtn = document.getElementById('cfg-notif-mute-btn');
+                if (cfgBtn) {
+                    cfgBtn.textContent = rbNotifMuted ? '🔕 الإشعارات مكتومة' : '🔔 الإشعارات مفعّلة';
+                    cfgBtn.className = rbNotifMuted
+                        ? 'text-[10px] font-bold px-2.5 py-1.5 rounded-xl border transition bg-rose-950/80 border-rose-500/50 text-rose-200'
+                        : 'text-[10px] font-bold px-2.5 py-1.5 rounded-xl border transition bg-emerald-950/80 border-emerald-500/40 text-emerald-200';
                 }
                 const centerBtn = document.getElementById('rb-notif-center-mute');
                 if (centerBtn) {
@@ -16934,15 +17063,15 @@
             }).catch(e => showToast('تعذّر تبديل ' + label + ': ' + String((e && e.message) || e), 'error'));
         }
 
-        function renderAdvancedControlView() {
-            const panel = document.getElementById('panel-content');
+        function renderAdvancedControlView(host, asSection) {
+            const panel = host || document.getElementById('panel-content');
             if (!panel) return;
             rbHwUnread = 0;
             rbUpdateAdvancedBadge();
-            panel.innerHTML = `
-                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-2.5 mb-2.5 border-b border-slate-800 gap-2">
+            const advancedHtml = `
+                <div class="mt-4 pt-4 border-t-2 border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center pb-2.5 mb-2.5 gap-2">
                     <div>
-                        <h2 class="text-lg md:text-xl font-bold text-emerald-300">🛠️ التحكم والأوامر المتقدمة</h2>
+                        <h3 class="text-base md:text-lg font-bold text-emerald-300">📡 مراقبة العتاد والخدمات الحية</h3>
                         <p class="text-xs text-slate-400">مراقبة حية لكل تغيّر في العتاد والخدمات: الشاشة، القفل، الاتصال، البلوتوث، Wi-Fi، البيانات، الشحن، الصوت، الميكروفون، الحركة والوضعية، التغطية، الطيران، وصوت الوسائط.</p>
                     </div>
                     <div class="flex flex-wrap items-center gap-1.5 shrink-0">
@@ -16995,6 +17124,8 @@
                     <div id="rb-hw-events" class="space-y-1.5 max-h-[42vh] overflow-y-auto custom-scrollbar pr-1">${rbHardwareEventsHtml()}</div>
                 </div>
             `;
+            if (asSection) panel.insertAdjacentHTML('beforeend', advancedHtml);
+            else panel.innerHTML = advancedHtml;
             setTimeout(() => { try { rbRequestHardwareStatus(); } catch (_) {} }, 180);
         }
 
