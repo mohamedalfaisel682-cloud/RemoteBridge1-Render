@@ -48,9 +48,6 @@ const b24Keys = [
     'function toggleRecordStream(', 'function enhanceCameraTab(',
     'function refreshCameraRecordsBox(', 'function addCallRecordingsSection(',
     'onclick="toggleRecordStream()"', 'id="records-cam-box"', 'mrgEnhanceSweep',
-    // B29 — تفصيل أذونات المضيف الكامل المستعلم مباشرة (permission_status + اللوحة الجديدة)
-    'function renderHostPermsFull(', 'function refreshHostPermissionsDetail(',
-    "cmd === 'permission_status'", 'host-perm-detail',
 ];
 
 let failed = 0;

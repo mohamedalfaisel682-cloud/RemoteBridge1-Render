@@ -452,7 +452,7 @@
         .rb-loc-row-click { cursor: pointer; transition: background .15s; }
         .rb-loc-row-click:hover { background: rgba(56, 189, 248, 0.08); }
         /* B42 — أيقونات نشاط العتاد والخدمات (نشط = متوهج أخضر، غير نشط = رمادي) */
-        .rb-act-icon { width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; position: relative; border-radius: 8px; border: 1px solid #334155; background: rgba(15, 23, 42, .75); color: #64748b; font-size: 12px; line-height: 1; cursor: pointer; transition: all .2s; }
+        .rb-act-icon { width: 31px; height: 31px; display: inline-flex; align-items: center; justify-content: center; position: relative; border-radius: 9px; border: 1px solid #334155; background: rgba(15, 23, 42, .75); color: #64748b; font-size: 15px; line-height: 1; cursor: pointer; transition: all .2s; }
         .rb-act-icon:hover { color: #e2e8f0; border-color: #475569; transform: translateY(-1px); }
         .rb-act-icon.active { color: #d1fae5; border-color: rgba(52, 211, 153, .75); background: rgba(6, 78, 59, .55); box-shadow: 0 0 8px rgba(16, 185, 129, .45); }
         .rb-act-live-dot { position: absolute; top: -2px; left: -2px; width: 7px; height: 7px; border-radius: 9999px; background: #34d399; box-shadow: 0 0 0 2px rgba(2, 6, 23, .9); animation: rbActPulse 1.2s ease-in-out infinite; }
@@ -738,9 +738,18 @@
             border-color: rgba(16, 185, 129, .7);
             box-shadow: 0 0 0 1px rgba(16, 185, 129, .3), 0 0 40px rgba(16, 185, 129, .16), 0 18px 50px rgba(0, 0, 0, .55);
         }
-        .rb-mp-stage { position: relative; width: 100%; aspect-ratio: 16 / 9; max-height: 62vh; background: #010409; }
-        .rb-mp-stage video { width: 100%; height: 100%; object-fit: contain; background: transparent; transition: object-fit .25s ease; }
-        .rb-mp-stage.rb-mp-cover video { object-fit: cover; }
+        .rb-mp-stage { position: relative; width: 100%; aspect-ratio: 16 / 9; max-height: 70vh; background: #010409; transition: aspect-ratio .2s ease; }
+        .rb-mp-stage video { width: 100%; height: 100%; object-fit: contain !important; background: transparent; }
+        .rb-mp-stage.rb-mp-ratio-19-6 { aspect-ratio: 19 / 6; }
+        .rb-mp-stage.rb-mp-ratio-4-3 { aspect-ratio: 4 / 3; }
+        .rb-mp-stage.rb-mp-fs, .rb-mp-stage:fullscreen {
+            width: 100vw; height: 100vh; max-height: none; aspect-ratio: auto !important;
+            background: #000; border-radius: 0; display: flex; align-items: center; justify-content: center;
+        }
+        .rb-mp-stage.rb-mp-fs video, .rb-mp-stage:fullscreen video { width: 100%; height: 100%; object-fit: contain !important; }
+        .rb-mp-hud, .rb-mp-bar { transition: opacity .2s ease; }
+        .rb-mp-wrap.rb-controls-hidden .rb-mp-hud,
+        .rb-mp-wrap.rb-controls-hidden .rb-mp-bar { opacity: 0; pointer-events: none; }
         .rb-mp-fade-top {
             position: absolute; inset: 0 0 auto 0; height: 64px; pointer-events: none;
             background: linear-gradient(180deg, rgba(2, 6, 23, .85) 0%, rgba(2, 6, 23, .35) 45%, transparent 100%);
@@ -776,9 +785,9 @@
             display: flex; gap: 5px;
         }
         .rb-mp-tool {
-            width: 30px; height: 30px; border-radius: 10px;
+            width: 39px; height: 39px; border-radius: 12px;
             display: inline-flex; align-items: center; justify-content: center;
-            font-size: 13px; line-height: 1;
+            font-size: 16px; line-height: 1;
             background: rgba(2, 6, 23, .8); border: 1px solid rgba(71, 85, 105, .8);
             color: #cbd5e1; transition: transform .15s, border-color .15s, background .15s;
         }
@@ -1030,8 +1039,8 @@
            ============================================================ */
         .rb-prio-group { display: inline-flex; align-items: center; gap: 2px; flex-shrink: 0; }
         .rb-prio-btn {
-            width: 22px; height: 22px; border-radius: 7px; border: 1px solid #334155;
-            background: rgba(15,23,42,.82); color: #64748b; font-size: 11px; line-height: 1;
+            width: 29px; height: 29px; border-radius: 8px; border: 1px solid #334155;
+            background: rgba(15,23,42,.82); color: #64748b; font-size: 14px; line-height: 1;
             display: inline-flex; align-items: center; justify-content: center;
             cursor: pointer; transition: all .16s ease; padding: 0;
         }
@@ -1039,7 +1048,7 @@
         .rb-prio-btn.on-important { color: #fde68a; border-color: rgba(245,158,11,.85); background: rgba(120,53,15,.55); box-shadow: 0 0 8px rgba(245,158,11,.35); }
         .rb-prio-btn.on-normal { color: #a7f3d0; border-color: rgba(16,185,129,.75); background: rgba(6,78,59,.5); }
         .rb-prio-btn.on-silent { color: #cbd5e1; border-color: rgba(100,116,139,.7); background: rgba(30,41,59,.7); opacity: .8; }
-        .rb-prio-btn.rb-prio-mini { width: 18px; height: 18px; font-size: 9.5px; border-radius: 6px; }
+        .rb-prio-btn.rb-prio-mini { width: 24px; height: 24px; font-size: 12px; border-radius: 7px; }
 
         .rb-notif-item {
             position: relative; border: 1px solid #1e293b; border-radius: 12px;
@@ -1065,10 +1074,44 @@
         .rb-notif-text { font-size: 10.5px; color: #94a3b8; line-height: 1.55; margin-top: 2px; word-break: break-word; }
         .rb-notif-meta { font-size: 9px; color: #64748b; margin-top: 3px; }
         .rb-notif-badge {
-            min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px;
-            background: #f59e0b; color: #1c1917; font-size: 9px; font-weight: 900;
+            min-width: 18px; height: 18px; padding: 0 4px; border-radius: 999px;
+            background: #f59e0b; color: #1c1917; font-size: 12px; font-weight: 900;
             display: inline-flex; align-items: center; justify-content: center;
             box-shadow: 0 0 8px rgba(245,158,11,.55);
+        }
+        /* B49 — أيقونة الإشعارات الواحدة + معاينة الإشعار الهام الملتصقة أسفلها */
+        .rb-notif-slot { position: relative; display: inline-flex; align-items: center; }
+        .rb-notif-pop {
+            position: absolute; top: calc(100% + 8px); right: 0; z-index: 130;
+            width: 236px; padding: 7px; border-radius: 13px; border: 1px solid #334155;
+            background: rgba(2,6,23,.985); box-shadow: 0 18px 44px rgba(0,0,0,.6);
+            display: flex; flex-direction: column; gap: 5px;
+        }
+        .rb-notif-pop[hidden] { display: none !important; }
+        .rb-notif-pop button {
+            font-size: 12px; font-weight: 800; border-radius: 9px; padding: 8px 10px;
+            text-align: right; transition: all .15s ease; width: 100%;
+        }
+        .rb-notif-open-center { background: #1e293b; color: #e2e8f0; border: 1px solid #334155; }
+        .rb-notif-open-center:hover { background: #334155; }
+        .rb-notif-mute-btn { background: rgba(6,78,59,.5); color: #a7f3d0; border: 1px solid rgba(16,185,129,.45); }
+        .rb-notif-mute-btn.off { background: rgba(127,29,29,.45); color: #fecaca; border-color: rgba(244,63,94,.5); }
+        .rb-notif-preview {
+            position: absolute; top: calc(100% + 8px); right: 0; z-index: 120;
+            width: min(286px, 86vw); border-radius: 12px; padding: 8px 10px;
+            border: 1px solid rgba(245,158,11,.72);
+            background: linear-gradient(135deg, rgba(69,26,3,.97), rgba(2,6,23,.985));
+            box-shadow: 0 14px 34px rgba(0,0,0,.55), 0 0 14px rgba(245,158,11,.2);
+            cursor: pointer; animation: rbNotifGlow 3.4s ease-in-out infinite;
+        }
+        .rb-notif-preview[hidden] { display: none !important; }
+        .rb-notif-preview .rb-np-kicker { font-size: 12px; font-weight: 900; color: #fcd34d; display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+        .rb-notif-preview .rb-np-text { font-size: 12px; color: #fde68a; line-height: 1.5; margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .rb-notif-preview .rb-np-time { font-size: 12px; color: #f59e0b; margin-top: 3px; font-family: "Consolas", ui-monospace, monospace; }
+        /* B49 — الحد الأدنى لنص الواجهة 12px: كل ما كان أصغر من text-xs */
+        [class~="text-[8px]"], [class~="text-[8.5px]"], [class~="text-[9px]"], [class~="text-[9.5px]"],
+        [class~="text-[10px]"], [class~="text-[10.5px]"], [class~="text-[11px]"], [class~="text-[11.5px]"] {
+            font-size: 12px !important; line-height: 1.45;
         }
         .rb-notif-center-list { max-height: 58vh; overflow-y: auto; }
         .rb-prio-row {
@@ -1118,7 +1161,96 @@
         body.ui-light .rb-prio-btn { background: #f1f5f9; border-color: #cbd5e1; color: #475569; }
         @media (max-width: 640px) {
             .rb-notif-center-list { max-height: 64vh; }
-            .rb-geofence-draw-hint { font-size: 9px; padding: 3px 8px; }
+            .rb-geofence-draw-hint { font-size: 12px; padding: 3px 8px; }
+        }
+        /* B49 — توحيد الحد الأدنى للخط عند 12px في كل الأنماط المخصصة (مرجع: زر فحص الجاهزية text-xs) */
+        .tab-badge, .file-thumb-name, .bubble-time, .ts-date-sep, .rb-chat-rail button, .rb-more-btn,
+        .rb-stream-stage .rb-state-chip, .rb-stream-d, .rb-stream-chip-hint, .settings-subitem,
+        .rb-lightwin .lw-sub, .rb-lightwin .lw-meta, .rb-lightwin .lw-copy-btn, .rb-lightwin .lw-play-btn,
+        .rb-copy-btn, .viewsize-btn, #studio-grid.vs-details .studio-type-badge, #studio-grid.vs-details .studio-meta,
+        .fb-bc, .fb-bc-sep, .studio-meta, .studio-type-badge, .studio-chip, .rb-mp-chip, .rbv3-sub,
+        .rbv3-tag, .rbv3-stage-badge, .rbv3-stage-clock, .rbv3-key-label, .rbv3-meter-title, .rbv3-meter-val,
+        .rb-lang-btn, .rb-notif-title, .rb-notif-text, .rb-notif-meta, .rb-prio-row .rb-prio-label,
+        .rb-prio-row .rb-prio-desc, .rb-prio-section {
+            font-size: 12px !important;
+        }
+        #rb-notif-bell.rb-bell-muted { filter: grayscale(.75); opacity: .72; }
+        /* B49 — نافذة الملفات المحفوظة */
+        .rb-saved-chip {
+            font-size: 12px; font-weight: 800; padding: 5px 10px; border-radius: 9px;
+            background: #1e293b; color: #cbd5e1; border: 1px solid #334155; transition: all .15s ease;
+        }
+        .rb-saved-chip:hover { background: #334155; color: #f1f5f9; }
+        .rb-saved-chip.on { background: rgba(6,78,59,.65); color: #a7f3d0; border-color: rgba(16,185,129,.65); }
+        .rb-saved-row {
+            display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-radius: 11px;
+            background: rgba(15,23,42,.72); border: 1px solid #1e293b; transition: all .15s ease;
+        }
+        .rb-saved-row:hover { border-color: #334155; background: rgba(30,41,59,.7); }
+        .rb-saved-thumb {
+            width: 38px; height: 38px; border-radius: 9px; flex-shrink: 0;
+            display: flex; align-items: center; justify-content: center; font-size: 18px;
+            background: rgba(2,6,23,.85); border: 1px solid #334155;
+        }
+        .rb-saved-name { font-size: 12px; font-weight: 800; color: #e2e8f0; direction: ltr; text-align: left; word-break: break-all; }
+        .rb-saved-meta { font-size: 12px; color: #94a3b8; margin-top: 1px; }
+        .rb-saved-act {
+            width: 31px; height: 31px; border-radius: 9px; font-size: 15px; line-height: 1;
+            display: inline-flex; align-items: center; justify-content: center;
+            background: #1e293b; border: 1px solid #334155; color: #e2e8f0; transition: all .15s ease;
+        }
+        .rb-saved-act:hover { background: #334155; transform: translateY(-1px); }
+        .rb-saved-act.play { background: rgba(6,78,59,.6); border-color: rgba(16,185,129,.55); }
+        .rb-saved-act.play:hover { background: rgba(6,95,70,.85); }
+        .rb-saved-act.del { background: rgba(127,29,29,.45); border-color: rgba(244,63,94,.45); }
+        .rb-saved-act.del:hover { background: rgba(153,27,27,.75); }
+        /* B49 — أيقونة التسجيل الموحّدة وقائمتها */
+        .rb-rec-slot { position: relative; display: inline-flex; align-items: center; }
+        .rb-rec-btn {
+            position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+            padding: 8px 13px; border-radius: 12px; font-weight: 800; font-size: 12px;
+            background: #1e293b; color: #e2e8f0; border: 1px solid #334155;
+            transition: all .18s ease; cursor: pointer;
+        }
+        .rb-rec-btn:hover { background: #334155; transform: translateY(-1px); }
+        .rb-rec-btn .rb-rec-dot {
+            width: 10px; height: 10px; border-radius: 999px; background: #94a3b8;
+            box-shadow: 0 0 0 2px rgba(148,163,184,.18); transition: all .18s ease;
+        }
+        .rb-rec-btn.rb-rec-on {
+            background: rgba(153,27,27,.75); color: #fecaca; border-color: rgba(244,63,94,.85);
+            box-shadow: 0 0 0 2px rgba(244,63,94,.3), 0 0 18px rgba(244,63,94,.35);
+        }
+        .rb-rec-btn.rb-rec-on .rb-rec-dot {
+            background: #f43f5e; box-shadow: 0 0 0 3px rgba(244,63,94,.25), 0 0 10px rgba(244,63,94,.9);
+            animation: rbRecPulse 1.1s ease-in-out infinite;
+        }
+        .rb-rec-btn.rb-rec-busy { border-color: rgba(245,158,11,.8); color: #fde68a; }
+        @keyframes rbRecPulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .45; transform: scale(.82); } }
+        .rb-rec-menu {
+            position: absolute; top: calc(100% + 8px); right: 0; z-index: 132;
+            width: 232px; padding: 7px; border-radius: 13px; border: 1px solid #334155;
+            background: rgba(2,6,23,.985); box-shadow: 0 18px 44px rgba(0,0,0,.6);
+            display: flex; flex-direction: column; gap: 5px;
+        }
+        .rb-rec-menu[hidden] { display: none !important; }
+        .rb-rec-menu button {
+            display: flex; align-items: center; justify-content: space-between; gap: 8px;
+            font-size: 12px; font-weight: 800; border-radius: 9px; padding: 9px 10px;
+            background: #1e293b; color: #e2e8f0; border: 1px solid #334155;
+            text-align: right; transition: all .15s ease; width: 100%;
+        }
+        .rb-rec-menu button:hover { background: #334155; }
+        .rb-rec-menu button.rb-rec-item-on {
+            background: rgba(153,27,27,.72); color: #fecaca; border-color: rgba(244,63,94,.8);
+        }
+        .rb-rec-menu .rb-rec-menu-hint { font-size: 12px; color: #94a3b8; padding: 2px 4px 4px; }
+        /* B49 — نبضة استجابة موحّدة لأيقونات اللقطات */
+        .rb-btn-pulse { animation: rbBtnPulse .75s ease; }
+        @keyframes rbBtnPulse {
+            0% { box-shadow: 0 0 0 0 rgba(56,189,248,.75); }
+            60% { box-shadow: 0 0 0 8px rgba(56,189,248,0); }
+            100% { box-shadow: 0 0 0 0 rgba(56,189,248,0); }
         }
     </style>
 </head>
@@ -1152,10 +1284,19 @@
                 <span id="ping-text" class="text-slate-500 font-mono">--ms</span>
             </div>
             
-            <button id="rb-notif-bell" onclick="openNotifCenter()" title="مركز إشعارات المتحكم — الهامة أولاً" class="relative bg-slate-800 hover:bg-slate-700 border border-slate-700 text-amber-300 px-2.5 md:px-3 py-1.5 md:py-2 rounded-xl text-xs font-bold shadow-md transition flex items-center gap-1.5 shrink-0">
-                <span>🔔</span><span class="hidden sm:inline">الإشعارات</span>
-                <span id="rb-notif-bell-badge" class="rb-notif-badge absolute -top-1.5 -left-1.5" hidden>0</span>
-            </button>
+            <!-- B49 — أيقونة إشعارات واحدة فقط بجوار «فحص الاتصال» + معاينة هامة واحدة أسفلها -->
+            <div class="rb-notif-slot" id="rb-notif-slot">
+                <button id="rb-notif-bell" onclick="rbToggleNotifMenu(event)" title="الإشعارات — فتح المركز" aria-label="الإشعارات" aria-expanded="false" class="relative bg-slate-800 hover:bg-slate-700 border border-slate-700 text-amber-300 w-9 h-9 md:w-10 md:h-10 rounded-xl text-base font-bold shadow-md transition flex items-center justify-center shrink-0">
+                    <span>🔔</span>
+                    <span id="rb-notif-bell-badge" class="rb-notif-badge absolute -top-1.5 -left-1.5" hidden>0</span>
+                </button>
+                <div id="rb-notif-pop" class="rb-notif-pop" hidden>
+                    <button type="button" onclick="openNotifCenter()" class="rb-notif-open-center">📥 فتح المركز</button>
+                    <button type="button" id="rb-notif-mute-btn" onclick="rbToggleNotifMute()" class="rb-notif-mute-btn">🔔 الإشعارات مفعّلة</button>
+                    <button type="button" onclick="openNotifPrioritySettings()" class="rb-notif-open-center">⚙️ أولوية الإشعارات</button>
+                </div>
+                <div id="rb-notif-preview" class="rb-notif-preview" hidden></div>
+            </div>
             <button onclick="startFullConnectivityDiagnostic()" id="diag-header-btn" class="bg-purple-600 hover:bg-purple-500 active:scale-95 text-white px-2.5 md:px-3.5 py-1.5 md:py-2 rounded-xl text-xs font-bold shadow-md transition flex items-center gap-1.5 shrink-0">
                 <svg class="w-4 h-4 text-purple-200 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
@@ -1180,7 +1321,6 @@
         <button onclick="switchTab('contacts')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">📇 الأسماء <span class="tab-state-dot" data-tab-dot="contacts" title="حالة الميزة الحيّة"></span> <span id="badge-contacts-m" class="tab-badge" hidden>0</span></button>
         <button onclick="switchTab('sms')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">💬 الرسائل <span class="tab-state-dot" data-tab-dot="sms" title="حالة الميزة الحيّة"></span> <span id="badge-sms-m" class="tab-badge" hidden>0</span></button>
         <button onclick="switchTab('calls')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">📞 المكالمات <span class="tab-state-dot" data-tab-dot="calls" title="حالة الميزة الحيّة"></span> <span id="badge-calls-m" class="tab-badge" hidden>0</span></button>
-        <button onclick="switchTab('notifications')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">🔔 الإشعارات <span class="tab-state-dot" data-tab-dot="notifications" title="حالة الميزة الحيّة"></span> <span id="badge-notifications-m" class="tab-badge" hidden>0</span></button>
         <button onclick="switchTab('settings')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">⚙️ الإعدادات <span class="tab-state-dot" data-tab-dot="settings" title="حالة الميزة الحيّة"></span></button>
         <button onclick="switchTab('commands')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">⚡ الأوامر</button>
         <button onclick="switchTab('advanced')" class="tab-btn-mobile px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap text-slate-300 bg-slate-800/60">🛠️ التحكم المتقدم <span id="badge-advanced-m" class="tab-badge" hidden>0</span></button>
@@ -1223,10 +1363,6 @@
                 <button onclick="switchTab('calls')" class="tab-btn w-full text-right px-3.5 py-2.5 rounded-xl hover:bg-slate-800/80 text-slate-300 font-medium transition flex items-center justify-between group">
                     <span class="flex items-center gap-2.5 text-xs"><span class="tab-emoji">📞</span> سجل المكالمات<span class="tab-state-dot" data-tab-dot="calls" title="حالة الميزة الحيّة"></span></span>
                     <span id="badge-calls" class="tab-badge" hidden>0</span>
-                </button>
-                <button onclick="switchTab('notifications')" class="tab-btn w-full text-right px-3.5 py-2.5 rounded-xl hover:bg-slate-800/80 text-slate-300 font-medium transition flex items-center justify-between group">
-                    <span class="flex items-center gap-2.5 text-xs"><span class="tab-emoji">🔔</span> الإشعارات الحية<span class="tab-state-dot" data-tab-dot="notifications" title="حالة الميزة الحيّة"></span></span>
-                    <span id="badge-notifications" class="tab-badge" hidden>0</span>
                 </button>
                 <button onclick="switchTab('settings')" id="settings-tab-btn" class="tab-btn w-full text-right px-3.5 py-2.5 rounded-xl hover:bg-slate-800/80 text-slate-300 font-medium transition flex items-center justify-between group">
                     <span class="flex items-center gap-2.5 text-xs"><span class="tab-emoji">⚙️</span> الإعدادات والبروفايلات<span class="tab-state-dot" data-tab-dot="settings" title="حالة الميزة الحيّة"></span></span>
@@ -1408,16 +1544,14 @@
             audioEnabled: true
         };
 
-        // B16/B18 — التبويب الفرعي للبث: ثلاث واجهات — «main» كلاسيكية، «pro» محرك برمجي احتياطي، «studio» استوديو سينمائي
+        // B49 — المشغّل الكلاسيكي هو الوحيد: أُزيلت واجهتا pro/studio نهائياً
         let broadcastViewMode = 'main';
-        try { const _m = localStorage.getItem('rb_bc_mode_v1'); broadcastViewMode = (_m === 'pro' || _m === 'studio') ? _m : 'main'; } catch (_) { broadcastViewMode = 'main'; }
         function setBroadcastViewMode(m) {
-            broadcastViewMode = (m === 'pro' || m === 'studio') ? m : 'main';
-            try { localStorage.setItem('rb_bc_mode_v1', broadcastViewMode); } catch (_) {}
-            // مزامنة القائمة المنسدلة في الإعدادات مع أي تبديل من أزرار اللوحة
+            broadcastViewMode = 'main';
+            try { localStorage.setItem('rb_bc_mode_v1', 'main'); } catch (_) {}
             try {
                 const sel = document.getElementById('legacy-iface-select');
-                if (sel && sel.value !== broadcastViewMode) sel.value = broadcastViewMode;
+                if (sel && sel.value !== 'main') sel.value = 'main';
             } catch (_) {}
             rbRefreshStreamPane();
         }
@@ -1542,6 +1676,10 @@
         ];
 
         let appConfig = Object.assign({}, DEFAULT_CONFIG, readStoredConfig() || {});
+        // B49 — كتم كامل لإشعارات الشاشة (يبقى التسجيل في المركز) — مفتاح محلي دائم
+        var rbNotifMuted = (function () {
+            try { return localStorage.getItem('rb_notif_muted_v1') === '1'; } catch (_) { return false; }
+        })();
         if (!appConfig.serverScope) appConfig.serverScope = 'AUTO';
         let configNeedsPersist = false;
 
@@ -1730,8 +1868,18 @@
         const seenOnceHints = new Set(); // تلميحات إرشادية ظهرت مرة واحدة في الجلسة
         window.__rbEventLog = window.__rbEventLog || [];
 
-        function showToast(message, type = "info") {
+        // B49 — نبضة بصرية فورية عند النقر على أيقونات اللقطات والتسجيل
+        function rbPulseBtn(el) {
             try {
+                if (!el) return;
+                el.classList.remove('rb-btn-pulse');
+                void el.offsetWidth;
+                el.classList.add('rb-btn-pulse');
+                setTimeout(() => { try { el.classList.remove('rb-btn-pulse'); } catch (_) {} }, 850);
+            } catch (_) {}
+        }
+
+        function showToast(message, type = "info") {            try {
                 window.__rbEventLog.push({
                     ts: Date.now(),
                     time: new Date().toLocaleTimeString('en-GB'),
@@ -1749,6 +1897,8 @@
             }
             // «اسكات»: لا يظهر على الشاشة الرئيسية إطلاقاً، ويُضاف فقط في قائمة الإشعارات
             if (rbLevel === 'silent') return;
+            // B49 — الكتم الكامل: لا يظهر أي إشعار مرئي على الشاشة، ويستمر التسجيل في المركز
+            if (rbNotifMuted) return;
 
             const container = document.getElementById("toast-container");
             if (!container) return;
@@ -3397,7 +3547,7 @@
                         audioEl.play().catch(e => console.log("Audio auto-play policy:", e));
                     }
                     showToast("تم استقبال الصوت الحي من الميكروفون! 🎙️", "success");
-                    try { attachLiveAudioMeter(); } catch (_) {}
+                    try { window.__rbMeterDismissed = false; rbRefreshAudioMeterVisibility(); } catch (_) {}
                 }
                 // B16/B18 — مرايا عرض المحرك البرمجي والاستوديو: تُملأ تلقائياً عند وجودها
                 try {
@@ -3816,29 +3966,60 @@
                 .rb-dl-name{font-size:11px;color:#bbf7d0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
                 .rb-dl-barwrap{margin-top:6px;height:5px;border-radius:9999px;background:#1e293b;overflow:hidden}
                 .rb-dl-bar{height:100%;width:12%;border-radius:9999px;background:linear-gradient(90deg,#14532d,#16a34a);transition:width .45s ease}
-                .rb-dl-sub{margin-top:5px;display:flex;gap:8px;justify-content:space-between;font-size:10px;color:#94a3b8}
+                .rb-dl-sub{margin-top:5px;display:flex;gap:8px;justify-content:space-between;font-size:12px;color:#94a3b8}
                 .rb-dl-eta{color:#cbd5e1}
                 .rb-dl-flash{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700}
                 @keyframes rbDlSpin{to{transform:rotate(360deg)}}
-                #rb-dl-mini{position:fixed;top:96px;right:12px;z-index:41;display:inline-flex;align-items:center;gap:6px;direction:rtl;background:rgba(15,23,42,.92);border:1px solid rgba(22,163,74,.55);border-radius:9999px;padding:4px 10px;color:#dcfce7;font:700 11px/1.3 'Segoe UI',Tahoma,Arial,sans-serif;box-shadow:0 2px 10px rgba(0,0,0,.45);cursor:pointer;max-width:210px;white-space:nowrap;animation:rbDlPulse 1.5s ease-in-out infinite}
+                #rb-dl-mini{position:fixed;top:96px;right:12px;z-index:41;display:inline-flex;align-items:center;gap:6px;direction:rtl;background:rgba(15,23,42,.92);border:1px solid rgba(22,163,74,.55);border-radius:9999px;padding:4px 10px;color:#dcfce7;font:700 12px/1.3 'Segoe UI',Tahoma,Arial,sans-serif;box-shadow:0 2px 10px rgba(0,0,0,.45);cursor:pointer;max-width:210px;white-space:nowrap;animation:rbDlPulse 1.5s ease-in-out infinite}
                 @media(min-width:767px){#rb-dl-mini{top:64px}}
                 #rb-dl-mini.rb-mini-off{display:none}
                 #rb-dl-mini .rb-mini-ic{width:13px;height:13px;border-radius:9999px;border:2px solid rgba(148,163,184,.35);border-top-color:#22c55e;animation:rbDlSpin .9s linear infinite;flex-shrink:0}
                 #rb-dl-mini .rb-mini-txt{overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
                 @keyframes rbDlPulse{0%,100%{box-shadow:0 2px 10px rgba(0,0,0,.45),0 0 0 0 rgba(34,197,94,.5)}50%{box-shadow:0 2px 10px rgba(0,0,0,.45),0 0 0 6px rgba(34,197,94,0)}}
+                /* B49 — نافذة التنزيل/الرفع المطوّرة: اسم كامل + حجم + نسبة + سحب + تصغير/استعادة */
+                #rb-dl-badge.rb-dl-card{width:min(368px,92vw);max-width:none;padding:0;pointer-events:auto;border-radius:16px;overflow:hidden;direction:rtl;touch-action:none}
+                .rb-dl-head{display:flex;align-items:center;gap:8px;padding:8px 11px;background:rgba(2,6,23,.92);border-bottom:1px solid #1e293b;cursor:grab;user-select:none}
+                .rb-dl-head:active{cursor:grabbing}
+                .rb-dl-head-title{font-size:12px;font-weight:900;color:#bbf7d0;letter-spacing:.2px}
+                .rb-dl-hbtn{width:31px;height:31px;border-radius:9px;border:1px solid #334155;background:#1e293b;color:#cbd5e1;font-size:15px;line-height:1;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;transition:all .15s ease}
+                .rb-dl-hbtn:hover{background:#334155;color:#fff}
+                .rb-dl-body{padding:10px 12px 11px}
+                .rb-dl-top{display:flex;align-items:flex-start;gap:9px;min-width:0}
+                .rb-dl-name{font-size:12px;color:#dcfce7;white-space:normal;word-break:break-all;line-height:1.45;max-height:2.9em;overflow:hidden;min-width:0;flex:1}
+                .rb-dl-pct{font-weight:900;font-size:17px;color:#fff;min-width:48px;text-align:left;line-height:1.2}
+                .rb-dl-size{margin-top:5px;font-size:12px;color:#94a3b8;font-variant-numeric:tabular-nums}
+                #rb-dl-badge.rb-dl-up{border-color:rgba(56,189,248,.85)}
+                #rb-dl-badge.rb-dl-up .rb-dl-head-title{color:#bae6fd}
+                #rb-dl-badge.rb-dl-up .rb-dl-name{color:#e0f2fe}
+                #rb-dl-badge.rb-dl-up .rb-dl-ic{border-top-color:#38bdf8;border-color:rgba(56,189,248,.3);border-top-color:#38bdf8}
+                #rb-dl-badge.rb-dl-up .rb-dl-bar{background:linear-gradient(90deg,#075985,#38bdf8)}
+                #rb-dl-badge.rb-dl-up.rb-dl-ok{border-color:rgba(56,189,248,.9)}
+                #rb-dl-badge.rb-dl-min{display:none}
+                #rb-dl-mini.rb-dl-mini-side{top:auto;bottom:16px;right:auto;left:auto;max-width:min(260px,72vw);font-size:12px;padding:7px 12px;gap:8px}
+                #rb-dl-mini .rb-mini-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:150px;color:#e2e8f0}
+                #rb-dl-mini .rb-mini-pct{color:#86efac;font-weight:900}
+                #rb-dl-mini .rb-mini-max{font-size:14px;color:#f0fdf4}
                 .rb-loc-numwrap{background:transparent;border:none}
                 .rb-loc-num{width:20px;height:20px;border-radius:9999px;background:rgba(20,83,45,.94);border:1px solid #16a34a;color:#f0fdf4;font:700 10.5px/19px Segoe UI,Tahoma,Arial;text-align:center;box-shadow:0 1px 5px rgba(0,0,0,.6)}
                 .rb-loc-cap{background:rgba(15,23,42,.9);border:1px solid rgba(22,163,74,.6);border-radius:9999px;padding:1px 7px;font-size:13px;box-shadow:0 1px 6px rgba(0,0,0,.55)}`;
             document.head.appendChild(st);
         })();
         const rbDlMarkup = () => `
-                <div class="rb-dl-top">
+                <div class="rb-dl-head" id="rb-dl-head">
                     <div class="rb-dl-ic" aria-hidden="true">⬇</div>
-                    <span class="rb-dl-pct" id="rb-dl-pct">0%</span>
-                    <span class="rb-dl-name" id="rb-dl-name">جارٍ السحب من الهاتف…</span>
+                    <span class="rb-dl-head-title" id="rb-dl-mode">جارٍ التنزيل</span>
+                    <span style="flex:1"></span>
+                    <button type="button" class="rb-dl-hbtn" onclick="rbDlMinimize(event)" title="تصغير إلى الجانب الأقرب">▁</button>
                 </div>
-                <div class="rb-dl-barwrap"><div class="rb-dl-bar" id="rb-dl-bar"></div></div>
-                <div class="rb-dl-sub"><span class="rb-dl-eta" id="rb-dl-eta">الزمن المتوقع: يجري حسابه…</span><span id="rb-dl-count"></span></div>`;
+                <div class="rb-dl-body">
+                    <div class="rb-dl-top">
+                        <span class="rb-dl-pct" id="rb-dl-pct">0%</span>
+                        <span class="rb-dl-name" id="rb-dl-name">جارٍ السحب من الهاتف…</span>
+                    </div>
+                    <div class="rb-dl-barwrap"><div class="rb-dl-bar" id="rb-dl-bar"></div></div>
+                    <div class="rb-dl-sub"><span class="rb-dl-eta" id="rb-dl-eta">الزمن المتوقع: يجري حسابه…</span><span id="rb-dl-count"></span></div>
+                    <div class="rb-dl-size" id="rb-dl-size"></div>
+                </div>`;
         let rbDlJobs = {};
         let rbDlFlash = null;
         let rbDlBadgeTimer = null;
@@ -3855,13 +4036,89 @@
             if (b) return b;
             b = document.createElement('div');
             b.id = 'rb-dl-badge';
+            b.className = 'rb-dl-card';
             b.setAttribute('role', 'status');
-            b.setAttribute('aria-label', 'شارة جارٍ التنزيل مع النسبة المئوية والزمن المتوقع');
+            b.setAttribute('aria-label', 'نافذة التنزيل والرفع مع النسبة المئوية والحجم والزمن المتوقع');
             b.innerHTML = rbDlMarkup();
             document.body.appendChild(b);
+            rbDlMakeDraggable(b);
             return b;
         }
-        // B22 — الشارة المصغّرة المتحركة في إطار الواجهة: تُنشأ مرة واحدة وتُخفى افتراضياً
+        // B49 — سحب وإفلات نافذة التنزيل + تصغير/استعادة إلى الجانب الأقرب
+        let rbDlMinimized = false;
+        function rbDlMakeDraggable(b) {
+            try {
+                const head = b.querySelector('#rb-dl-head');
+                if (!head || head.__rbDragBound) return;
+                head.__rbDragBound = true;
+                let dragging = false, dx = 0, dy = 0;
+                head.addEventListener('pointerdown', function (ev) {
+                    if (ev.target && ev.target.closest && ev.target.closest('button')) return;
+                    try {
+                        const r = b.getBoundingClientRect();
+                        dragging = true;
+                        dx = ev.clientX - r.left;
+                        dy = ev.clientY - r.top;
+                        b.style.left = r.left + 'px';
+                        b.style.top = r.top + 'px';
+                        b.style.bottom = 'auto';
+                        b.style.right = 'auto';
+                        head.setPointerCapture && head.setPointerCapture(ev.pointerId);
+                        ev.preventDefault();
+                    } catch (_) {}
+                });
+                head.addEventListener('pointermove', function (ev) {
+                    if (!dragging) return;
+                    try {
+                        const w = b.offsetWidth || 360, h = b.offsetHeight || 140;
+                        let x = ev.clientX - dx, y = ev.clientY - dy;
+                        x = Math.max(6, Math.min(window.innerWidth - w - 6, x));
+                        y = Math.max(6, Math.min(window.innerHeight - h - 6, y));
+                        b.style.left = x + 'px';
+                        b.style.top = y + 'px';
+                    } catch (_) {}
+                });
+                const end = function (ev) {
+                    if (!dragging) return;
+                    dragging = false;
+                    try { head.releasePointerCapture && head.releasePointerCapture(ev.pointerId); } catch (_) {}
+                };
+                head.addEventListener('pointerup', end);
+                head.addEventListener('pointercancel', end);
+            } catch (_) {}
+        }
+
+        function rbDlMinimize(ev) {
+            try { if (ev) { ev.stopPropagation(); ev.preventDefault(); } } catch (_) {}
+            const b = document.getElementById('rb-dl-badge');
+            const mini = rbDlBindMini();
+            if (!b || !mini) return;
+            rbDlMinimized = true;
+            // الجانب الأقرب أفقياً + الموضع الرأسي الأقرب
+            let side = 'right';
+            try {
+                const r = b.getBoundingClientRect();
+                side = (r.left + r.width / 2) < window.innerWidth / 2 ? 'left' : 'right';
+                const fromBottom = window.innerHeight - r.bottom;
+                mini.style.bottom = Math.max(12, Math.min(window.innerHeight - 70, fromBottom)) + 'px';
+            } catch (_) {}
+            mini.style.left = side === 'left' ? '12px' : 'auto';
+            mini.style.right = side === 'right' ? '12px' : 'auto';
+            mini.classList.add('rb-dl-mini-side');
+            mini.classList.remove('rb-mini-off');
+            b.classList.add('rb-dl-min');
+        }
+
+        function rbDlRestore(ev) {
+            try { if (ev) { ev.stopPropagation(); ev.preventDefault(); } } catch (_) {}
+            rbDlMinimized = false;
+            const b = document.getElementById('rb-dl-badge');
+            if (b) b.classList.remove('rb-dl-min');
+            const mini = document.getElementById('rb-dl-mini');
+            if (mini) mini.classList.add('rb-mini-off');
+        }
+
+        // B22 — الشارة المصغّرة: تُنشأ مرة واحدة وتُخفى افتراضياً — B49: تعرض الاسم والنسبة وزر التكبير
         function rbDlBindMini() {
             let m = document.getElementById('rb-dl-mini');
             if (m) return m;
@@ -3870,18 +4127,15 @@
             m.id = 'rb-dl-mini';
             m.type = 'button';
             m.classList.add('rb-mini-off');
-            m.setAttribute('onclick', 'rbDlMiniFocus()');
-            m.setAttribute('aria-label', 'شارة مصغّرة متحركة لنسبة التنزيل والوقت المتوقع — انقر لتمييز شارة التنزيل الرئيسية');
-            m.title = 'ملفات جارٍ سحبها الآن';
-            m.innerHTML = '<span class="rb-mini-ic" aria-hidden="true"></span><span class="rb-mini-txt" id="rb-dl-mini-txt">0%</span>';
+            m.setAttribute('onclick', 'rbDlRestore(event)');
+            m.setAttribute('aria-label', 'نافذة التنزيل مصغّرة — انقر لاستعادة العرض الكامل');
+            m.title = 'انقر لاستعادة نافذة التنزيل';
+            m.innerHTML = '<span class="rb-mini-ic" aria-hidden="true"></span><span class="rb-mini-name" id="rb-dl-mini-name">جارٍ التنزيل</span><span class="rb-mini-pct" id="rb-dl-mini-pct">0%</span><span class="rb-mini-max" aria-hidden="true">⤢</span>';
             document.body.appendChild(m);
             return m;
         }
         function rbDlMiniFocus() {
-            const b = rbDlBindBadge();
-            if (!b) return;
-            b.classList.remove('rb-dl-out');
-            try { b.scrollIntoView({ behavior: 'smooth', block: 'end' }); } catch (_) {}
+            rbDlRestore();
         }
         // B23 — محرّك الأيقونات التفاعلي: كل عنصر يحمل data-rb-ctl يُضيء عند النشاط ويخفت بالخمول
         function rbStopStreamSafe() {
@@ -3918,25 +4172,33 @@
             const jobs = Object.keys(rbDlJobs).map(k => rbDlJobs[k]).filter(j => j && !j.done);
             if (jobs.length) {
                 if (!b) b = rbDlBindBadge();
-                b.classList.remove('rb-dl-out', 'rb-dl-ok', 'rb-dl-err');
+                b.classList.remove('rb-dl-out', 'rb-dl-ok', 'rb-dl-err', 'rb-dl-up');
                 // استعادة بنية العرض بعد أي وميض سابق
-                if (!document.getElementById('rb-dl-bar')) b.innerHTML = rbDlMarkup();
-                let gotAll = 0, totalAll = 0, knownTotal = false, newest = jobs[0];
+                if (!document.getElementById('rb-dl-bar')) { b.innerHTML = rbDlMarkup(); rbDlMakeDraggable(b); }
+                let gotAll = 0, totalAll = 0, knownTotal = false, newest = jobs[0], upCount = 0, downCount = 0;
                 jobs.forEach(j => {
                     gotAll += Number(j.got) || 0;
                     if (Number(j.total) > 0) { totalAll += Number(j.total); knownTotal = true; }
                     if ((Number(j.updAt) || 0) >= (Number(newest.updAt) || 0)) newest = j;
+                    if (j.dir === 'up') upCount++; else downCount++;
                 });
+                const isUp = upCount > 0 && downCount === 0;
+                if (isUp) b.classList.add('rb-dl-up');
+                const modeEl = document.getElementById('rb-dl-mode');
+                if (modeEl) modeEl.textContent = isUp ? 'جار الرفع' : (upCount > 0 ? 'رفع وتنزيل' : 'جارٍ التنزيل');
                 const pct = knownTotal && totalAll > 0 ? Math.min(100, Math.round(gotAll / totalAll * 100)) : null;
                 const pctEl = document.getElementById('rb-dl-pct'), nameEl = document.getElementById('rb-dl-name'),
-                    bar = document.getElementById('rb-dl-bar'), etaEl = document.getElementById('rb-dl-eta'), cntEl = document.getElementById('rb-dl-count');
+                    bar = document.getElementById('rb-dl-bar'), etaEl = document.getElementById('rb-dl-eta'),
+                    cntEl = document.getElementById('rb-dl-count'), sizeEl = document.getElementById('rb-dl-size');
                 if (pctEl) pctEl.textContent = pct === null ? '⟳' : (pct + '%');
-                if (nameEl) nameEl.textContent = (newest && newest.name) || 'جارٍ السحب من الهاتف…';
+                if (nameEl) nameEl.textContent = (newest && newest.name) || (isUp ? 'جار رفع ملف إلى المضيف…' : 'جارٍ السحب من الهاتف…');
                 if (bar) bar.style.width = (pct === null ? ((Number(newest && newest.got) > 0) ? 40 : 12) : pct) + '%';
                 let etaTxt = '';
                 if (etaEl) {
-                    if (pct === null) { etaTxt = 'جارٍ السحب: ' + rbFmtMB(gotAll); etaEl.textContent = etaTxt; }
-                    else {
+                    if (pct === null) {
+                        etaTxt = (isUp ? 'جار الرفع: ' : 'جارٍ السحب: ') + rbFmtMB(gotAll);
+                        etaEl.textContent = etaTxt;
+                    } else {
                         let eta = null;
                         if (newest && Number(newest.total) > 0 && Number(newest.got) > 0) {
                             const el = Math.max(0.5, (Date.now() - Number(newest.startedAt)) / 1000);
@@ -3949,17 +4211,23 @@
                         etaEl.textContent = etaTxt;
                     }
                 }
+                if (sizeEl) {
+                    sizeEl.textContent = (isUp ? 'الحجم: ' : '') + rbFmtBytes(gotAll) + (totalAll > 0 ? ' من ' + rbFmtBytes(totalAll) : '');
+                }
                 if (cntEl) cntEl.textContent = jobs.length > 1 ? ('مهام: ' + jobs.length) : '';
-                // B22 — الشارة المصغّرة في رأس الإطار: تُبنى وتُحدَّث داخل الدورة الزمنية نفسها (500ms)
+                // B49 — الشارة المصغّرة تظهر فقط عند التصغير، وتعرض اسم الملف والنسبة وزر التكبير
                 const mini = rbDlBindMini();
                 if (mini) {
-                    mini.classList.remove('rb-mini-off');
-                    const mt = document.getElementById('rb-dl-mini-txt');
-                    if (mt) {
-                        const compact = (etaTxt || '').replace('الزمن المتوقع: ', '').replace('جارٍ السحب: ', '');
-                        mt.textContent = (pct === null ? '⟳' : pct + '%') + ' • ' + compact + (jobs.length > 1 ? ' • ' + jobs.length + ' مهام' : '');
+                    if (rbDlMinimized) {
+                        mini.classList.remove('rb-mini-off');
+                        const mn = document.getElementById('rb-dl-mini-name');
+                        const mp = document.getElementById('rb-dl-mini-pct');
+                        if (mn) mn.textContent = (newest && newest.name) || (isUp ? 'جار الرفع' : 'جارٍ التنزيل');
+                        if (mp) mp.textContent = pct === null ? '⟳' : (pct + '%');
+                        mini.title = ((newest && newest.name) || '') + (pct === null ? '' : ' — ' + pct + '%') + ' — انقر للاستعادة';
+                    } else {
+                        mini.classList.add('rb-mini-off');
                     }
-                    mini.title = ((newest && newest.name) || 'سحب من الهاتف') + (pct === null ? '' : ' — ' + pct + '%');
                 }
                 return;
             }
@@ -3967,14 +4235,18 @@
             const fl = rbDlFlash;
             if (fl && Date.now() < Number(fl.until)) {
                 if (!b) b = rbDlBindBadge();
+                if (rbDlMinimized) { rbDlMinimized = false; b.classList.remove('rb-dl-min'); }
                 b.classList.remove('rb-dl-out');
                 b.classList.add(fl.ok ? 'rb-dl-ok' : 'rb-dl-err');
-                b.innerHTML = '<div class="rb-dl-flash" style="color:' + (fl.ok ? '#bbf7d0' : '#fecaca') + '"><span aria-hidden="true">' + (fl.ok ? '✅' : '❌') + '</span><span>' + (fl.ok ? 'اكتمل التنزيل ✓' : 'فشل التنزيل ✖') + (fl.name ? ' — ' + escapeHtml2(fl.name) : '') + '</span></div>';
+                const okTxt = fl.dir === 'up' ? 'اكتمل الرفع ✓' : 'اكتمل التنزيل ✓';
+                const errTxt = fl.dir === 'up' ? 'فشل الرفع ✖' : 'فشل التنزيل ✖';
+                b.innerHTML = '<div class="rb-dl-flash" style="color:' + (fl.ok ? '#bbf7d0' : '#fecaca') + ';padding:10px 12px"><span aria-hidden="true">' + (fl.ok ? '✅' : '❌') + '</span><span>' + (fl.ok ? okTxt : errTxt) + (fl.name ? ' — ' + escapeHtml2(fl.name) : '') + '</span></div>';
                 const miniF = document.getElementById('rb-dl-mini');
                 if (miniF) miniF.classList.add('rb-mini-off');
                 return;
             }
             rbDlFlash = null;
+            rbDlMinimized = false;
             const miniN = document.getElementById('rb-dl-mini');
             if (miniN) miniN.classList.add('rb-mini-off');
             if (b) {
@@ -3985,10 +4257,11 @@
         }
         function rbDlOnProgress(reqId, name, got, total) {
             try {
-                const j = rbDlJobs[reqId] || (rbDlJobs[reqId] = { got: 0, total: 0, startedAt: Date.now(), updAt: 0, name: '' });
+                const j = rbDlJobs[reqId] || (rbDlJobs[reqId] = { got: 0, total: 0, startedAt: Date.now(), updAt: 0, name: '', dir: 'down' });
                 j.name = name || j.name || 'ملف من الهاتف';
                 j.got = Number(got) || 0;
                 j.total = Number(total) || 0;
+                j.dir = j.dir || 'down';
                 j.updAt = Date.now();
                 if (!rbDlBadgeTimer) { rbDlBadgeTimer = setInterval(rbDlTick, 500); rbDlBindBadge(); }
                 rbDlTick();
@@ -3998,12 +4271,35 @@
             try {
                 const j = rbDlJobs[reqId];
                 const nm = (j && j.name) || '';
+                const dir = (j && j.dir) || 'down';
                 const sz = Number(sizeBytes) || 0;
                 delete rbDlJobs[reqId];
                 // الأجزاء الصغيرة لا تستحق وميضاً يشتت العين — فقط المهام الفعلية تُظهر الشارة
-                if (!ok || sz >= 262144) rbDlFlash = { ok: !!ok, name: nm, until: Date.now() + 2600 };
+                if (!ok || sz >= 262144 || dir === 'up') rbDlFlash = { ok: !!ok, name: nm, dir: dir, until: Date.now() + 2600 };
                 rbDlTick();
             } catch (_) {}
+        }
+        // B49 — واجهة الرفع: تُعرض في النافذة نفسها بلون مختلف ونص «جار الرفع»
+        function rbDlUploadStart(reqId, name, total) {
+            try {
+                rbDlJobs[reqId] = { got: 0, total: Number(total) || 0, startedAt: Date.now(), updAt: Date.now(), name: name || 'ملف', dir: 'up' };
+                if (!rbDlBadgeTimer) { rbDlBadgeTimer = setInterval(rbDlTick, 500); rbDlBindBadge(); }
+                rbDlTick();
+            } catch (_) {}
+        }
+        function rbDlUploadProgress(reqId, name, got, total) {
+            try {
+                const j = rbDlJobs[reqId];
+                if (!j) return;
+                j.got = Number(got) || 0;
+                if (Number(total) > 0) j.total = Number(total);
+                if (name) j.name = name;
+                j.updAt = Date.now();
+                rbDlTick();
+            } catch (_) {}
+        }
+        function rbDlUploadDone(reqId, ok, sizeBytes) {
+            rbDlOnDone(reqId, ok, sizeBytes);
         }
 
         // —— هيكل المشغل (يُنشأ مرة واحدة) ——
@@ -4166,9 +4462,11 @@
             document.getElementById('mp-controls').style.display = '';
             if (kind === 'audio') { wrap.classList.remove('hidden'); mpStatus('جارٍ سحب الصوت ثم تحليل الموجة…'); }
             try {
-                // B41 — المصدر قد يكون نسخة مشفرة منزّلة من الخادم (عندما يكون المضيف غير متصل)
+                // B49 — تشغيل مباشر لملف محفوظ في المتحكم بلا سحب من المضيف
                 let res;
-                if (o.serverBlob) {
+                if (o.blob instanceof Blob) {
+                    res = { blob: o.blob, name: o.name || 'وسيط', size: o.blob.size };
+                } else if (o.serverBlob) {
                     mpStatus('جارٍ جلب النسخة المشفرة من الخادم وفكّها…');
                     res = await rbFetchVaultBlobFromServer(Object.assign({ displayName: o.name, mime }, o.serverBlob));
                 } else {
@@ -4356,13 +4654,21 @@
                         </div>
                         <img src="${dataUrl}" class="w-full rounded-xl border border-slate-700" alt="">
                         <div class="flex flex-wrap items-center gap-2 mt-3 justify-center">
-                            <a href="${dataUrl}" download="${escHtml(name || 'rb_shot.png')}" class="text-[11px] font-bold bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-2 rounded-xl transition">⬇️ حفظ</a>
+                            <button onclick="rbCaptureSave()" class="text-[11px] font-bold bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-2 rounded-xl transition">⬇️ حفظ</button>
                             <button onclick="rbCaptureDrive()" class="text-[11px] font-bold bg-sky-800 hover:bg-sky-700 text-sky-100 px-3 py-2 rounded-xl transition">▲ رفع إلى Drive</button>
+                            <button onclick="openSavedFilesWindow()" class="text-[11px] font-bold bg-amber-800 hover:bg-amber-700 text-amber-50 px-3 py-2 rounded-xl transition">📂 الملفات المحفوظة</button>
                         </div>
                     </div>
                 </div>`;
             document.body.appendChild(div);
             window.__rbLastCapture = { dataUrl: dataUrl, name: name || ('rb_shot_' + Date.now() + '.png') };
+            // B49 — تسجيل اللقطة في «الملفات المحفوظة» فوراً مع نسخة قابلة للتشغيل
+            try {
+                const blob = rbDataUrlToBlob(dataUrl);
+                if (blob && blob.size) {
+                    rbRegisterSavedFile({ name: window.__rbLastCapture.name, mime: 'image/png', size: blob.size, blob: blob });
+                }
+            } catch (_) {}
             try {
                 const cfg = rbDriveCfg();
                 if (cfg.autoUploadCaptures && cfg.scriptUrl) {
@@ -4372,6 +4678,16 @@
             } catch (_) {}
         }
         function rbCaptureClose() { const el = document.getElementById('rb-capture-shell'); if (el) el.remove(); }
+        // B49 — حفظ اللقطة عبر جسر التطبيق/المتصفح مع تسجيلها في الملفات المحفوظة
+        async function rbCaptureSave() {
+            try {
+                if (!window.__rbLastCapture) return;
+                const blob = rbDataUrlToBlob(window.__rbLastCapture.dataUrl);
+                if (!blob) { showToast('تعذر تجهيز الصورة للحفظ', 'error'); return; }
+                await saveBlobAs(blob, window.__rbLastCapture.name, 'image/png');
+                rbRegisterSavedFile({ name: window.__rbLastCapture.name, mime: 'image/png', size: blob.size, blob: blob });
+            } catch (e) { showToast('تعذر حفظ اللقطة: ' + ((e && e.message) || String(e)), 'error'); }
+        }
         async function rbCaptureDrive() {
             try {
                 if (!window.__rbLastCapture) return;
@@ -4395,7 +4711,8 @@
         // —— مقياس مستوى الصوت الحي (AnalyserNode على الدفق الوارد — بلا صدى) ——
         function attachLiveAudioMeter() {
             try {
-                if (window.__rbLiveMeter) return;
+                if (window.__rbLiveMeter || window.__rbMeterDismissed) return;
+                if (!rbHasLiveAudioActivity()) return;
                 if (!remoteMediaStream || !remoteMediaStream.getAudioTracks().length) return;
                 const host = document.createElement('div');
                 host.className = 'fixed bottom-3 left-3 z-[75] bg-slate-900/95 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden';
@@ -4403,7 +4720,7 @@
                 host.innerHTML = `
                     <div class="flex items-center justify-between px-2.5 py-1.5 border-b border-slate-800 bg-slate-950/80">
                         <p class="text-[10px] font-bold text-teal-300">📊 مستوى الصوت الحي</p>
-                        <button onclick="stopLiveAudioMeter()" class="text-slate-500 hover:text-white text-xs px-1">✕</button>
+                        <button onclick="window.__rbMeterDismissed=true;stopLiveAudioMeter()" class="text-slate-500 hover:text-white text-xs px-1" title="إخفاء المقياس حتى بدء نشاط صوتي جديد">✕</button>
                     </div>
                     <canvas id="rb-lam-c" width="392" height="88" style="width:196px;height:44px;display:block"></canvas>`;
                 document.body.appendChild(host);
@@ -4449,7 +4766,27 @@
             try { if (m.ac) m.ac.close(); } catch (_) {}
             try { m.host.remove(); } catch (_) {}
             window.__rbLiveMeter = null;
+            try { window.__rbLiveRms = 0; } catch (_) {}
         }
+        // B49 — إظهار مقياس الصوت فقط عند نشاط صوت/ميكروفون فعلي أو تسجيل جارٍ
+        function rbHasLiveAudioActivity() {
+            try {
+                if (window.__rbMeterDismissed) return false;
+                if (streamState && streamState.active && streamState.mode === 'audio') return true;
+                const tracks = remoteMediaStream ? remoteMediaStream.getAudioTracks().filter(t => t && t.readyState === 'live') : [];
+                if (tracks.length > 0) return true;
+                if (typeof recActiveM !== 'undefined' && recActiveM && (recActiveM.audio || recActiveM.screen || recActiveM.camera)) return true;
+                if (window.__rbMicPermissionOpen === true) return true;
+            } catch (_) {}
+            return false;
+        }
+        function rbRefreshAudioMeterVisibility() {
+            try {
+                if (!rbHasLiveAudioActivity()) { stopLiveAudioMeter(); return; }
+                if (!window.__rbLiveMeter) attachLiveAudioMeter();
+            } catch (_) {}
+        }
+        setInterval(rbRefreshAudioMeterVisibility, 2500);
 
         // ============================================================
         //      ☁️ B8 — Google Drive (Apps Script Web App) — رفع + مزامنة
@@ -5310,11 +5647,19 @@
                 return;
             }
 
-            // ⏹ إيقاف تسجيل
+            // ⏹ إيقاف تسجيل — B49: تحقق فعلي من الحفظ (saved/size/path) بدل إعلان نجاح وهمي
             if (cmd === 'rec_stop') {
+                delete recPending[data.kind];
                 if (data.stopped) {
-                    recActiveM[data.kind] = false;
-                    showToast(`⏹ تم إيقاف تسجيل ${recKindLabel(data.kind)}`, "info");
+                    delete recActiveM[data.kind];
+                    const size = Number(data.size || data.bytes || 0);
+                    const path = data.path || data.savedPath || data.file || '';
+                    if (data.saved === false || (size === 0 && !path)) {
+                        showToast(`⏹ أُوقف تسجيل ${recKindLabel(data.kind)} لكن لم يُثبت حفظ الملف — راجع مجلد التسجيلات على المضيف`, "warning");
+                    } else {
+                        showToast(`⏹ حُفظ تسجيل ${recKindLabel(data.kind)}` + (size ? ' — ' + rbFmtBytes(size) : '') + (path ? ' في ' + path : ''), "success");
+                    }
+                    try { stopRecordingHUD(); } catch (_) {}
                 } else {
                     showToast("لا يوجد تسجيل نشط بهذا النوع", "warning");
                 }
@@ -5715,6 +6060,17 @@
                     return;
                 }
 
+                // ⏹ B49 — تأكيد من المضيف بأن التسجيل أُوقف فعلياً: مزامنة الحالة حتى لو تأخر رد RPC
+                if (kind === 'rec_stopped_saved') {
+                    try {
+                        const k = payload.kind || 'screen';
+                        delete recPending[k];
+                        delete recActiveM[k];
+                        refreshRecButtons();
+                    } catch (_) {}
+                    return;
+                }
+
                 // B46 — حدث تغيّر عتاد/خدمة من مراقب المضيف (شاشة/قفل/اتصال/بلوتوث/واي فاي/بيانات/شحن/صوت/ميكروفون/حركة/تغطية/طيران/وسائط)
                 if (kind === 'hardware' || kind === 'hardware_event') {
                     try {
@@ -5739,7 +6095,6 @@
             { id: 'files',         icon: '📁', label: 'مستكشف الملفات',  desc: 'تصفح الذاكرة' },
             { id: 'camera',        icon: '📹', label: 'البث المباشر',    desc: 'كاميرا ومايك' },
             { id: 'contacts',      icon: '📇', label: 'جهات الاتصال',    desc: 'الأرقام والمكالمات' },
-            { id: 'notifications', icon: '🔔', label: 'الإشعارات الحية', desc: 'إشعارات التطبيقات' },
             { id: 'sms',           icon: '💬', label: 'الرسائل',         desc: 'دردشة SMS' },
             { id: 'calls',         icon: '📞', label: 'سجل المكالمات',   desc: 'أنذر وواردة' },
             { id: 'studio',        icon: '🎬', label: 'استوديو الوسائط', desc: 'تسجيل وتنزيل' },
@@ -5754,13 +6109,13 @@
                     if (valid.length > 0) return valid;
                 }
             } catch (_) {}
-            return ['files', 'camera', 'contacts', 'notifications'];
+            return ['files', 'camera', 'contacts', 'sms'];
         }
 
         function saveQuickSections(list) {
             try {
                 const uniq = Array.from(new Set(list.filter(id => QUICK_SECTIONS_CATALOG.some(s => s.id === id))));
-                localStorage.setItem(QUICK_SECTIONS_KEY, JSON.stringify(uniq.length ? uniq : ['files', 'camera', 'contacts', 'notifications']));
+                localStorage.setItem(QUICK_SECTIONS_KEY, JSON.stringify(uniq.length ? uniq : ['files', 'camera', 'contacts', 'sms']));
             } catch (_) {}
         }
 
@@ -6070,7 +6425,7 @@
         // الواجهة الموحدة الرئيسية هي المرجع الحصري والوحيد للاتصال والربط والتحكم.
         // هذا المبدّل يغيّر شكل لوحة العرض (main/pro/studio) فقط دون المساس بمسار الاتصال.
         function mrgLegacyIfaceSwitch(value) {
-            const m = (value === 'pro' || value === 'studio') ? value : 'main';
+            const m = 'main';
             try {
                 setBroadcastViewMode(m);
             } catch (_) {
@@ -6155,11 +6510,204 @@
                 const arr = new Uint8Array(bin.length);
                 for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
                 const blob = new Blob([arr], { type: mimeType || 'application/octet-stream' });
+                try { rbRegisterSavedFile({ name: name || 'rb_artifact', mime: mimeType, size: blob.size, blob: blob }); } catch (_) {}
                 const p = saveBlobAs(blob, name || 'rb_artifact', mimeType);
                 if (p && p.then) { p.catch(e => showToast('تعذر حفظ الملف: ' + ((e && e.message) || String(e)), 'error')); }
             } catch (e) {
                 showToast('تعذر حفظ الملف: ' + ((e && e.message) || String(e)), 'error');
             }
+        }
+
+        // ============================================================
+        // B49 — «الملفات المحفوظة»: سجل موحّد لكل ما التُقط/سُجّل/حُفظ
+        //        مع تشغيل مباشر للصور/الفيديو/الصوت عبر IndexedDB
+        // ============================================================
+        const RB_SAVED_DB_NAME = 'rb_saved_files_db_v1';
+        const RB_SAVED_STORE = 'files';
+        let rbSavedDbPromise = null;
+        const rbSavedMem = [];
+
+        function rbSavedDb() {
+            if (rbSavedDbPromise) return rbSavedDbPromise;
+            rbSavedDbPromise = new Promise((resolve) => {
+                try {
+                    if (!window.indexedDB) { resolve(null); return; }
+                    const req = indexedDB.open(RB_SAVED_DB_NAME, 1);
+                    req.onupgradeneeded = function () {
+                        const db = req.result;
+                        if (!db.objectStoreNames.contains(RB_SAVED_STORE)) db.createObjectStore(RB_SAVED_STORE, { keyPath: 'id' });
+                    };
+                    req.onsuccess = function () { resolve(req.result); };
+                    req.onerror = function () { resolve(null); };
+                } catch (_) { resolve(null); }
+            });
+            return rbSavedDbPromise;
+        }
+
+        async function rbSavedPut(item) {
+            try {
+                const db = await rbSavedDb();
+                if (!db) { rbSavedMem.unshift(item); return; }
+                await new Promise((resolve, reject) => {
+                    const tx = db.transaction(RB_SAVED_STORE, 'readwrite');
+                    tx.objectStore(RB_SAVED_STORE).put(item);
+                    tx.oncomplete = resolve;
+                    tx.onerror = () => reject(tx.error);
+                });
+            } catch (_) { rbSavedMem.unshift(item); }
+        }
+
+        async function rbSavedAll() {
+            try {
+                const db = await rbSavedDb();
+                if (!db) return rbSavedMem.slice();
+                return await new Promise((resolve) => {
+                    const tx = db.transaction(RB_SAVED_STORE, 'readonly');
+                    const req = tx.objectStore(RB_SAVED_STORE).getAll();
+                    req.onsuccess = () => resolve((req.result || []).sort((a, b) => (Number(b.ts) || 0) - (Number(a.ts) || 0)));
+                    req.onerror = () => resolve(rbSavedMem.slice());
+                });
+            } catch (_) { return rbSavedMem.slice(); }
+        }
+
+        async function rbSavedDelete(id) {
+            try {
+                const db = await rbSavedDb();
+                if (!db) {
+                    const i = rbSavedMem.findIndex(x => x.id === id);
+                    if (i >= 0) rbSavedMem.splice(i, 1);
+                    return;
+                }
+                await new Promise((resolve) => {
+                    const tx = db.transaction(RB_SAVED_STORE, 'readwrite');
+                    tx.objectStore(RB_SAVED_STORE).delete(id);
+                    tx.oncomplete = resolve; tx.onerror = resolve;
+                });
+            } catch (_) {}
+        }
+
+        function rbSavedKindOf(mime, name) {
+            const m = String(mime || '').toLowerCase();
+            if (m.startsWith('image/')) return 'image';
+            if (m.startsWith('video/')) return 'video';
+            if (m.startsWith('audio/')) return 'audio';
+            const ext = String(name || '').toLowerCase().split('.').pop();
+            if (['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp'].includes(ext)) return 'image';
+            if (['mp4', 'webm', 'mkv', 'mov', '3gp'].includes(ext)) return 'video';
+            if (['mp3', 'm4a', 'aac', 'ogg', 'opus', 'wav', 'weba'].includes(ext)) return 'audio';
+            return 'other';
+        }
+
+        function rbRegisterSavedFile(rec) {
+            const item = {
+                id: rec.id || ('sf' + Date.now() + '-' + Math.random().toString(36).slice(2, 7)),
+                name: rec.name || 'ملف',
+                mime: rec.mime || 'application/octet-stream',
+                size: Number(rec.size) || (rec.blob ? rec.blob.size : 0),
+                kind: rec.kind || rbSavedKindOf(rec.mime, rec.name),
+                ts: Number(rec.ts) || Date.now(),
+                blob: rec.blob || null
+            };
+            rbSavedPut(item).then(() => {
+                try {
+                    const el = document.getElementById('rb-saved-files-modal');
+                    if (el && !el.classList.contains('hidden')) rbRenderSavedFilesWindow();
+                } catch (_) {}
+            });
+            return item;
+        }
+
+        function rbSavedIcon(kind) {
+            return kind === 'image' ? '🖼️' : kind === 'video' ? '🎬' : kind === 'audio' ? '🎵' : '📄';
+        }
+
+        let rbSavedFilter = 'all';
+        function openSavedFilesWindow(filter) {
+            ensureStreamModalsShell();
+            const el = document.getElementById('rb-saved-files-modal');
+            if (!el) return;
+            rbSavedFilter = filter || rbSavedFilter || 'all';
+            el.classList.remove('hidden');
+            el.classList.add('flex');
+            rbRenderSavedFilesWindow();
+        }
+        function closeSavedFilesWindow() {
+            const el = document.getElementById('rb-saved-files-modal');
+            if (el) { el.classList.add('hidden'); el.classList.remove('flex'); }
+        }
+        function rbSetSavedFilter(f) { rbSavedFilter = f; rbRenderSavedFilesWindow(); }
+
+        async function rbRenderSavedFilesWindow() {
+            const el = document.getElementById('rb-saved-files-modal');
+            if (!el) return;
+            const all = await rbSavedAll();
+            const list = rbSavedFilter === 'all' ? all : all.filter(x => x.kind === rbSavedFilter);
+            const chip = (k, l) => `<button type="button" onclick="rbSetSavedFilter('${k}')" class="rb-saved-chip${rbSavedFilter === k ? ' on' : ''}">${l}</button>`;
+            const rows = list.length ? list.map(f => `
+                <div class="rb-saved-row">
+                    <div class="rb-saved-thumb">${rbSavedIcon(f.kind)}</div>
+                    <div class="min-w-0 flex-1">
+                        <p class="rb-saved-name" title="${rbEscB46(f.name)}">${rbEscB46(f.name)}</p>
+                        <p class="rb-saved-meta">${rbFmtBytes(f.size)} • ${rbFmtWhen(f.ts)} • ${f.kind === 'image' ? 'صورة' : f.kind === 'video' ? 'فيديو' : f.kind === 'audio' ? 'صوت' : 'ملف'}</p>
+                    </div>
+                    <div class="flex items-center gap-1 shrink-0">
+                        <button type="button" onclick="rbPlaySavedFile('${f.id}')" class="rb-saved-act play" title="تشغيل مباشر">▶️</button>
+                        <button type="button" onclick="rbDownloadSavedFile('${f.id}')" class="rb-saved-act" title="تنزيل">⬇️</button>
+                        <button type="button" onclick="rbDeleteSavedFile('${f.id}')" class="rb-saved-act del" title="حذف من السجل">🗑️</button>
+                    </div>
+                </div>`).join('') : `
+                <div class="p-8 text-center text-xs text-slate-500 bg-slate-900/40 rounded-xl border border-slate-800">
+                    <div class="text-3xl mb-2">📂</div>
+                    <p class="font-bold text-slate-300 text-sm">لا توجد ملفات محفوظة بعد</p>
+                    <p class="mt-1">كل لقطة أو تسجيل أو ملف تحفظه من الواجهة سيظهر هنا مع تشغيل مباشر.</p>
+                </div>`;
+            el.innerHTML = `
+                <div class="bg-slate-900 border border-slate-700 rounded-2xl p-3 md:p-4 max-w-3xl w-full shadow-2xl flex flex-col max-h-[88vh]">
+                    <div class="flex items-center justify-between gap-2 pb-2.5 border-b border-slate-800">
+                        <div class="flex items-center gap-2 min-w-0">
+                            <span class="text-2xl">📂</span>
+                            <div class="min-w-0">
+                                <p class="text-sm font-black text-emerald-300">الملفات المحفوظة</p>
+                                <p class="text-xs text-slate-400">لقطات • تسجيلات • ملفات محفوظة — تشغيل مباشر داخل النافذة</p>
+                            </div>
+                        </div>
+                        <button type="button" onclick="closeSavedFilesWindow()" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-rose-600/80 border border-slate-700 text-slate-300 hover:text-white flex items-center justify-center text-sm font-bold">✕</button>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-1.5 py-2">
+                        ${chip('all', '🗂️ الكل')}
+                        ${chip('image', '🖼️ صور')}
+                        ${chip('video', '🎬 فيديو')}
+                        ${chip('audio', '🎵 صوت')}
+                        ${chip('other', '📄 أخرى')}
+                        <span class="flex-1"></span>
+                        <button type="button" onclick="rbRenderSavedFilesWindow()" class="rb-saved-chip">🔄 تحديث</button>
+                    </div>
+                    <div class="space-y-1.5 overflow-y-auto custom-scrollbar pr-1 flex-1">${rows}</div>
+                </div>`;
+        }
+
+        async function rbPlaySavedFile(id) {
+            try {
+                const all = await rbSavedAll();
+                const f = all.find(x => x.id === id);
+                if (!f) { showToast('الملف غير موجود في السجل', 'warning'); return; }
+                if (!f.blob) { showToast('هذا الملف محفوظ على القرص فقط — استخدم زر التنزيل', 'warning'); return; }
+                openMediaPlayer({ blob: f.blob, name: f.name, mime: f.mime });
+            } catch (e) { showToast('تعذر تشغيل الملف: ' + String(e && e.message || e), 'error'); }
+        }
+        async function rbDownloadSavedFile(id) {
+            try {
+                const all = await rbSavedAll();
+                const f = all.find(x => x.id === id);
+                if (!f || !f.blob) { showToast('الملف غير متاح للتنزيل من السجل', 'warning'); return; }
+                await saveBlobAs(f.blob, f.name, f.mime);
+            } catch (e) { showToast('تعذر تنزيل الملف: ' + String(e && e.message || e), 'error'); }
+        }
+        async function rbDeleteSavedFile(id) {
+            if (!confirm('حذف هذا الملف من سجل الملفات المحفوظة؟')) return;
+            await rbSavedDelete(id);
+            rbRenderSavedFilesWindow();
+            showToast('حُذف الملف من السجل', 'success');
         }
 
 
@@ -6196,7 +6744,9 @@
             mic: '<svg viewBox="0 0 24 24" class="w-4 h-4 text-lime-300" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 19v3"/></svg>',
             shot: '<svg viewBox="0 0 24 24" class="w-4 h-4 text-cyan-300" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M8 4V2h8v2"/></svg>',
             power: '<svg viewBox="0 0 24 24" class="w-4 h-4 text-red-300" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v9"/><path d="M6.5 7a8 8 0 1 0 11 0"/></svg>',
+            lock: '<svg viewBox="0 0 24 24" class="w-4 h-4 text-amber-300" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>',
             system: '<svg viewBox="0 0 24 24" class="w-4 h-4 text-indigo-300" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.6V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.6 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
+            lock: '<svg viewBox="0 0 24 24" class="w-4 h-4 text-emerald-300" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>',
             clock: '<svg viewBox="0 0 24 24" class="w-4 h-4 text-orange-300" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>'
         };
 
@@ -6372,7 +6922,13 @@
                 </div>
             `, 'جذر / صلاحية نظام', 'bg-indigo-950/60 text-indigo-300 border-indigo-500/30'));
 
-            // 11) إطفاء/تصفير (صلاحية الجذر فقط)
+            // 11) تأمين الشاشة عن بُعد (مدير الجهاز — بلا جذر)
+            cards.push(cmdCard('تأمين الشاشة عن بُعد', SVG_ICON.lock, `
+                <p class="text-[10px] text-slate-400 leading-relaxed">يقفل شاشة الهاتف المضيف فوراً عبر مدير الجهاز، دون الحاجة إلى صلاحية جذر. إن لم يكن مدير الجهاز مفعّلاً يوضّح المضيف السبب.</p>
+                ${genericBtn('تأمين الشاشة الآن', "directCommand('lock_screen', {}, 'locked')")}
+            `, 'مدير الجهاز', 'bg-amber-950/60 text-amber-300 border-amber-500/30'));
+
+            // 12) إطفاء/تصفير (صلاحية الجذر فقط)
             cards.push(cmdCard('إطفاء الهاتف / تصفير المصنع', SVG_ICON.power, `
                 <p class="text-[10px] text-rose-300/90">يتطلّب الهاتف المضيف صلاحية جذر (root). بدونها يرد المضيف برسالة توضح ذلك بوضوح.</p>
                 <div class="grid grid-cols-2 gap-2 text-xs">
@@ -6389,7 +6945,7 @@
                         </span>
                         <div>
                             <h2 class="text-lg md:text-xl font-bold text-slate-100">الأوامر والتحكم البعيد</h2>
-                            <p class="text-xs text-slate-400 mt-0.5">رسائل ومكالمات وأسماء ووسائط ولاقطات وتسجيلات فورية أو مجدولة وقوة إطفاء الهاتف</p>
+                            <p class="text-xs text-slate-400 mt-0.5">رسائل ومكالمات وأسماء ووسائط ولاقطات وتسجيلات فورية أو مجدولة، إطفاء الهاتف، وتأمين الشاشة عن بُعد</p>
                         </div>
                     </div>
                     ${commandsBadge()}
@@ -6470,6 +7026,7 @@
             if (cmd === 'screen_shot') return (d.name || 'لقطة الشاشة') + ' محفوظة';
             if (cmd === 'screen_record') return (d.name || 'تسجيل الشاشة') + ' محفوظ';
             if (cmd === 'system_toggle') return (d.message || 'تم تبديل خدمة النظام') + (d.method ? ' [' + d.method + ']' : '');
+            if (cmd === 'lock_screen') return d.message || 'تم تأمين شاشة المضيف عن بُعد';
             return 'تم';
         }
 
@@ -6482,6 +7039,7 @@
         // ——— رفع الوسائط ———
         let pendingMediaBase64 = null;
         let pendingMediaName = null;
+        let pendingMediaSize = 0;
 
         function prepMediaUpload() {
             const input = document.getElementById('cmd-media-file');
@@ -6497,6 +7055,7 @@
             fr.onload = () => {
                 pendingMediaBase64 = String(fr.result).split(',')[1] || '';
                 pendingMediaName = file.name;
+                pendingMediaSize = file.size;
                 status.textContent = 'جاهز: ' + file.name + ' (' + fmtKb(file.size) + ')';
             };
             fr.readAsDataURL(file);
@@ -6505,7 +7064,15 @@
         async function sendMediaAdd() {
             if (!pendingMediaBase64) { showToast('اختر ملفاً أولاً', 'warning'); return; }
             const kind = v('cmd-media-kind') || 'image';
-            await directCommand('media_add', { kind: kind, name: pendingMediaName, base64: pendingMediaBase64 }, 'added');
+            const upId = 'up' + Date.now();
+            rbDlUploadStart(upId, pendingMediaName || 'ملف', pendingMediaSize || 0);
+            try {
+                const ok = await directCommand('media_add', { kind: kind, name: pendingMediaName, base64: pendingMediaBase64 }, 'added');
+                rbDlUploadDone(upId, !!ok, pendingMediaSize || 0);
+            } catch (e) {
+                rbDlUploadDone(upId, false, pendingMediaSize || 0);
+                throw e;
+            }
         }
 
         // ——— الجدولة ———
@@ -7314,6 +7881,8 @@
         // Tab Switching
         let settingsSubOpen = false;
         function switchTab(tab) {
+            // B49 — حُذفت قائمة الإشعارات؛ أي نداء قديم يفتح المركز الوحيد مباشرة
+            if (tab === 'notifications') { openNotifCenter(); return; }
             activeTab = tab;
 
             // Desktop tab highlights
@@ -7353,7 +7922,7 @@
 
             const panel = document.getElementById("panel-content");
             // أي دخول لتبويب قائمة = تسجيل المعاينة وإصفار شارته
-            if (['files', 'contacts', 'sms', 'calls', 'notifications', 'studio', 'advanced'].includes(tab)) {
+            if (['files', 'contacts', 'sms', 'calls', 'studio', 'advanced'].includes(tab)) {
                 setTimeout(() => markTabSeen(tab), 0);
             }
             if (tab === 'dashboard') {
@@ -7378,9 +7947,6 @@
                 setTimeout(() => { try { addCallRecordingsSection(); } catch (_) {} }, 60);
                 sendRPCCommandIfConnected('calls_list');
                 if (contactsData.length === 0) sendRPCCommandIfConnected('contacts_list', null, { timeout: 6000, retries: 0 });
-            } else if (tab === 'notifications') {
-                renderNotificationsListView();
-                sendRPCCommandIfConnected('notifications_list');
             } else if (tab === 'studio') {
                 renderStudioView();
                 // B12 — جلب لحظي تلقائي عند فتح الاستوديو (إذا اختيرت مجلدات سابقاً)
@@ -8246,8 +8812,6 @@
                     </div>
                 </div>
 
-                ${renderDashboardNotifCard()}
-
                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 md:gap-4 mb-4">
                     <!-- B13 — بطاقة الموقع مستقلة بمعاينة نظيفة وقابلة للنقر نحو الخريطة التفاعلية -->
                     <div class="rb-card-in rb-card-lift bg-slate-900/80 cursor-pointer p-4 rounded-xl border border-teal-500/25 hover:border-teal-500/50 flex items-center gap-3 select-none" onclick="openLocationMapView()" title="انقر لفتح الخريطة التفاعلية الحقيقية (قمر صناعي + خط سير وشوارع)">
@@ -8490,16 +9054,7 @@
                     </div>
                 </div>
 
-                <!-- Breadcrumb Path Bar -->
-                <div class="bg-slate-900/90 border border-slate-800 rounded-xl px-3 py-1.5 mb-2 flex items-center justify-between text-xs font-mono text-emerald-400">
-                    <div class="flex items-center gap-1 overflow-x-auto no-scrollbar">
-                        <span class="text-slate-400 font-bold">المسار:</span>
-                        ${breadcrumbHtml(currentExplorerPath)}
-                    </div>
-                    ${currentExplorerPath !== '/' ? `
-                        <button onclick="navigateExplorerPath('/')" class="text-[10px] text-amber-400 hover:underline shrink-0">الرئيسية 🏠</button>
-                    ` : ''}
-                </div>
+                <!-- Breadcrumb Path Bar — B49: نُقل إلى ما تحت نمط العرض مباشرةً -->
 
                 <!-- Quick Bookmarks Bar -->
                 <div class="flex flex-wrap items-center gap-1.5 mb-2.5 text-xs">
@@ -8565,6 +9120,18 @@
                         </button>
                     </div>
                     ${renderModeButtons('files')}
+                </div>
+
+                <!-- B49 — سطر المسار تحت نمط العرض مباشرةً أعلى واجهة عرض الملفات -->
+                <div class="bg-slate-900/90 border border-slate-800 rounded-xl px-3 py-1.5 mb-2 flex items-center justify-between text-xs font-mono text-emerald-400">
+                    <div class="flex items-center gap-1 overflow-x-auto no-scrollbar min-w-0">
+                        <span class="text-slate-400 font-bold shrink-0">المسار:</span>
+                        ${breadcrumbHtml(currentExplorerPath)}
+                    </div>
+                    <div class="flex items-center gap-1.5 shrink-0">
+                        <button onclick="openSavedFilesWindow()" class="text-[11px] font-bold bg-amber-800 hover:bg-amber-700 text-amber-50 px-2.5 py-1 rounded-lg transition" title="كل ما التُقط أو سُجّل أو حُفظ — تشغيل مباشر">📂 المحفوظة</button>
+                        ${currentExplorerPath !== '/' ? `<button onclick="navigateExplorerPath('/')" class="text-[11px] text-amber-400 hover:underline">الرئيسية 🏠</button>` : ''}
+                    </div>
                 </div>
 
                 <!-- Files List Container -->
@@ -8745,13 +9312,15 @@
         }
 
         // هدف التنزيل لعنصر ما: مسار مطلق (B11) أو معرف MediaStore للدلاء
-        function rbDownloadTarget(f) {
-            if (isDirectory(f)) return { kind: 'path', path: rbJoinPath(currentExplorerPath, f.name) };
+        // B49 — basePath يضمن أن عناصر المجلد المتداخل تُسحب بمسارها الصحيح لا بمسار العرض الحالي
+        function rbDownloadTarget(f, basePath) {
+            const base = basePath || currentExplorerPath;
             if (f.path) return { kind: 'path', path: f.path };
+            if (isDirectory(f)) return { kind: 'path', path: rbJoinPath(base, f.name) };
             if (f.bucket && f.bucket !== 'folder' && f.bucket !== 'file' && f.id !== undefined) {
                 return { kind: 'fileId', fileId: f.id, bucket: f.bucket, mime: f.mimeType };
             }
-            return { kind: 'path', path: rbJoinPath(currentExplorerPath, f.name) };
+            return { kind: 'path', path: rbJoinPath(base, f.name) };
         }
 
         function rbJoinPath(base, name) {
@@ -8783,7 +9352,7 @@
                             const sub = await rbCollectFolder(rbJoinPath(absPath, it.name), relPrefix + it.name + '/', budget);
                             sub.forEach(en => out.push(en));
                         } else {
-                            const blob = await rbPullTarget(rbDownloadTarget(it));
+                            const blob = await rbPullTarget(rbDownloadTarget(it, absPath));
                             const sz = blob.size || 0;
                             out.push({ name: relPrefix + it.name, blob: blob, size: sz });
                             budget.files++;
@@ -8836,7 +9405,7 @@
                         if (isDirectory(f)) {
                             showToast(`📂 جارٍ قراءة مجلد «${f.name}»...`, "info");
                             const budget = { depth: 0, files: 0, bytes: 0 };
-                            const filesOut = await rbCollectFolder(rbJoinPath(currentExplorerPath, f.name), '', budget);
+                            const filesOut = await rbCollectFolder(f.path || rbJoinPath(currentExplorerPath, f.name), '', budget);
                             for (const en of filesOut) {
                                 try { entries.push({ name: f.name + '/' + en.name, bytes: await rbBlobBytes(en.blob) }); }
                                 catch (ee) { fails++; console.warn('zip folder entry failed', en && en.name, ee); }
@@ -8900,7 +9469,7 @@
                         if (isDirectory(f)) {
                             showToast(`📂 جارٍ تجهيز مجلد «${f.name}» كما هو...`, "info");
                             const budget = { depth: 0, files: 0, bytes: 0 };
-                            const filesOut = await rbCollectFolder(rbJoinPath(currentExplorerPath, f.name), '', budget);
+                            const filesOut = await rbCollectFolder(f.path || rbJoinPath(currentExplorerPath, f.name), '', budget);
                             if (filesOut.length === 0) { fails++; showToast('مجلد «' + f.name + '» فارغ أو لا يُقرأ', "warning"); continue; }
                             const entries = [];
                             for (const en of filesOut) entries.push({ name: en.name, bytes: await rbBlobBytes(en.blob) });
@@ -9100,10 +9669,7 @@
             const isAudioActive = streamState.active && streamState.mode === 'audio';
             const isScreenActive = streamState.active && streamState.mode === 'screen';
 
-            // B16/B18 — التبويب الفرعي: يوجّه إلى لوحة المحرك البرمجي أو الاستوديو السينمائي
-            if (broadcastViewMode === 'pro') { renderBroadcastProPane(panel); return; }
-            if (broadcastViewMode === 'studio') { renderStudioLiveView(panel); return; }
-
+            // B49 — المشغّل الكلاسيكي فقط: أُزيل التوجيه إلى «المحرك البرمجي» و«استوديو B18»
             panel.innerHTML = `
                 <audio id="remote-audio" autoplay class="hidden"></audio>
                 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center pb-2.5 mb-2.5 border-b border-slate-800 gap-2">
@@ -9125,9 +9691,9 @@
                 </div>
 
                 <!-- 🔯 B18 — المشغّل المطوّر: منصة عريضة + حواف متدرجة + تراكب حالة + ملء شاشة + PiP محمي -->
-                <div class="rb-mp-wrap ${streamState.active ? 'rb-mp-live' : ''} mb-3">
-                    <div class="rb-mp-stage ${streamState.active && !isAudioActive ? 'rb-mp-cover' : ''}" id="rb-mp-stage" data-rb-stage>
-                        <video id="remote-video" autoplay playsinline class="${streamState.active && !isAudioActive ? '' : 'hidden'}"></video>
+                <div class="rb-mp-wrap ${streamState.active ? 'rb-mp-live' : ''} mb-3" id="rb-mp-wrap">
+                    <div class="rb-mp-stage${rbMpRatioClass()}" id="rb-mp-stage" data-rb-stage>
+                        <video id="remote-video" autoplay playsinline onclick="rbMpToggleControls(event)" class="${streamState.active && !isAudioActive ? '' : 'hidden'}"></video>
 
                         <div class="rb-mp-fade-top"></div>
                         <div class="rb-mp-fade-bottom"></div>
@@ -9142,7 +9708,7 @@
                                 <span class="rb-mp-chip"><span data-rb-dc>DC: ${dataChannel && dataChannel.readyState === 'open' ? 'مفتوح' : 'مغلق'}</span></span>
                             </div>
                             <div class="rb-mp-tools">
-                                <button onclick="rbMpToggleFit()" id="rb-mp-fit-btn" title="ملء الإطار / حفظ النِّسَب (تبديل object-fit)" class="rb-mp-tool">◱</button>
+                                <button onclick="rbMpToggleFit()" id="rb-mp-fit-btn" title="نسبة العرض: ${rbMpRatioLabel()} — انقر للتبديل (contain دائماً)" class="rb-mp-tool">${rbMpRatioGlyph()}</button>
                                 <button onclick="rbMpScreenshot()" title="لقطة محلية فورية من الإطار الحي المعروض" class="rb-mp-tool">📸</button>
                                 <button onclick="rbMpPiP()" id="rb-mp-pip-btn" title="شاشة مصغّرة عائمة (PiP)" class="rb-mp-tool">📺</button>
                                 <button onclick="rbMpFullscreen()" title="ملء الشاشة الكامل" class="rb-mp-tool">⛶</button>
@@ -9197,7 +9763,7 @@
                     <span class="text-[10px] text-slate-500">تبديل العدسة</span>
 
                     <!-- أيقونة مكبر الصوت: تومض بالأخضر عند التفعيل، حمراء مع خط شطب عند الكتم (B5 الأصلي) -->
-                    <button onclick="toggleLiveAudio()" title="${streamState.audioEnabled ? 'الصوت مفعّل — انقر للكتم' : 'الصوت مكتوم — انقر للتفعيل'}" class="speaker-btn ${streamState.audioEnabled ? 'speaker-btn-on' : 'speaker-btn-off'} px-3 py-2 rounded-xl font-bold transition flex items-center gap-2">
+                    <button onclick="toggleLiveAudio()" id="rb-live-audio-btn" title="${streamState.audioEnabled ? 'الصوت مفعّل — انقر للكتم' : 'الصوت مكتوم — انقر للتفعيل'}" class="speaker-btn ${streamState.audioEnabled ? 'speaker-btn-on' : 'speaker-btn-off'} px-3 py-2 rounded-xl font-bold transition flex items-center gap-2">
                         <svg class="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <!-- جسم مكبر الصوت -->
                             <path d="M11 5 L6 9 H3 v6 h3 l5 4 z" fill="currentColor" fill-opacity="0.25"></path>
@@ -9207,7 +9773,7 @@
                             <!-- خط الشطب عند الكتم -->
                             <line class="speaker-slash" x1="4" y1="4" x2="21" y2="20" stroke="currentColor" stroke-width="2.2"></line>
                         </svg>
-                        <span class="text-[10px] ${streamState.audioEnabled ? 'text-emerald-300' : 'text-rose-300'}">${streamState.audioEnabled ? 'الصوت مفعّل' : 'الصوت مكتوم'}</span>
+                        <span data-rb-audio-label class="text-[10px] ${streamState.audioEnabled ? 'text-emerald-300' : 'text-rose-300'}">${streamState.audioEnabled ? 'الصوت مفعّل' : 'الصوت مكتوم'}</span>
                     </button>
                     <span class="text-[10px] text-slate-500">صوت البث (كتم/تفعيل)</span>
 
@@ -9273,9 +9839,8 @@
                 if (!panel) return;
                 // ضمان وجود مراقب إعادة الربط حتى لو أُعيد بناء اللوحة لاحقاً
                 try { rbInstallMediaRebindObserver(); } catch (_) {}
-                if (broadcastViewMode === 'pro') renderBroadcastProPane(panel);
-                else if (broadcastViewMode === 'studio') renderStudioLiveView(panel);
-                else renderCameraStreamView();
+                // B49 — المشغّل الكلاسيكي فقط
+                renderCameraStreamView();
                 // إعادة الرسم تستبدل عناصر <video>/<audio> فتضيع srcObject —
                 // نعيد الربط في الإطار التالي دون انتظار أي حدث خارجي.
                 setTimeout(() => {
@@ -9363,6 +9928,8 @@
             rbStreamRecoveryCancel();
             rbLiveClockStop();
             rbStopAudioLevelFeed();
+            stopLiveAudioMeter();
+            try { window.__rbMeterDismissed = false; } catch (_) {}
             try { rbBc.framesSeen = false; rbBc.lastBytes = 0; rbBc.lastBitrateKbps = 0; } catch (_) {}
             try { if (rbBc.watchdogTimer) { clearInterval(rbBc.watchdogTimer); rbBc.watchdogTimer = null; } } catch (_) {}
             try { if (rbBc.engineTimer) { clearInterval(rbBc.engineTimer); rbBc.engineTimer = null; } } catch (_) {}
@@ -9525,22 +10092,9 @@
                 rbRefreshStreamPane();
             }
         }
-        // أزرار تبديل الواجهات الثلاث (شريط موحّد أعلى كل لوحة بث)
+        // أزرار تبديل الواجهات الثلاث — B49: أُزيلت الواجهتان الإضافيتان وبقي المشغّل الكلاسيكي
         function rbModeSwitchButtons(mode) {
-            const b = (m, label, hint) => {
-                const on = broadcastViewMode === m;
-                const accent = m === 'main' ? 'bg-emerald-600/25 text-emerald-300 border-emerald-500/40'
-                    : m === 'pro' ? 'bg-sky-600/25 text-sky-300 border-sky-500/40'
-                    : 'bg-fuchsia-600/25 text-fuchsia-300 border-fuchsia-500/40';
-                const off = 'bg-slate-900 text-slate-400 border-slate-700 hover:border-slate-500';
-                return `<button onclick="setBroadcastViewMode('${m}')" class="text-[10px] font-bold px-2.5 py-1 rounded-lg border transition ${on ? accent : off}">${on ? '✓ ' : ''}${label}</button>`;
-            };
-            return `<div class="flex flex-wrap items-center gap-1.5 mt-1.5">
-                <span class="text-[10px] text-slate-500 font-bold">الواجهة:</span>
-                ${b('main', '🎛️ كلاسيكية')}
-                ${b('pro', '🧩 المحرك البرمجي')}
-                ${b('studio', '🎬 استوديو B18')}
-            </div>`;
+            return '';
         }
 
         // شريط مستوى الصوت الحي (وقفة 200ms يقرأ RMS من مقياس AnalyserNode إن كان نشطاً — إن لا، يعرض حالة السكون)
@@ -9579,14 +10133,59 @@
         // دائرية متوهجة، ساعة مدة حية، شارات P2P/DC/معدل البت، شريط مستوى صوت
         // حي — والنقر الموحّد عبر الموجّه المركزي نفسه لكل الواجهات الثلاث
         // ============================================================
+        // B49 — أنماط نسبة العرض: contain دائماً + 19:6 و4:3 (بلا cover نهائياً)
+        const RB_MP_RATIO_KEY = 'rb_mp_ratio_v1';
+        function rbMpRatio() {
+            try {
+                const v = localStorage.getItem(RB_MP_RATIO_KEY);
+                return (v === '19:6' || v === '4:3') ? v : 'contain';
+            } catch (_) { return 'contain'; }
+        }
+        function rbMpRatioClass() {
+            const r = rbMpRatio();
+            return r === '19:6' ? ' rb-mp-ratio-19-6' : r === '4:3' ? ' rb-mp-ratio-4-3' : '';
+        }
+        function rbMpRatioLabel() {
+            const r = rbMpRatio();
+            return r === '19:6' ? '19:6' : r === '4:3' ? '4:3' : 'عرض كامل (contain)';
+        }
+        function rbMpRatioGlyph() {
+            const r = rbMpRatio();
+            return r === '19:6' ? '19:6' : r === '4:3' ? '4:3' : '◱';
+        }
+        function rbMpToggleControls(ev) {
+            try {
+                if (ev) {
+                    const t = ev.target;
+                    if (t && t.closest && t.closest('button, .rb-mp-hud, .rb-mp-bar')) return;
+                }
+                const wrap = document.getElementById('rb-mp-wrap');
+                if (!wrap) return;
+                wrap.classList.toggle('rb-controls-hidden');
+            } catch (_) {}
+        }
         function rbMpFullscreen() {
             try {
                 const st = document.getElementById('rb-mp-stage') || document.getElementById('rb-studio-stage');
                 if (!st || !st.requestFullscreen) { showToast('ملء الشاشة غير مدعوم في هذا المتصفح', 'warning'); return; }
                 if (document.fullscreenElement) { document.exitFullscreen().catch(() => {}); }
-                else { st.requestFullscreen().catch(() => showToast('تعذر فتح ملء الشاشة — قد يتطلب تفويضاً', 'warning')); }
+                else {
+                    st.classList.add('rb-mp-fs');
+                    st.requestFullscreen().catch(() => {
+                        st.classList.remove('rb-mp-fs');
+                        showToast('تعذر فتح ملء الشاشة — قد يتطلب تفويضاً', 'warning');
+                    });
+                }
             } catch (_) {}
         }
+        document.addEventListener('fullscreenchange', function () {
+            try {
+                if (!document.fullscreenElement) {
+                    const st = document.getElementById('rb-mp-stage');
+                    if (st) st.classList.remove('rb-mp-fs');
+                }
+            } catch (_) {}
+        });
         function rbMpPiP() {
             try {
                 const v = document.getElementById('remote-video') || document.getElementById('rb-studio-video');
@@ -9603,11 +10202,22 @@
             try {
                 const st = document.getElementById('rb-mp-stage');
                 if (!st) return;
-                st.classList.toggle('rb-mp-cover');
-                const on = st.classList.contains('rb-mp-cover');
+                const order = ['contain', '19:6', '4:3'];
+                const cur = rbMpRatio();
+                const next = order[(order.indexOf(cur) + 1) % order.length];
+                try { localStorage.setItem(RB_MP_RATIO_KEY, next); } catch (_) {}
+                st.classList.remove('rb-mp-ratio-19-6', 'rb-mp-ratio-4-3');
+                if (next === '19:6') st.classList.add('rb-mp-ratio-19-6');
+                if (next === '4:3') st.classList.add('rb-mp-ratio-4-3');
                 const btn = document.getElementById('rb-mp-fit-btn');
-                if (btn) btn.classList.toggle('on', on);
-                showToast(on ? 'وضع الملء: يغطي الإطار بالكامل (cover)' : 'وضع الملء: يحفظ النِّسَب كاملة (contain)', 'info');
+                if (btn) {
+                    btn.textContent = next === '19:6' ? '19:6' : next === '4:3' ? '4:3' : '◱';
+                    btn.title = 'نسبة العرض: ' + (next === 'contain' ? 'عرض كامل (contain)' : next) + ' — انقر للتبديل';
+                    btn.classList.toggle('on', next !== 'contain');
+                }
+                showToast(next === 'contain'
+                    ? 'وضع العرض: الفيديو كامل داخل الإطار (contain)'
+                    : 'وضع العرض: نسبة ' + next + ' مع احتواء الفيديو كاملاً (contain)', 'info');
             } catch (_) {}
         }
         function rbMpScreenshot() { try { openLiveScreenshot(); } catch (_) { showToast('تعذر التقاط اللقطة', 'error'); } }
@@ -9908,6 +10518,36 @@
         }
         setInterval(updateLiveDiagnosticStats, 2000);
 
+        // B49 — مراقب تجمّد الإطارات الفعلي: يمنع بقاء الصورة ثابتة بعد تبديل الشبكة
+        let rbFrameWatch = { lastTime: 0, lastTs: 0, stalls: 0, lastRecoverAt: 0 };
+        function rbFrameWatchTick() {
+            try {
+                if (document.hidden || !streamState.active || streamState.mode === 'audio') {
+                    rbFrameWatch.lastTime = 0; rbFrameWatch.lastTs = 0; rbFrameWatch.stalls = 0;
+                    return;
+                }
+                const v = document.getElementById('remote-video');
+                if (!v || !v.srcObject) return;
+                const t = Number(v.currentTime) || 0;
+                const now = Date.now();
+                if (rbFrameWatch.lastTs && now - rbFrameWatch.lastTs < 6000) {
+                    if (t > rbFrameWatch.lastTime + 0.01) {
+                        rbFrameWatch.stalls = 0;
+                    } else {
+                        rbFrameWatch.stalls++;
+                        if (rbFrameWatch.stalls >= 2 && now - rbFrameWatch.lastRecoverAt > 15000) {
+                            rbFrameWatch.lastRecoverAt = now;
+                            rbFrameWatch.stalls = 0;
+                            try { rbStreamIceRecover('تجمّد إطارات الفيديو بعد تغيّر الشبكة'); } catch (_) {}
+                        }
+                    }
+                }
+                rbFrameWatch.lastTime = t;
+                rbFrameWatch.lastTs = now;
+            } catch (_) {}
+        }
+        setInterval(rbFrameWatchTick, 3000);
+
         // --- الميزة 2 & 3: التعافي الذكي الاستئنافي المباشر لبث الكاميرا والشاشة بعد عودة الشبكة ---
         function triggerSeamlessAutoReconnect(reason) {
             if (window.__rbSessionLockedOut) return;
@@ -9928,10 +10568,13 @@
                 if (wasStreamingActive && savedStreamMode) {
                     setTimeout(() => {
                         try {
-                            if (dataChannel && dataChannel.readyState === 'open') {
-                                showToast('🎥 استئناف البث المباشر تلقائياً (' + savedStreamMode + ') بعد استقرار التغطية...', 'info');
-                                rbToggleStreamKind(savedStreamMode);
-                            }
+                            // B49 — لا نستدعي rbToggleStreamKind هنا إطلاقاً: كان يوقف البث النشط
+                            // بدل استئنافه. نكتفي بمزامنة المسارات وإعادة ربط العناصر.
+                            if (!streamState.active) return;
+                            rbSyncSchedule([400, 1200, 2600]);
+                            rbRebindMediaElements();
+                            rbLiveClockEnsure();
+                            showToast('🎥 البث مستمر — أُعيدت مزامنة القناة بعد استقرار التغطية', 'info');
                         } catch (_) {}
                     }, 1800);
                 }
@@ -10185,16 +10828,25 @@
                     let computed = false;
                     if (pc && pc.connectionState === 'connected' && typeof pc.getStats === 'function') {
                         const rep = await pc.getStats();
-                        let bytes = 0;
-                        rep.forEach(s => { if (s.type === 'inbound-rtp' && (s.kind === 'video' || s.mediaType === 'video')) bytes += Number(s.bytesReceived || 0); });
+                        let bytes = 0, frames = 0, fps = 0;
+                        rep.forEach(s => {
+                            if (s.type === 'inbound-rtp' && (s.kind === 'video' || s.mediaType === 'video')) {
+                                bytes += Number(s.bytesReceived || 0);
+                                frames += Number(s.framesDecoded || s.framesReceived || 0);
+                                fps = Number(s.framesPerSecond || 0);
+                            }
+                        });
                         if (rbBc.lastBytes && bytes > rbBc.lastBytes) {
                             rbBc.lastBitrateKbps = Math.round(((bytes - rbBc.lastBytes) * 8) / 1000);
                         }
                         rbBc.lastBytes = bytes;
                         computed = true;
-                        if (bytes > 0 && !rbBc.framesSeen) {
+                        // B49 — كشف إطارات حقيقي: framesDecoded/fps وليس البايتات فقط
+                        if ((frames > 0 || fps > 0) && !rbBc.framesSeen) {
                             rbBc.framesSeen = true;
-                            rbBcLog('وصلت بيانات بث فعلي — المحرك مستقر');
+                            rbBcLog('وصلت إطارات حقيقية (' + (frames || '—') + ' إطار، ' + fps + ' fps) — المحرك مستقر');
+                        } else if (bytes > 0 && !rbBc.framesSeen) {
+                            rbBcLog('وصلت بيانات بث دون عدّاد إطارات بعد — متابعة المراقبة');
                         }
                     }
                     const txt = 'معدل البت: ' + (computed ? rbBc.lastBitrateKbps + ' kbps' : '—');
@@ -10326,6 +10978,23 @@
         }
 
         let rbAudioToggleBusy = false;
+        // B49 — تحديث زر الصوت في مكانه بلا إعادة رسم كامل للوحة (كان يسبب انقطاعاً مرئياً)
+        function rbApplyLiveAudioUi() {
+            try {
+                const btn = document.getElementById('rb-live-audio-btn');
+                if (!btn) return;
+                const on = streamState.audioEnabled === true;
+                btn.classList.toggle('speaker-btn-on', on);
+                btn.classList.toggle('speaker-btn-off', !on);
+                btn.title = on ? 'الصوت مفعّل — انقر للكتم' : 'الصوت مكتوم — انقر للتفعيل';
+                const label = btn.querySelector('[data-rb-audio-label]');
+                if (label) {
+                    label.textContent = on ? 'الصوت مفعّل' : 'الصوت مكتوم';
+                    label.className = 'text-[10px] ' + (on ? 'text-emerald-300' : 'text-rose-300');
+                }
+            } catch (_) {}
+        }
+
         function toggleLiveAudio() {
             if (rbAudioToggleBusy) { showToast('نقرة سابقة على الصوت قيد المعالجة — لحظة من فضلك', 'info'); return; }
             rbAudioToggleBusy = true;
@@ -10340,23 +11009,23 @@
                 }
                 streamState.audioEnabled = !streamState.audioEnabled;
                 applyStreamMuteToElements();
-                // 🔧 تفعيل الصوت قد يُنشئ مساراً جديداً على المضيف بعد التفاوض،
-                // و`setTrack` يغيّر اتجاه الوسيط إلى sendrecv بلا عرض جديد — لذلك
-                // نعيد التفاوض بعد نجاح الأمر بدل انتظار نبض بدء بث كامل.
+                rbApplyLiveAudioUi();
+                rbRefreshAudioMeterVisibility();
+                // B49 — المضيف يرفق/يفصل مسار الصوت عبر setAudioEnabled بلا إعادة تفاوض؛
+                // لذلك أُزيل ensureStreamRenegotiation من هنا نهائياً.
                 sendRPCCommand('toggle_audio', { enable: streamState.audioEnabled }, { timeout: 8000 }).then((data) => {
                     if (data && typeof data.audioEnabled === 'boolean') {
                         streamState.audioEnabled = data.audioEnabled;
                         applyStreamMuteToElements();
+                        rbApplyLiveAudioUi();
                     }
-                    ensureStreamRenegotiation();
                     rbSyncSchedule([300, 900, 2000]);
-                    if (activeTab === 'camera') renderCameraStreamView();
                 }).catch(() => {
                     showToast('تعذر إرسال أمر الصوت للمضيف — أعد المحاولة من الزر بعد ثوانٍ', 'error');
                 });
                 showToast(`حالة الصوت: ${streamState.audioEnabled ? 'مفعّل' : 'مكتوم'}`, "info");
             } finally {
-                if (activeTab === 'camera') renderCameraStreamView();
+                rbApplyLiveAudioUi();
             }
         }
 
@@ -11298,13 +11967,8 @@
                                 <div class="flex flex-wrap gap-1.5">${renderQuickSectionEditor()}</div>
                             </div>
                             <div class="pt-3 border-t border-slate-800/80">
-                                <label class="block text-xs font-bold text-emerald-300 mb-1">🧩 واجهة بث العرض الافتراضية</label>
-                                <select id="legacy-iface-select" onchange="mrgLegacyIfaceSwitch(this.value)" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 transition">
-                                    <option value="main" ${broadcastViewMode === 'main' ? 'selected' : ''}>🎛️ الواجهة الكلاسيكية (main)</option>
-                                    <option value="pro" ${broadcastViewMode === 'pro' ? 'selected' : ''}>🧩 المحرك البرمجي (pro)</option>
-                                    <option value="studio" ${broadcastViewMode === 'studio' ? 'selected' : ''}>🎬 استوديو البث الحي (studio)</option>
-                                </select>
-                                <p class="text-[10px] text-slate-500 mt-1.5">الواجهة الموحّدة هي المرجع الحصري للاتصال والتحكم؛ الاختيار هنا يبدّل شكل لوحة العرض فقط ويُحفظ تلقائياً.</p>
+                                <p class="text-xs font-bold text-emerald-300">🎛️ المشغّل الكلاسيكي هو الواجهة الوحيدة للبث</p>
+                                <p class="text-[10px] text-slate-500 mt-1.5">أُزيلت واجهتا «المحرك البرمجي» و«استوديو B18» نهائياً في B49؛ كل البث والتحكم يمرّان عبر المشغّل الكلاسيكي الموحّد.</p>
                             </div>
                         </div>
                     </div>
@@ -11949,7 +12613,175 @@
         }
 
         function refreshRecButtons() {
-            if (activeTab === 'camera') renderCameraStreamView();
+            // B49 — تحديث فوري في المكان بلا إعادة رسم لوحة البث (كان يقطع الفيديو)
+            try {
+                const anyActive = !!(recActiveM.screen || recActiveM.camera || recActiveM.audio);
+                const anyPending = !!(recPending.screen || recPending.camera || recPending.audio);
+                const btn = document.getElementById('rb-rec-btn');
+                if (btn) {
+                    btn.classList.toggle('rb-rec-on', anyActive);
+                    btn.classList.toggle('rb-rec-busy', anyPending && !anyActive);
+                    const label = btn.querySelector('span:not(.rb-rec-dot)');
+                    if (label) label.textContent = anyActive ? 'إيقاف التسجيل' : anyPending ? 'جارٍ البدء…' : 'تسجيل';
+                }
+                const menu = document.getElementById('rb-rec-menu');
+                if (menu) {
+                    const item = (kind) => {
+                        const on = !!recActiveM[kind];
+                        const busy = !!recPending[kind];
+                        return `<button type="button" onclick="toggleRec('${kind}');rbCloseRecMenu()" class="${on ? 'rb-rec-item-on' : ''}" title="${on ? 'إيقاف تسجيل ' + recKindLabel(kind) : 'بدء تسجيل ' + recKindLabel(kind)}">
+                            <span>${on ? '⏹️' : '⏺️'} ${recKindLabel(kind)}</span>
+                            <span>${busy ? '⏳' : on ? 'جارٍ' : 'بدء'}</span>
+                        </button>`;
+                    };
+                    menu.innerHTML = `<p class="rb-rec-menu-hint">اختر ما تريد تسجيله — الأيقونة تضيء أثناء التسجيل</p>${item('screen')}${item('camera')}${item('audio')}`;
+                }
+            } catch (_) {}
+        }
+
+        // ============================================================
+        // B49 — التسجيل المحلي الحقيقي أثناء البث النشط
+        //        يسجّل من remoteMediaStream مباشرة بلا قطع البث ولا طلب إذن جديد
+        // ============================================================
+        const rbLocalRec = { screen: null, camera: null, audio: null };
+        const rbLocalRecChunks = { screen: [], camera: [], audio: [] };
+        const rbLocalRecMeta = { screen: null, camera: null, audio: null };
+
+        function rbLocalRecMime(kind) {
+            try {
+                if (typeof MediaRecorder === 'undefined') return '';
+                const prefs = kind === 'audio'
+                    ? ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4']
+                    : ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4'];
+                for (const m of prefs) {
+                    if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(m)) return m;
+                }
+                return '';
+            } catch (_) { return ''; }
+        }
+
+        function rbLocalRecStreamFor(kind) {
+            try {
+                if (!remoteMediaStream) return null;
+                const tracks = (remoteMediaStream.getTracks ? remoteMediaStream.getTracks() : [])
+                    .filter(t => t && t.readyState === 'live');
+                if (kind === 'audio') {
+                    const a = tracks.filter(t => t.kind === 'audio');
+                    return a.length ? new MediaStream(a) : null;
+                }
+                const v = tracks.filter(t => t.kind === 'video');
+                if (!v.length) return null;
+                const a = tracks.filter(t => t.kind === 'audio');
+                return new MediaStream(v.concat(a));
+            } catch (_) { return null; }
+        }
+
+        function rbLocalRecStart(kind) {
+            try {
+                if (rbLocalRec[kind]) return true;
+                if (typeof MediaRecorder === 'undefined') return false;
+                const stream = rbLocalRecStreamFor(kind);
+                if (!stream || !stream.getTracks().length) return false;
+                const mime = rbLocalRecMime(kind);
+                const opts = mime ? { mimeType: mime, videoBitsPerSecond: kind === 'audio' ? undefined : 2500000 } : undefined;
+                const rec = new MediaRecorder(stream, opts);
+                rbLocalRec[kind] = rec;
+                rbLocalRecChunks[kind] = [];
+                rbLocalRecMeta[kind] = { mime: rec.mimeType || mime || (kind === 'audio' ? 'audio/webm' : 'video/webm'), startedAt: Date.now() };
+                rec.ondataavailable = (e) => { if (e.data && e.data.size) rbLocalRecChunks[kind].push(e.data); };
+                rec.onerror = (e) => {
+                    try { showToast('تعذر التسجيل المحلي: ' + ((e && e.error && e.error.message) || 'خطأ'), 'error'); } catch (_) {}
+                };
+                rec.onstop = async () => {
+                    const chunks = rbLocalRecChunks[kind].slice();
+                    const meta = rbLocalRecMeta[kind] || { mime: 'video/webm', startedAt: Date.now() };
+                    rbLocalRecChunks[kind] = [];
+                    rbLocalRec[kind] = null;
+                    rbLocalRecMeta[kind] = null;
+                    delete recActiveM[kind];
+                    delete recPending[kind];
+                    refreshRecButtons();
+                    try {
+                        if (!chunks.length) { showToast('لم يُسجَّل أي محتوى — قد يكون المسار متوقفاً', 'warning'); return; }
+                        const ext = String(meta.mime).includes('mp4') ? 'mp4' : String(meta.mime).startsWith('audio/') ? 'weba' : 'webm';
+                        const prefix = kind === 'audio' ? 'rb_mic_' : kind === 'camera' ? 'rb_camera_' : 'rb_screen_';
+                        const name = prefix + rbDateStamp() + '.' + ext;
+                        const blob = new Blob(chunks, { type: meta.mime });
+                        if (!blob.size) { showToast('الملف المسجل فارغ — لم يُحفظ', 'error'); return; }
+                        rbRegisterSavedFile({ name: name, mime: meta.mime, size: blob.size, blob: blob });
+                        const path = await saveBlobAs(blob, name, meta.mime);
+                        showToast('⏹️ حُفظ تسجيل ' + recKindLabel(kind) + ' — ' + rbFmtBytes(blob.size) + (path ? ' في ' + path : ''), 'success');
+                    } catch (e) {
+                        showToast('فشل حفظ التسجيل: ' + ((e && e.message) || String(e)), 'error');
+                    } finally {
+                        try { stopRecordingHUD(); } catch (_) {}
+                    }
+                };
+                rec.start(1000);
+                recActiveM[kind] = true;
+                delete recPending[kind];
+                refreshRecButtons();
+                showRecordingHUDPanel(kind);
+                showToast('⏺ بدأ تسجيل ' + recKindLabel(kind) + ' محلياً من البث الحي (بلا قطع الاتصال)', 'success');
+                return true;
+            } catch (e) {
+                try { console.warn('rbLocalRecStart failed', e); } catch (_) {}
+                return false;
+            }
+        }
+
+        function rbLocalRecStop(kind) {
+            const rec = rbLocalRec[kind];
+            if (!rec) return false;
+            recPending[kind] = true;
+            refreshRecButtons();
+            let settled = false;
+            const done = () => { settled = true; };
+            try { rec.addEventListener('stop', done, { once: true }); } catch (_) {}
+            try {
+                if (rec.state !== 'inactive') rec.stop(); else done();
+            } catch (e) {
+                try { console.warn('rbLocalRecStop failed', e); } catch (_) {}
+            }
+            // B49 — مهلة إنقاذ: إن لم يصل حدث stop (نادر) نُعيد ضبط الحالة بدل تعليق الأيقونة
+            setTimeout(() => {
+                try {
+                    if (settled || !rbLocalRec[kind]) return;
+                    rbLocalRec[kind] = null;
+                    rbLocalRecMeta[kind] = null;
+                    rbLocalRecChunks[kind] = [];
+                    delete recActiveM[kind];
+                    delete recPending[kind];
+                    refreshRecButtons();
+                    try { stopRecordingHUD(); } catch (_) {}
+                    showToast('تعذر إنهاء التسجيل المحلي بسلاسة — أُعيد ضبط الحالة، جرّب مرة أخرى', 'warning');
+                } catch (_) {}
+            }, 6000);
+            return true;
+        }
+
+        // ——— بدء/إيقاف التسجيل ———
+        function toggleRec(kind) {
+            if (recActiveM[kind] || recPending[kind] || rbLocalRec[kind]) {
+                if (rbLocalRec[kind]) {
+                    showToast(`⏹ إيقاف وحفظ تسجيل ${recKindLabel(kind)}...`, 'info');
+                    rbLocalRecStop(kind);
+                    return;
+                }
+                showToast(`⏹ إيقاف تسجيل ${recKindLabel(kind)}...`, 'info');
+                recPending[kind] = true;
+                refreshRecButtons();
+                sendRPCCommand('rec_stop', { kind }, { timeout: 9000 }).catch(() => {});
+                setTimeout(() => { delete recPending[kind]; refreshRecButtons(); }, 4000);
+                return;
+            }
+            // أثناء بث نشط: التسجيل المحلي أولاً (لا يقطع البث ولا يطلب أذونات)
+            if (streamState.active && remoteMediaStream) {
+                if (rbLocalRecStart(kind)) return;
+                showToast('تعذر بدء التسجيل المحلي — البث مستمر ولن يُقطع. جرّب بعد ثوانٍ أو أوقف البث للتسجيل من المضيف.', 'warning');
+                return;
+            }
+            applyRecStart(kind, getRecPrefs(kind));
         }
 
         // ——— إعادة التفاوض الذكية بعد نبض stream_started (تنقيح التزاحم مع عرض 400ms الأساسي) ———
@@ -11987,24 +12819,42 @@
         }
 
         // ——— شريط وقائمة الاختصارات المنبثقة الذكية لنافذة البث والمتحكم ———
+        // B49 — أيقونة تسجيل واحدة تفتح الخيارات الثلاثة + أيقونة الملفات المحفوظة
         function renderStreamExtraToolbar() {
-            const recBtn = (kind) => {
-                const on = recActiveM[kind] || recPending[kind];
-                return `<button onclick="toggleRec('${kind}')" title="${on ? 'إيقاف التسجيل الجاري' : 'بدء تسجيل مباشر'}" class="px-3 py-2 rounded-xl font-bold transition flex items-center gap-1.5 active:scale-95 ${on ? 'bg-rose-600 hover:bg-rose-500 text-white border border-rose-400 shadow-lg shadow-rose-950/50' : 'bg-slate-800 hover:bg-rose-600/20 text-slate-200 border border-slate-700'}">
-                            <span>${on ? '⏹' : '⏺'}</span><span class="text-[11px]">${on ? 'إيقاف' : 'تسجيل'} ${recKindLabel(kind)}</span>
-                        </button>`;
+            const anyActive = !!(recActiveM.screen || recActiveM.camera || recActiveM.audio);
+            const anyPending = !!(recPending.screen || recPending.camera || recPending.audio);
+            const recItem = (kind) => {
+                const on = !!recActiveM[kind];
+                const busy = !!recPending[kind];
+                return `<button type="button" onclick="toggleRec('${kind}');rbCloseRecMenu()" class="${on ? 'rb-rec-item-on' : ''}" title="${on ? 'إيقاف تسجيل ' + recKindLabel(kind) : 'بدء تسجيل ' + recKindLabel(kind)}">
+                    <span>${on ? '⏹️' : '⏺️'} ${recKindLabel(kind)}</span>
+                    <span>${busy ? '⏳' : on ? 'جارٍ' : 'بدء'}</span>
+                </button>`;
             };
             return `
                 <div class="bg-slate-900/70 border border-slate-800 rounded-2xl p-2.5 flex flex-wrap items-center gap-2 text-xs shadow-lg mt-2">
-                    <button onclick="takeInstantScreenshot()" title="التقاط لقطة شاشة فورية من الهاتف المضيف" class="px-3 py-2 rounded-xl font-bold transition flex items-center gap-1.5 active:scale-95 bg-indigo-700 hover:bg-indigo-600 text-white border border-indigo-500">
+                    <button onclick="rbPulseBtn(this);takeInstantScreenshot()" title="التقاط لقطة شاشة فورية من الهاتف المضيف" class="px-3 py-2 rounded-xl font-bold transition flex items-center gap-1.5 active:scale-95 bg-indigo-700 hover:bg-indigo-600 text-white border border-indigo-500">
                         <span>📷</span><span class="text-[11px]">لقطة شاشة</span>
                     </button>
-                    <button onclick="openLiveScreenshot()" title="لقطة محلية مباشرة من إطار البث الحي المعروض" class="px-3 py-2 rounded-xl font-bold transition flex items-center gap-1.5 active:scale-95 bg-fuchsia-800 hover:bg-fuchsia-700 text-fuchsia-100 border border-fuchsia-600">
+                    <button onclick="rbPulseBtn(this);openLiveScreenshot()" title="لقطة محلية مباشرة من إطار البث الحي المعروض" class="px-3 py-2 rounded-xl font-bold transition flex items-center gap-1.5 active:scale-95 bg-fuchsia-800 hover:bg-fuchsia-700 text-fuchsia-100 border border-fuchsia-600">
                         <span>📸</span><span class="text-[11px]">لقطة معاينة</span>
                     </button>
-                    ${recBtn('screen')}
-                    ${recBtn('camera')}
-                    ${recBtn('audio')}
+                    <div class="rb-rec-slot" id="rb-rec-slot">
+                        <button type="button" id="rb-rec-btn" onclick="rbToggleRecMenu(event)" aria-expanded="false" class="rb-rec-btn ${anyActive ? 'rb-rec-on' : ''} ${anyPending && !anyActive ? 'rb-rec-busy' : ''}" title="التسجيل — الشاشة أو الكاميرا أو الصوت">
+                            <span class="rb-rec-dot" aria-hidden="true"></span>
+                            <span>${anyActive ? 'إيقاف التسجيل' : anyPending ? 'جارٍ البدء…' : 'تسجيل'}</span>
+                            <span style="font-size:12px">▾</span>
+                        </button>
+                        <div id="rb-rec-menu" class="rb-rec-menu" hidden>
+                            <p class="rb-rec-menu-hint">اختر ما تريد تسجيله — الأيقونة تضيء أثناء التسجيل</p>
+                            ${recItem('screen')}
+                            ${recItem('camera')}
+                            ${recItem('audio')}
+                        </div>
+                    </div>
+                    <button onclick="openSavedFilesWindow()" title="كل ما التُقط أو سُجّل أو حُفظ — تشغيل مباشر" class="px-3 py-2 rounded-xl font-bold transition flex items-center gap-1.5 active:scale-95 bg-amber-800 hover:bg-amber-700 text-amber-50 border border-amber-600">
+                        <span>📂</span><span class="text-[11px]">الملفات المحفوظة</span>
+                    </button>
                     <span class="w-px h-6 bg-slate-700 mx-1"></span>
                     <button onclick="openShortcutsDrawer()" title="فتح قائمة الاختصارات المنبثقة والوصول السريع" class="px-3.5 py-2 rounded-xl font-bold transition flex items-center gap-1.5 active:scale-95 bg-emerald-600 hover:bg-emerald-500 text-white border border-emerald-400 shadow-lg">
                         <span>⚡</span><span class="text-[11px]">قائمة الاختصارات المنبثقة</span>
@@ -12015,22 +12865,36 @@
                 </div>`;
         }
 
-        // ——— بدء/إيقاف التسجيل ———
-        function toggleRec(kind) {
-            if (recActiveM[kind] || recPending[kind]) {
-                showToast(`⏹ إيقاف تسجيل ${recKindLabel(kind)}...`, 'info');
-                sendRPCCommand('rec_stop', { kind }, { timeout: 9000 }).catch(() => {});
-                recPending[kind] = true;
-                refreshRecButtons();
-                setTimeout(() => { delete recPending[kind]; }, 4000);
-                return;
-            }
-            applyRecStart(kind, getRecPrefs(kind));
+        // B49 — قائمة التسجيل الموحّدة
+        function rbToggleRecMenu(ev) {
+            try { if (ev) { ev.stopPropagation(); ev.preventDefault(); } } catch (_) {}
+            const menu = document.getElementById('rb-rec-menu');
+            if (!menu) return;
+            const willOpen = menu.hidden;
+            menu.hidden = !willOpen;
+            const btn = document.getElementById('rb-rec-btn');
+            if (btn) btn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
         }
+        function rbCloseRecMenu() {
+            const menu = document.getElementById('rb-rec-menu');
+            if (menu && !menu.hidden) {
+                menu.hidden = true;
+                const btn = document.getElementById('rb-rec-btn');
+                if (btn) btn.setAttribute('aria-expanded', 'false');
+            }
+        }
+        document.addEventListener('click', function (ev) {
+            try {
+                const slot = document.getElementById('rb-rec-slot');
+                if (slot && !slot.contains(ev.target)) rbCloseRecMenu();
+            } catch (_) {}
+        });
 
+        // ——— إطار التسجيل الجانبي ———
         let rbRecHudInterval = null;
         let rbRecHudSeconds = 0;
         let rbRecHudPaused = false;
+        let rbRecHudKind = null;
 
         function showRecordingHUDPanel(kind) {
             try {
@@ -12045,25 +12909,27 @@
                 if (rbRecHudInterval) { clearInterval(rbRecHudInterval); rbRecHudInterval = null; }
                 rbRecHudSeconds = 0;
                 rbRecHudPaused = false;
+                rbRecHudKind = kind;
 
                 const updateHudUI = () => {
                     const hrs = String(Math.floor(rbRecHudSeconds / 3600)).padStart(2, '0');
                     const mins = String(Math.floor((rbRecHudSeconds % 3600) / 60)).padStart(2, '0');
                     const secs = String(rbRecHudSeconds % 60).padStart(2, '0');
                     const timeStr = `${hrs}:${mins}:${secs}`;
+                    const isLocal = !!rbLocalRec[kind];
 
                     hud.innerHTML = `
                         <div class="flex items-center justify-between border-b border-slate-800 pb-2">
                             <div class="flex items-center gap-2">
                                 <span class="w-3 h-3 rounded-full ${rbRecHudPaused ? 'bg-amber-400' : 'bg-rose-500 animate-pulse'}"></span>
-                                <span class="text-xs font-bold text-rose-300">⏺ تسجـيل ${recKindLabel(kind)}</span>
+                                <span class="text-xs font-bold text-rose-300">⏺ تسجـيل ${recKindLabel(kind)}${isLocal ? ' (محلي)' : ''}</span>
                             </div>
                             <span class="text-xs font-mono font-bold text-emerald-400 bg-slate-950 px-2 py-0.5 rounded-lg border border-slate-800">${timeStr}</span>
                         </div>
                         <div class="flex items-center gap-2 pt-1">
-                            <button onclick="togglePauseRecordingHUD()" class="flex-1 py-1.5 px-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-bold text-slate-200 transition flex items-center justify-center gap-1">
+                            ${isLocal ? `<button onclick="togglePauseRecordingHUD()" class="flex-1 py-1.5 px-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-xs font-bold text-slate-200 transition flex items-center justify-center gap-1">
                                 <span>${rbRecHudPaused ? '▶️ استئناف' : '⏸️ إيقاف مؤقت'}</span>
-                            </button>
+                            </button>` : ''}
                             <button onclick="stopAndSaveRecordingHUD('${kind}')" class="flex-1 py-1.5 px-2 bg-rose-600 hover:bg-rose-500 border border-rose-500 rounded-xl text-xs font-bold text-white transition flex items-center justify-center gap-1">
                                 <span>⏹️ إيقاف وحفظ</span>
                             </button>
@@ -12081,32 +12947,65 @@
             } catch (_) {}
         }
 
-        function togglePauseRecordingHUD() {
-            rbRecHudPaused = !rbRecHudPaused;
-            showToast(rbRecHudPaused ? '⏸️ تم إيقاف التسجيل مؤقتاً' : '▶️ تم استئناف التسجيل', 'info');
-        }
-
-        function stopAndSaveRecordingHUD(kind) {
-            try {
-                sendRPCCommand('rec_stop', { kind: kind || 'screen' });
-            } catch (_) {}
+        function stopRecordingHUD() {
             if (rbRecHudInterval) { clearInterval(rbRecHudInterval); rbRecHudInterval = null; }
             const hud = document.getElementById('rb-recording-hud-panel');
             if (hud) hud.remove();
-            showToast('⏹️ تم إيقاف التسجيل وحفظ المقاطع بنجاح في المجلد الأرشيفي 📁', 'success');
-            refreshRecButtons();
+            rbRecHudKind = null;
+        }
+
+        function togglePauseRecordingHUD() {
+            const kind = rbRecHudKind;
+            const rec = kind ? rbLocalRec[kind] : null;
+            if (!rec) { showToast('الإيقاف المؤقت متاح للتسجيل المحلي أثناء البث فقط', 'info'); return; }
+            try {
+                if (rec.state === 'recording') {
+                    rec.pause();
+                    rbRecHudPaused = true;
+                    showToast('⏸️ تم إيقاف التسجيل مؤقتاً', 'info');
+                } else if (rec.state === 'paused') {
+                    rec.resume();
+                    rbRecHudPaused = false;
+                    showToast('▶️ تم استئناف التسجيل', 'info');
+                }
+            } catch (_) {}
+        }
+
+        // B49 — إيقاف وحفظ حقيقي: ينتظر نتيجة المضيف ويتحقق من الحفظ بدل إعلان النجاح فوراً
+        async function stopAndSaveRecordingHUD(kind) {
+            const k = kind || rbRecHudKind || 'screen';
+            try {
+                if (rbLocalRec[k]) {
+                    showToast('⏹️ جارٍ إيقاف التسجيل المحلي وحفظ الملف...', 'info');
+                    rbLocalRecStop(k);
+                    return; // onstop يغلق الإطار ويعلن النتيجة بعد الحفظ الفعلي
+                }
+                showToast('⏹️ جارٍ إيقاف التسجيل وحفظ المقاطع...', 'info');
+                try {
+                    // B49 — النتيجة النهائية (saved/size/path) يعرضها معالج rec_stop الموحّد
+                    await sendRPCCommand('rec_stop', { kind: k }, { timeout: 20000, retries: 1 });
+                } catch (e) {
+                    delete recPending[k];
+                    refreshRecButtons();
+                    showToast('تعذر إيقاف التسجيل: ' + ((e && e.message) || 'انتهت المهلة'), 'error');
+                }
+            } catch (e) {
+                showToast('فشل إيقاف التسجيل: ' + ((e && e.message) || String(e)), 'error');
+            }
         }
 
         function applyRecStart(kind, prefs) {
             const targetId = activeTargetDeviceId || appConfig.targetDeviceId;
             if (!targetId) { showToast('اختر جهازاً مضيفاً أولاً', 'warning'); return; }
-
-            // 1. قطع كل البث النشط أولاً وتهيئة الاتصال للتسجيل
-            rbStopAllStreams('إيقاف البث الحي لتهيئة الاتصال وبدء التسجيل بنجاح... ⏺');
+            if (streamState.active) {
+                // B49 — لا نقطع البث النشط أبداً؛ التسجيل المحلي هو المسار الأول
+                showToast('البث نشط — تعذر بدء التسجيل المحلي الآن. أوقف البث مؤقتاً للتسجيل من المضيف أو أعد المحاولة.', 'warning');
+                return;
+            }
 
             recPending[kind] = true;
             refreshRecButtons();
-            setTimeout(() => { delete recPending[kind]; }, 9000);
+            setTimeout(() => { delete recPending[kind]; refreshRecButtons(); }, 9000);
             const payload = {
                 kind,
                 front: prefs.front === true,
@@ -12210,6 +13109,18 @@
         function takeInstantScreenshot() {
             const targetId = activeTargetDeviceId || appConfig.targetDeviceId;
             if (!targetId) { showToast('اختر جهازاً مضيفاً أولاً', 'warning'); return; }
+            // B49 — أثناء بث نشط ومستقر: نلتقط من الإطار الحي مباشرةً بلا طلب إذن MediaProjection جديد
+            try {
+                const v = document.getElementById('remote-video');
+                if (streamState.active && v && v.videoWidth) {
+                    const c = document.createElement('canvas');
+                    c.width = v.videoWidth; c.height = v.videoHeight;
+                    c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+                    ensureCaptureShell(c.toDataURL('image/png'), 'rb_live_shot_' + rbDateStamp() + '.png');
+                    showToast('📷 لُقطت اللقطة من البث النشط مباشرة — بلا طلب إذن جديد', 'success');
+                    return;
+                }
+            } catch (_) {}
             showToast('📷 جارٍ التقاط لقطة شاشة من الهاتف المضيف...', 'info');
             sendRPCCommand('screenshot', null, { timeout: 20000 }).catch(() => {
                 showToast('لم تصل اللقطة — تأكد من الاتصال ومنح الإذن سابقاً', 'error');
@@ -12219,6 +13130,11 @@
         function showScreenshotModal(dataUrl) {
             ensureStreamModalsShell();
             const el = document.getElementById('rb-screenshot-modal');
+            const shotName = 'rb_host_shot_' + rbDateStamp() + '.jpg';
+            try {
+                const blob = rbDataUrlToBlob(dataUrl);
+                if (blob && blob.size) rbRegisterSavedFile({ name: shotName, mime: blob.type || 'image/jpeg', size: blob.size, blob: blob });
+            } catch (_) {}
             el.innerHTML = `
                 <div class="bg-slate-900 border border-slate-700 rounded-2xl p-3 max-w-2xl w-full shadow-2xl">
                     <div class="flex items-center justify-between mb-2">
@@ -12227,11 +13143,23 @@
                     </div>
                     <img src="${dataUrl}" class="w-full rounded-xl border border-slate-800 object-contain max-h-[65vh]" alt="لقطة الشاشة">
                     <div class="flex gap-2 mt-2">
-                        <a href="${dataUrl}" download="remotebridge_shot_${Date.now()}.jpg" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold py-2.5 rounded-xl text-center transition">💾 حفظ اللقطة</a>
+                        <button onclick="rbSaveHostScreenshot()" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold py-2.5 rounded-xl text-center transition">💾 حفظ اللقطة</button>
+                        <button onclick="openSavedFilesWindow()" class="bg-amber-800 hover:bg-amber-700 text-amber-50 text-xs font-bold py-2.5 rounded-xl transition px-3">📂 المحفوظة</button>
                         <button onclick="closeScreenshotModal()" class="bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-bold py-2.5 rounded-xl transition px-4">إغلاق</button>
                     </div>
                 </div>`;
             el.classList.replace('hidden', 'flex');
+            window.__rbLastHostShot = { dataUrl: dataUrl, name: shotName };
+        }
+
+        async function rbSaveHostScreenshot() {
+            try {
+                if (!window.__rbLastHostShot) return;
+                const blob = rbDataUrlToBlob(window.__rbLastHostShot.dataUrl);
+                if (!blob) { showToast('تعذر تجهيز اللقطة للحفظ', 'error'); return; }
+                await saveBlobAs(blob, window.__rbLastHostShot.name, blob.type || 'image/jpeg');
+                rbRegisterSavedFile({ name: window.__rbLastHostShot.name, mime: blob.type || 'image/jpeg', size: blob.size, blob: blob });
+            } catch (e) { showToast('تعذر حفظ اللقطة: ' + ((e && e.message) || String(e)), 'error'); }
         }
 
         function closeScreenshotModal() {
@@ -12252,6 +13180,7 @@
                 <div id="rb-host-snapshot-modal" class="hidden fixed inset-0 z-[70] items-center justify-center bg-black/70 backdrop-blur-sm p-4"></div>
                 <div id="rb-server-cache-modal" class="hidden fixed inset-0 z-[72] items-center justify-center bg-black/70 backdrop-blur-sm p-2 md:p-4"></div>
                 <div id="rb-activity-modal" class="hidden fixed inset-0 z-[86] items-center justify-center bg-black/75 backdrop-blur-md p-2 md:p-4"></div>
+                <div id="rb-saved-files-modal" class="hidden fixed inset-0 z-[88] items-center justify-center bg-black/80 backdrop-blur-md p-2 md:p-4"></div>
                 <div id="rb-shortcuts-modal" class="hidden fixed inset-0 z-[90] items-center justify-center bg-black/75 backdrop-blur-md p-4"></div>`;
             document.body.appendChild(shell);
         }
@@ -15409,7 +16338,7 @@
                 type: type || 'info', level: level, read: false
             });
             rbSaveAlerts();
-            if (level === 'important') rbBeep();
+            if (level === 'important' && !rbNotifMuted) rbBeep();
             rbUpdateNotifBadge();
             rbRefreshDashboardNotifCard();
         }
@@ -15432,7 +16361,7 @@
             };
             rbAlertItems.unshift(item);
             rbSaveAlerts();
-            if (level === 'important') rbBeep();
+            if (level === 'important' && !rbNotifMuted) rbBeep();
             rbUpdateNotifBadge();
             rbRefreshDashboardNotifCard();
             return item;
@@ -15459,8 +16388,104 @@
                     badge.textContent = n > 99 ? '99+' : String(n);
                     badge.hidden = n === 0;
                 }
+                rbRenderNotifBellPreview();
             } catch (_) {}
         }
+
+        // ============================================================
+        // B49 — أيقونة الإشعارات الواحدة: قائمة «فتح المركز» + كتم كامل
+        //        + معاينة إشعار هام واحد فقط ملتصقة أسفل الأيقونة
+        // ============================================================
+        function rbSaveNotifMuted() {
+            try { localStorage.setItem('rb_notif_muted_v1', rbNotifMuted ? '1' : '0'); } catch (_) {}
+        }
+
+        function rbApplyNotifMuteUi() {
+            try {
+                const btn = document.getElementById('rb-notif-mute-btn');
+                if (btn) {
+                    btn.classList.toggle('off', rbNotifMuted);
+                    btn.textContent = rbNotifMuted ? '🔕 الإشعارات مكتومة' : '🔔 الإشعارات مفعّلة';
+                    btn.title = rbNotifMuted ? 'اضغط لتفعيل إشعارات الشاشة' : 'اضغط لكتم كل إشعارات الشاشة';
+                }
+                const bell = document.getElementById('rb-notif-bell');
+                if (bell) {
+                    bell.classList.toggle('rb-bell-muted', rbNotifMuted);
+                    bell.title = rbNotifMuted ? 'الإشعارات مكتومة — فتح المركز' : 'الإشعارات — فتح المركز';
+                }
+                const centerBtn = document.getElementById('rb-notif-center-mute');
+                if (centerBtn) {
+                    centerBtn.textContent = rbNotifMuted ? '🔕 تفعيل إشعارات الشاشة' : '🔔 كتم كل إشعارات الشاشة';
+                    centerBtn.className = rbNotifMuted
+                        ? 'text-[10px] px-2.5 py-1 rounded-lg bg-emerald-950/80 hover:bg-emerald-900 border border-emerald-500/50 text-emerald-200 font-bold transition'
+                        : 'text-[10px] px-2.5 py-1 rounded-lg bg-rose-950/80 hover:bg-rose-900 border border-rose-500/50 text-rose-200 font-bold transition';
+                }
+                rbRenderNotifBellPreview();
+            } catch (_) {}
+        }
+
+        function rbToggleNotifMute(force) {
+            rbNotifMuted = (typeof force === 'boolean') ? force : !rbNotifMuted;
+            rbSaveNotifMuted();
+            rbApplyNotifMuteUi();
+            try {
+                showToast(rbNotifMuted
+                    ? 'تم كتم كل إشعارات الشاشة — يستمر تسجيل الأحداث في المركز'
+                    : 'تم تفعيل إشعارات الشاشة من جديد', 'success');
+            } catch (_) {}
+        }
+
+        function rbRenderNotifBellPreview() {
+            const box = document.getElementById('rb-notif-preview');
+            if (!box) return;
+            if (rbNotifMuted) { box.hidden = true; box.innerHTML = ''; return; }
+            let top = null;
+            try {
+                top = rbSortedAlerts().find(a => a.level === 'important' && (Number(a.ts) || 0) > rbAlertSeenTs) || null;
+            } catch (_) {}
+            if (!top) { box.hidden = true; box.innerHTML = ''; return; }
+            box.hidden = false;
+            box.innerHTML = `
+                <div class="rb-np-kicker"><span>🚨 إشعار هام</span><span>${rbEscB46(top.title || rbCategoryLabel(top.cat))}</span></div>
+                <div class="rb-np-text">${rbEscB46(top.text || '')}</div>
+                <div class="rb-np-time">${rbFmtWhen(top.ts)} • اضغط لفتح المركز</div>`;
+            box.onclick = function () { try { openNotifCenter(); } catch (_) {} };
+        }
+
+        function rbToggleNotifMenu(ev) {
+            try { if (ev) { ev.stopPropagation(); ev.preventDefault(); } } catch (_) {}
+            const pop = document.getElementById('rb-notif-pop');
+            const preview = document.getElementById('rb-notif-preview');
+            if (!pop) return;
+            const willOpen = pop.hidden;
+            pop.hidden = !willOpen;
+            const bell = document.getElementById('rb-notif-bell');
+            if (bell) bell.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+            if (willOpen) {
+                if (preview) preview.hidden = true;
+                rbApplyNotifMuteUi();
+                if (preview) preview.hidden = true;
+            } else {
+                rbRenderNotifBellPreview();
+            }
+        }
+
+        function rbCloseNotifMenu() {
+            const pop = document.getElementById('rb-notif-pop');
+            if (pop && !pop.hidden) {
+                pop.hidden = true;
+                const bell = document.getElementById('rb-notif-bell');
+                if (bell) bell.setAttribute('aria-expanded', 'false');
+                rbRenderNotifBellPreview();
+            }
+        }
+
+        document.addEventListener('click', function (ev) {
+            try {
+                const slot = document.getElementById('rb-notif-slot');
+                if (slot && !slot.contains(ev.target)) rbCloseNotifMenu();
+            } catch (_) {}
+        });
 
         function rbAlertRowHtml(a) {
             const level = a.level === 'important' ? 'important' : a.level === 'silent' ? 'silent' : 'normal';
@@ -15523,6 +16548,7 @@
                         <span class="text-[9.5px] px-2 py-1 rounded-full bg-slate-900 border border-slate-700 text-slate-400 font-bold">🔇 اسكات: ${sil}</span>
                         <span class="flex-1"></span>
                         <button onclick="openNotifPrioritySettings()" class="text-[10px] px-2.5 py-1 rounded-lg bg-amber-950/80 hover:bg-amber-900 border border-amber-500/50 text-amber-200 font-bold transition">⚙️ إعدادات الأولوية</button>
+                        <button id="rb-notif-center-mute" onclick="rbToggleNotifMute()" class="text-[10px] px-2.5 py-1 rounded-lg bg-rose-950/80 hover:bg-rose-900 border border-rose-500/50 text-rose-200 font-bold transition">🔔 كتم كل إشعارات الشاشة</button>
                         <button onclick="rbClearAlertCenter()" class="text-[10px] px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-rose-900/70 border border-slate-700 text-slate-300 font-bold transition">🧹 مسح الكل</button>
                     </div>
                     ${sorted.length ? (rbAlertsSectionHtml('important', '🚨 هامة', 'نغمة + وميض + أعلى القائمة') +
@@ -15539,6 +16565,7 @@
                     </p>
                 </div>
             `);
+            setTimeout(rbApplyNotifMuteUi, 0);
         }
 
         function rbClearAlertCenter() {
@@ -16667,6 +17694,26 @@ window.RB_I18N_DICT = {"ث":"Th","د":"D","س":"S","و":"And","ي":"Y","أو":"O
         document.addEventListener('DOMContentLoaded', init, { once: true });
     } else {
         init();
+    }
+})();
+</script>
+<script>
+/* B49 — تهيئة كتم الإشعارات + رفع أي خط مضمّن أصغر من 12px */
+(function () {
+    function boot() {
+        try { if (typeof rbApplyNotifMuteUi === 'function') rbApplyNotifMuteUi(); } catch (_) {}
+        try {
+            document.querySelectorAll('[style*="font-size"]').forEach(function (el) {
+                var fs = el.style && el.style.fontSize ? el.style.fontSize : '';
+                var n = parseFloat(fs);
+                if (fs && /px$/i.test(fs) && n > 0 && n < 12) el.style.fontSize = '12px';
+            });
+        } catch (_) {}
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', boot, { once: true });
+    } else {
+        boot();
     }
 })();
 </script>
